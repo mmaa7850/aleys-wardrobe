@@ -21,9 +21,30 @@ const router = createRouter({
 
         // Products - Colors ✅（你的檔案在 pages/admin/products）
         {
-          path: "products/colors",
-          name: "admin-products-colors",
-          component: () => import("@/pages/admin/products/Colors.vue"),
+          path: "products/setcolors",
+          name: "admin-products-setcolors",
+          component: () => import("@/pages/admin/products/SetColors.vue"),
+        },
+        {
+          path: "products/setsizes",
+          name: "admin-products-setsizes",
+          component: () => import("@/pages/admin/products/SetSizes.vue"),
+        },
+        {
+          path: "products/setcategories",
+          name: "admin-products-setcategories",
+          component: () => import("@/pages/admin/products/SetCategories.vue"),
+        },
+        {
+          path: "products/settags",
+          name: "admin-products-settags",
+          component: () => import("@/pages/admin/products/SetTags.vue"),
+        },
+
+        {
+          path: "orders/setstatus",
+          name: "admin-orders-setstatus",
+          component: () => import("@/pages/admin/orders/SetStatus.vue"),
         },
 
         // 之後要加其他頁面就照這樣加：

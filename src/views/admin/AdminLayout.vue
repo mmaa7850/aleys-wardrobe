@@ -1,19 +1,27 @@
 <script setup>
 import AdminSidebar from "@/components/admin/AdminSidebar.vue";
 import { useAuthStore } from "@/stores/auth";
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 
 const auth = useAuthStore();
 const { locale } = useI18n();
 
-const currentLangLabel = computed(() => {
-  return locale.value === "en-US" ? "English" : "繁體中文";
-});
+const isLangOpen = ref(false);
+
+const currentLangLabel = computed(() =>
+  locale.value === "en-US" ? "English" : "繁體中文"
+);
 
 const setLocale = (val) => {
   locale.value = val;
   localStorage.setItem("locale", val);
+  isLangOpen.value = false; // 切完語言關閉
+};
+
+// 點擊外部關閉（可選但專業）
+const closeLang = () => {
+  isLangOpen.value = false;
 };
 </script>
 
@@ -21,24 +29,25 @@ const setLocale = (val) => {
   <div class="admin-layout">
     <AdminSidebar />
 
-    <main class="content">
-      <!-- Topbar -->
-      <header class="topbar">
+    <main class="content" @click="closeLang">
+      <header class="topbar" @click.stop>
         <h1 class="title">Admin</h1>
 
         <div class="topbar-right">
-          <!-- Language Switch -->
+          <!-- ✅ Vue 控制的 Dropdown（Bootstrap 樣式） -->
           <div class="dropdown">
             <button
               class="btn btn-outline-secondary btn-sm dropdown-toggle"
               type="button"
-              data-bs-toggle="dropdown"
-              aria-expanded="false"
+              @click.stop="isLangOpen = !isLangOpen"
             >
               {{ currentLangLabel }}
             </button>
 
-            <ul class="dropdown-menu dropdown-menu-end">
+            <ul
+              class="dropdown-menu dropdown-menu-end"
+              :class="{ show: isLangOpen }"
+            >
               <li>
                 <button class="dropdown-item" @click="setLocale('zh-TW')">
                   繁體中文
@@ -52,12 +61,10 @@ const setLocale = (val) => {
             </ul>
           </div>
 
-          <!-- User Email -->
           <span class="user">{{ auth.user?.email }}</span>
         </div>
       </header>
 
-      <!-- Page Content -->
       <section class="page">
         <RouterView />
       </section>
@@ -72,7 +79,6 @@ const setLocale = (val) => {
   background: #f5f6f8;
 }
 
-/* Main content */
 .content {
   flex: 1;
   display: flex;
@@ -97,11 +103,15 @@ const setLocale = (val) => {
   margin: 0;
 }
 
-/* Right side */
 .topbar-right {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.dropdown-menu {
+  position: absolute;
+  z-index: 1050;
 }
 
 .user {
@@ -110,7 +120,6 @@ const setLocale = (val) => {
   white-space: nowrap;
 }
 
-/* Page area */
 .page {
   flex: 1;
   padding: 16px;

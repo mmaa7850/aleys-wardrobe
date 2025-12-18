@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 
 const { t } = useI18n();
 
-const tableName = "S_PRD_ColorList";
+const tableName = "S_PRD_SizeList";
 
 const rows = ref([]);
 const loading = ref(false);
@@ -26,7 +26,7 @@ const form = ref({
 });
 
 const titleText = computed(() =>
-  mode.value === "create" ? t("product.colors.createTitle") : t("product.colors.editTitle")
+  mode.value === "create" ? t("product.setsizes.createTitle") : t("product.setsizes.editTitle")
 );
 
 const resetForm = () => {
@@ -92,15 +92,19 @@ const formatDate = (v) => {
   return d.toLocaleString();
 };
 
-const validateCreate = () => {
+const validateForm = () => {
   const name = form.value.Name?.trim();
-  if (!name) return t("product.colors.validateNameRequired");
+  const desc = form.value.Description?.trim();
+
+  if (!name) return t("product.setsizes.validateNameRequired");
+  if (!desc) return t("product.setsizes.validateDescriptionRequired");
+
   return "";
 };
 
 const createColor = async () => {
   saveError.value = "";
-  const msg = validateCreate();
+  const msg = validateForm();
   if (msg) {
     saveError.value = msg;
     return;
@@ -110,7 +114,7 @@ const createColor = async () => {
   try {
     const payload = {
       Name: form.value.Name.trim(),
-      Description: form.value.Description?.trim() || null,
+      Description: form.value.Description?.trim(),
       UpdatedDate: new Date().toISOString(),
     };
 
@@ -130,14 +134,20 @@ const updateColor = async () => {
   saveError.value = "";
 
   if (!form.value.ID) {
-    saveError.value = t("product.colors.missingId");
+    saveError.value = t("product.setsizes.missingId");
+    return;
+  }
+
+  const msg = validateForm();
+  if (msg) {
+    saveError.value = msg;
     return;
   }
 
   saving.value = true;
   try {
     const payload = {
-      Description: form.value.Description?.trim() || null,
+      Description: form.value.Description?.trim(),
       UpdatedDate: new Date().toISOString(),
     };
 
@@ -159,7 +169,7 @@ const submitModal = async () => {
 };
 
 const deleteRow = async (row) => {
-  const ok = window.confirm(t("product.colors.confirmDelete", { name: row.Name }));
+  const ok = window.confirm(t("product.setsizes.confirmDelete", { name: row.Name }));
   if (!ok) return;
 
   try {
@@ -182,8 +192,8 @@ onMounted(async () => {
     <!-- Header -->
     <div class="d-flex align-items-center justify-content-between mb-3">
       <div>
-        <h4 class="mb-1">{{ t("product.colors.title") }}</h4>
-        <div class="text-muted small">{{ t("product.colors.tableName") }}</div>
+        <h4 class="mb-1">{{ t("product.setsizes.title") }}</h4>
+        <div class="text-muted small">{{ t("product.setsizes.tableName") }}</div>
       </div>
 
       <button class="btn btn-primary d-inline-flex align-items-center gap-2" @click="openCreateModal">
@@ -206,9 +216,9 @@ onMounted(async () => {
           <table class="table table-hover mb-0 align-middle">
             <thead class="table-light">
               <tr>
-                <th style="width: 30%">{{ t("product.colors.name") }}</th>
-                <th style="width: 45%">{{ t("product.colors.description") }}</th>
-                <th style="width: 20%">{{ t("product.colors.updatedDate") }}</th>
+                <th style="width: 30%">{{ t("product.setsizes.name") }}</th>
+                <th style="width: 45%">{{ t("product.setsizes.description") }}</th>
+                <th style="width: 20%">{{ t("product.setsizes.updatedDate") }}</th>
                 <th class="text-end" style="width: 5%">{{ t("common.action") }}</th>
               </tr>
             </thead>
@@ -257,26 +267,26 @@ onMounted(async () => {
             </div>
 
             <div class="mb-3">
-              <label class="form-label">{{ t("product.colors.name") }}</label>
+              <label class="form-label">{{ t("product.setsizes.name") }}</label>
               <input
                 v-model="form.Name"
                 type="text"
                 class="form-control"
-                placeholder="e.g. Red"
+                placeholder="e.g. M"
                 :disabled="saving || mode === 'edit'"
               />
               <div class="form-text">
-                {{ mode === "edit" ? t("product.colors.nameHintEdit") : t("product.colors.nameHintCreate") }}
+                {{ mode === "edit" ? t("product.setsizes.nameHintEdit") : t("product.setsizes.nameHintCreate") }}
               </div>
             </div>
 
             <div class="mb-1">
-              <label class="form-label">{{ t("product.colors.description") }}</label>
+              <label class="form-label">{{ t("product.setsizes.description") }}</label>
               <input
                 v-model="form.Description"
                 type="text"
                 class="form-control"
-                placeholder="e.g. 紅色"
+                placeholder="e.g. M"
                 :disabled="saving"
               />
             </div>

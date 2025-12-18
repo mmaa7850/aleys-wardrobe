@@ -2,69 +2,71 @@
 import { useAuthStore } from "@/stores/auth";
 import { useRouter, useRoute, RouterLink } from "vue-router";
 import { ref, computed, watch } from "vue";
+import { useI18n } from "vue-i18n";
 
 const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
+const { t } = useI18n();
 
 const logout = async () => {
   await auth.signOut();
   router.push("/login");
 };
 
-/* ===== Sidebar 結構 ===== */
+/* ===== Sidebar 結構（只放 i18n key） ===== */
 const sections = [
-  { key: "dashboard", label: "Dashboard", to: "/admin" },
+  { key: "dashboard", labelKey: "admin.sidebar.dashboard", to: "/admin" },
   {
     key: "products",
-    label: "Products",
+    labelKey: "admin.sidebar.products",
     children: [
-      { label: "Product List", to: "/admin/products" },
-      { label: "Categories", to: "/admin/products/categories" },
-      { label: "Tags", to: "/admin/products/tags" },
-      { label: "Colors", to: "/admin/products/colors" },
-      { label: "Sizes", to: "/admin/products/sizes" },
+      // { labelKey: "admin.sidebar.productList", to: "/admin/products" },
+      { labelKey: "admin.sidebar.categories", to: "/admin/products/setcategories" },
+      { labelKey: "admin.sidebar.tags", to: "/admin/products/settags" },
+      { labelKey: "admin.sidebar.colors", to: "/admin/products/setcolors" },
+      { labelKey: "admin.sidebar.sizes", to: "/admin/products/setsizes" },
     ],
   },
   {
     key: "orders",
-    label: "Orders",
+    labelKey: "admin.sidebar.orders",
     children: [
-      { label: "Order List", to: "/admin/orders" },
-      { label: "Order Status", to: "/admin/orders/status" },
+      // { labelKey: "admin.sidebar.orderList", to: "/admin/orders" },
+      { labelKey: "admin.sidebar.status", to: "/admin/orders/setstatus" },
     ],
   },
   {
     key: "inventory",
-    label: "Inventory",
+    labelKey: "admin.sidebar.inventory",
     children: [
-      { label: "Stock Overview", to: "/admin/wms" },
-      { label: "Stock Logs", to: "/admin/wms/logs" },
+      { labelKey: "admin.sidebar.stockOverview", to: "/admin/wms" },
+      { labelKey: "admin.sidebar.stockLogs", to: "/admin/wms/logs" },
     ],
   },
   {
     key: "marketing",
-    label: "Marketing",
+    labelKey: "admin.sidebar.marketing",
     children: [
-      { label: "Coupons", to: "/admin/marketing/coupons" },
-      { label: "Banners", to: "/admin/marketing/banners" },
+      { labelKey: "admin.sidebar.coupons", to: "/admin/marketing/coupons" },
+      { labelKey: "admin.sidebar.banners", to: "/admin/marketing/banners" },
     ],
   },
   {
     key: "settings",
-    label: "Settings",
+    labelKey: "admin.sidebar.settings",
     children: [
-      { label: "Pay Methods", to: "/admin/settings/pay-methods" },
-      { label: "Shipping Methods", to: "/admin/settings/shipping-methods" },
-      { label: "Config Categories", to: "/admin/settings/config-categories" },
-      { label: "System Config", to: "/admin/settings/config" },
-      { label: "Admin Users", to: "/admin/settings/admin-users" },
+      { labelKey: "admin.sidebar.payMethods", to: "/admin/settings/pay-methods" },
+      { labelKey: "admin.sidebar.shippingMethods", to: "/admin/settings/shipping-methods" },
+      { labelKey: "admin.sidebar.configCategories", to: "/admin/settings/config-categories" },
+      { labelKey: "admin.sidebar.systemConfig", to: "/admin/settings/config" },
+      { labelKey: "admin.sidebar.adminUsers", to: "/admin/settings/admin-users" },
     ],
   },
 ];
 
-/* ===== 展開狀態 ===== */
-const openKeys = ref(new Set());
+/* ===== 展開狀態：一次只開一個（Accordion） ===== */
+const openKey = ref(null); // 目前展開的主選單 key（例如 'products'）
 
 const isPathInSection = (section) =>
   section.children?.some((c) => route.path.startsWith(c.to));
@@ -73,25 +75,16 @@ watch(
   () => route.path,
   () => {
     const hit = sections.find(isPathInSection);
-    if (hit) openKeys.value.add(hit.key);
+    if (hit) openKey.value = hit.key; // 路由在哪一區，就自動展開那一區
   },
   { immediate: true }
 );
 
 const toggle = (key) => {
-  const next = new Set(openKeys.value);
-  next.has(key) ? next.delete(key) : next.add(key);
-  openKeys.value = next;
+  openKey.value = openKey.value === key ? null : key; // 點同一個就收起來，點別的就切換（自動關掉上一個）
 };
 
-const isOpen = (key) => openKeys.value.has(key);
-
-const activeSectionKey = computed(() => {
-  const hit = sections.find(
-    (s) => s.to === route.path || isPathInSection(s)
-  );
-  return hit?.key;
-});
+const isOpen = (key) => openKey.value === key;
 </script>
 
 <template>
@@ -118,11 +111,8 @@ const activeSectionKey = computed(() => {
           }"
           @click="toggle(s.key)"
         >
-          {{ s.label }}
-          <span
-            class="transition"
-            :class="{ rotate: isOpen(s.key) }"
-          >▾</span>
+          {{ t(s.labelKey) }}
+          <span class="transition" :class="{ rotate: isOpen(s.key) }">▾</span>
         </button>
 
         <RouterLink
@@ -131,10 +121,10 @@ const activeSectionKey = computed(() => {
           class="btn w-100 text-start"
           :class="route.path === s.to ? 'btn-light fw-semibold' : 'btn-link text-dark'"
         >
-          {{ s.label }}
+          {{ t(s.labelKey) }}
         </RouterLink>
 
-        <!-- 子選單（Bootstrap風格動畫） -->
+        <!-- 子選單 -->
         <Transition name="collapse">
           <div v-if="s.children && isOpen(s.key)" class="ps-3 mt-1">
             <RouterLink
@@ -144,7 +134,7 @@ const activeSectionKey = computed(() => {
               class="d-block py-1 px-2 rounded text-decoration-none text-secondary"
               :class="{ 'bg-light fw-semibold text-dark': route.path.startsWith(c.to) }"
             >
-              {{ c.label }}
+              {{ t(c.labelKey) }}
             </RouterLink>
           </div>
         </Transition>
@@ -155,7 +145,7 @@ const activeSectionKey = computed(() => {
     <div class="border-top p-3">
       <div class="small text-muted mb-2">{{ auth.user?.email }}</div>
       <button class="btn btn-outline-secondary w-100" @click="logout">
-        Logout
+        {{ t("common.logout") }}
       </button>
     </div>
   </aside>
@@ -179,26 +169,31 @@ const activeSectionKey = computed(() => {
   color: #7c2d12;
 }
 
-.transition {
-  transition: transform 0.5s ease;
-}
-.rotate {
-  transform: rotate(180deg);
+.collapse-enter-active {
+  transition: max-height 0.35s ease, opacity 0.2s ease;
 }
 
-/* Bootstrap collapse-like animation */
-.collapse-enter-active,
 .collapse-leave-active {
-  transition: max-height 0.5s ease, opacity 0.5s ease;
+  transition: max-height 0.2s ease, opacity 0.1s ease;
 }
-.collapse-enter-from,
-.collapse-leave-to {
+
+.collapse-enter-from {
   max-height: 0;
   opacity: 0;
 }
-.collapse-enter-to,
+
+.collapse-enter-to {
+  max-height: 300px;
+  opacity: 1;
+}
+
 .collapse-leave-from {
   max-height: 300px;
   opacity: 1;
+}
+
+.collapse-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 </style>
