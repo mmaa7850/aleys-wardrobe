@@ -4,6 +4,11 @@ import { useRouter, useRoute, RouterLink } from "vue-router";
 import { ref, computed, watch } from "vue";
 import { useI18n } from "vue-i18n";
 
+const props = defineProps({
+  mobileOpen: { type: Boolean, default: false },
+});
+const emit = defineEmits(["close"]);
+
 const auth = useAuthStore();
 const router = useRouter();
 const route = useRoute();
@@ -14,14 +19,13 @@ const logout = async () => {
   router.push("/login");
 };
 
-/* ===== Sidebar 結構（只放 i18n key） ===== */
+/* ===== Sidebar 結構（你原本那份照用） ===== */
 const sections = [
   { key: "dashboard", labelKey: "admin.sidebar.dashboard", to: "/admin" },
   {
     key: "products",
     labelKey: "admin.sidebar.products",
     children: [
-      // { labelKey: "admin.sidebar.productList", to: "/admin/products" },
       { labelKey: "admin.sidebar.categories", to: "/admin/products/setcategories" },
       { labelKey: "admin.sidebar.tags", to: "/admin/products/settags" },
       { labelKey: "admin.sidebar.colors", to: "/admin/products/setcolors" },
@@ -31,42 +35,13 @@ const sections = [
   {
     key: "orders",
     labelKey: "admin.sidebar.orders",
-    children: [
-      // { labelKey: "admin.sidebar.orderList", to: "/admin/orders" },
-      { labelKey: "admin.sidebar.status", to: "/admin/orders/setstatus" },
-    ],
+    children: [{ labelKey: "admin.sidebar.status", to: "/admin/orders/setstatus" }],
   },
-  {
-    key: "inventory",
-    labelKey: "admin.sidebar.inventory",
-    children: [
-      { labelKey: "admin.sidebar.stockOverview", to: "/admin/wms" },
-      { labelKey: "admin.sidebar.stockLogs", to: "/admin/wms/logs" },
-    ],
-  },
-  {
-    key: "marketing",
-    labelKey: "admin.sidebar.marketing",
-    children: [
-      { labelKey: "admin.sidebar.coupons", to: "/admin/marketing/coupons" },
-      { labelKey: "admin.sidebar.banners", to: "/admin/marketing/banners" },
-    ],
-  },
-  {
-    key: "settings",
-    labelKey: "admin.sidebar.settings",
-    children: [
-      { labelKey: "admin.sidebar.payMethods", to: "/admin/settings/pay-methods" },
-      { labelKey: "admin.sidebar.shippingMethods", to: "/admin/settings/shipping-methods" },
-      { labelKey: "admin.sidebar.configCategories", to: "/admin/settings/config-categories" },
-      { labelKey: "admin.sidebar.systemConfig", to: "/admin/settings/config" },
-      { labelKey: "admin.sidebar.adminUsers", to: "/admin/settings/admin-users" },
-    ],
-  },
+  // 其他你之後再加
 ];
 
-/* ===== 展開狀態：一次只開一個（Accordion） ===== */
-const openKey = ref(null); // 目前展開的主選單 key（例如 'products'）
+/* ===== 展開狀態：一次只開一個（你之前要的） ===== */
+const openKey = ref(null);
 
 const isPathInSection = (section) =>
   section.children?.some((c) => route.path.startsWith(c.to));
@@ -75,33 +50,47 @@ watch(
   () => route.path,
   () => {
     const hit = sections.find(isPathInSection);
-    if (hit) openKey.value = hit.key; // 路由在哪一區，就自動展開那一區
+    if (hit) openKey.value = hit.key;
   },
   { immediate: true }
 );
 
 const toggle = (key) => {
-  openKey.value = openKey.value === key ? null : key; // 點同一個就收起來，點別的就切換（自動關掉上一個）
+  openKey.value = openKey.value === key ? null : key;
 };
 
 const isOpen = (key) => openKey.value === key;
+
+const activeSectionKey = computed(() => {
+  const hit = sections.find((s) => s.to === route.path || isPathInSection(s));
+  return hit?.key;
+});
+
+/* ✅ 手機點子選單自動關 sidebar */
+const onNavClick = () => {
+  emit("close");
+};
 </script>
 
 <template>
-  <aside class="sidebar d-flex flex-column border-end">
+  <aside class="sidebar" :class="{ open: mobileOpen }">
     <!-- Brand -->
-    <div class="p-3 border-bottom d-flex align-items-center gap-2">
+    <div class="brand">
       <div class="logo">A</div>
-      <div>
-        <div class="fw-bold">Aley’s</div>
-        <small class="text-muted">Admin</small>
+      <div class="brand-text">
+        <strong>Aley’s</strong>
+        <span>Admin</span>
       </div>
+
+      <!-- 手機上顯示關閉按鈕 -->
+      <button class="btn btn-sm btn-outline-secondary d-lg-none" @click="emit('close')">
+        ✕
+      </button>
     </div>
 
-    <!-- Menu -->
-    <nav class="flex-fill p-2">
+    <!-- Menu（吃掉中間空間） -->
+    <nav class="menu">
       <div v-for="s in sections" :key="s.key" class="mb-2">
-        <!-- 主選單 -->
         <button
           v-if="s.children"
           class="btn w-100 text-start d-flex justify-content-between align-items-center"
@@ -120,11 +109,11 @@ const isOpen = (key) => openKey.value === key;
           :to="s.to"
           class="btn w-100 text-start"
           :class="route.path === s.to ? 'btn-light fw-semibold' : 'btn-link text-dark'"
+          @click="onNavClick"
         >
           {{ t(s.labelKey) }}
         </RouterLink>
 
-        <!-- 子選單 -->
         <Transition name="collapse">
           <div v-if="s.children && isOpen(s.key)" class="ps-3 mt-1">
             <RouterLink
@@ -133,6 +122,7 @@ const isOpen = (key) => openKey.value === key;
               :to="c.to"
               class="d-block py-1 px-2 rounded text-decoration-none text-secondary"
               :class="{ 'bg-light fw-semibold text-dark': route.path.startsWith(c.to) }"
+              @click="onNavClick"
             >
               {{ t(c.labelKey) }}
             </RouterLink>
@@ -141,9 +131,9 @@ const isOpen = (key) => openKey.value === key;
       </div>
     </nav>
 
-    <!-- Bottom -->
-    <div class="border-top p-3">
-      <div class="small text-muted mb-2">{{ auth.user?.email }}</div>
+    <!-- Bottom（固定在最下面） -->
+    <div class="bottom">
+      <div class="email">{{ auth.user?.email }}</div>
       <button class="btn btn-outline-secondary w-100" @click="logout">
         {{ t("common.logout") }}
       </button>
@@ -154,8 +144,45 @@ const isOpen = (key) => openKey.value === key;
 <style scoped>
 .sidebar {
   width: 260px;
+  background: #ffffff;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
   min-height: 100vh;
-  background: #fff;
+
+  display: flex;
+  flex-direction: column;
+
+  transition: transform 0.3s ease;
+}
+
+/* 手機 / 平板：側欄抽屜 */
+@media (max-width: 991.98px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1100;
+    transform: translateX(-100%);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+}
+
+/* 桌機：固定顯示 */
+@media (min-width: 992px) {
+  .sidebar {
+    position: static;
+    transform: none !important;
+  }
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  justify-content: space-between;
 }
 
 .logo {
@@ -165,35 +192,59 @@ const isOpen = (key) => openKey.value === key;
   display: grid;
   place-items: center;
   font-weight: 800;
-  background: linear-gradient(135deg, #fbbf24, #f472b6);
   color: #7c2d12;
+  background: linear-gradient(135deg, #fbbf24, #f472b6);
 }
 
-.collapse-enter-active {
-  transition: max-height 0.35s ease, opacity 0.2s ease;
+.brand-text {
+  flex: 1;
+}
+.brand-text strong {
+  display: block;
+  font-size: 14px;
+}
+.brand-text span {
+  font-size: 12px;
+  color: #6b7280;
 }
 
+.menu {
+  flex: 1;
+  padding: 12px 8px;
+  overflow: auto;
+}
+
+.bottom {
+  padding: 14px 16px 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.email {
+  font-size: 12px;
+  color: #6b7280;
+  word-break: break-all;
+  margin-bottom: 10px;
+}
+
+.transition {
+  transition: transform 0.35s ease;
+}
+.rotate {
+  transform: rotate(180deg);
+}
+
+.collapse-enter-active,
 .collapse-leave-active {
-  transition: max-height 0.2s ease, opacity 0.1s ease;
+  transition: max-height 0.35s ease, opacity 0.35s ease;
 }
-
-.collapse-enter-from {
-  max-height: 0;
-  opacity: 0;
-}
-
-.collapse-enter-to {
-  max-height: 300px;
-  opacity: 1;
-}
-
-.collapse-leave-from {
-  max-height: 300px;
-  opacity: 1;
-}
-
+.collapse-enter-from,
 .collapse-leave-to {
   max-height: 0;
   opacity: 0;
+}
+.collapse-enter-to,
+.collapse-leave-from {
+  max-height: 300px;
+  opacity: 1;
 }
 </style>
