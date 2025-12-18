@@ -1,0 +1,40 @@
+/* ==========
+   Global base (keep it boring)
+   ========== */
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+:root {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background: #f4f5f7; /* 後台底色（不想全站固定也可以改白色） */
+  color: #1f2937;
+}
+
+/* Links */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Optional: form elements look consistent */
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
