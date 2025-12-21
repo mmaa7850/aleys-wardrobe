@@ -2,7 +2,7 @@
 import { ref, onMounted, nextTick, computed } from "vue";
 import { Modal } from "bootstrap";
 import { useI18n } from "vue-i18n";
-import { supabase } from "@/lib/supabase";
+import { db } from "@/lib/db";
 
 const { t } = useI18n();
 
@@ -66,12 +66,12 @@ const closeModal = () => {
   modalInstance?.hide();
 };
 
-const loadColors = async () => {
+const loadCategories = async () => {
   loading.value = true;
   errorMsg.value = "";
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from(tableName)
       .select('ID, "Name", "Description", "UpdatedDate"')
       .order("ID", { ascending: false });
@@ -85,11 +85,15 @@ const loadColors = async () => {
   }
 };
 
-const formatDate = (v) => {
-  if (!v) return "";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return v;
-  return d.toLocaleString();
+const formatDate = (val) => {
+  if (!val) return "";
+  const d = new Date(val);
+
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    `${d.getFullYear()}/${pad(d.getMonth() + 1)}/${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+  );
 };
 
 const validateForm = () => {
@@ -102,7 +106,7 @@ const validateForm = () => {
   return "";
 };
 
-const createColor = async () => {
+const createCategorie = async () => {
   saveError.value = "";
   const msg = validateForm();
   if (msg) {
@@ -118,11 +122,11 @@ const createColor = async () => {
       UpdatedDate: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from(tableName).insert(payload);
+    const { error } = await db.from(tableName).insert(payload);
     if (error) throw error;
 
     closeModal();
-    await loadColors();
+    await loadCategories();
   } catch (err) {
     saveError.value = err?.message ?? String(err);
   } finally {
@@ -130,7 +134,7 @@ const createColor = async () => {
   }
 };
 
-const updateColor = async () => {
+const updateCategorie = async () => {
   saveError.value = "";
 
   if (!form.value.ID) {
@@ -151,11 +155,11 @@ const updateColor = async () => {
       UpdatedDate: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from(tableName).update(payload).eq("ID", form.value.ID);
+    const { error } = await db.from(tableName).update(payload).eq("ID", form.value.ID);
     if (error) throw error;
 
     closeModal();
-    await loadColors();
+    await loadCategories();
   } catch (err) {
     saveError.value = err?.message ?? String(err);
   } finally {
@@ -164,8 +168,8 @@ const updateColor = async () => {
 };
 
 const submitModal = async () => {
-  if (mode.value === "create") return createColor();
-  return updateColor();
+  if (mode.value === "create") return createCategorie();
+  return updateCategorie();
 };
 
 const deleteRow = async (row) => {
@@ -173,9 +177,9 @@ const deleteRow = async (row) => {
   if (!ok) return;
 
   try {
-    const { error } = await supabase.from(tableName).delete().eq("ID", row.ID);
+    const { error } = await db.from(tableName).delete().eq("ID", row.ID);
     if (error) throw error;
-    await loadColors();
+    await loadCategories();
   } catch (err) {
     errorMsg.value = err?.message ?? String(err);
   }
@@ -183,7 +187,7 @@ const deleteRow = async (row) => {
 
 onMounted(async () => {
   await ensureModal();
-  await loadColors();
+  await loadCategories();
 });
 </script>
 
@@ -293,12 +297,12 @@ onMounted(async () => {
           </div>
 
           <div class="modal-footer">
-            <button class="btn btn-outline-secondary" @click="closeModal" :disabled="saving">
-              {{ t("common.cancel") }}
-            </button>
             <button class="btn btn-primary" @click="submitModal" :disabled="saving">
               <span v-if="saving" class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
               {{ t("common.confirm") }}
+            </button>
+            <button class="btn btn-outline-secondary" @click="closeModal" :disabled="saving">
+              {{ t("common.cancel") }}
             </button>
           </div>
         </div>

@@ -21,6 +21,22 @@ const router = createRouter({
 
         // Products - Colors ✅（你的檔案在 pages/admin/products）
         {
+          path: "/admin/products",
+          name: "AdminProducts",
+          component: () => import("@/pages/admin/products/ProductList.vue"),
+        },
+        {
+          path: "/product/products/new",
+          name: "ProductNew",
+          component: () => import("@/pages/admin/products/ProductEdit.vue"),
+        },
+        {
+          path: "/product/products/:id",
+          name: "ProductEdit",
+          component: () => import("@/pages/admin/products/ProductEdit.vue"),
+          props: true,
+        },
+        {
           path: "products/setcolors",
           name: "admin-products-setcolors",
           component: () => import("@/pages/admin/products/SetColors.vue"),
@@ -41,10 +57,45 @@ const router = createRouter({
           component: () => import("@/pages/admin/products/SetTags.vue"),
         },
 
+        // Orders
         {
           path: "orders/setstatus",
           name: "admin-orders-setstatus",
           component: () => import("@/pages/admin/orders/SetStatus.vue"),
+        },
+
+        // Marketing
+        {
+          path: "marketing/setcoupons",
+          name: "admin-market-setcoupons",
+          component: () => import("@/pages/admin/marketing/SetCoupons.vue"),
+        },
+        {
+          path: "marketing/setbanners",
+          name: "admin-market-setbanners",
+          component: () => import("@/pages/admin/marketing/SetBanners.vue"),
+        },
+
+        // Settings
+        {
+          path: "settings/setpaymethods",
+          name: "admin-settings-setpaymethods",
+          component: () => import("@/pages/admin/settings/SetPayMethods.vue"),
+        },
+        {
+          path: "settings/setshippingmethods",
+          name: "admin-settings-setshippingmethods",
+          component: () => import("@/pages/admin/settings/SetShippingMethods.vue"),
+        },
+        {
+          path: "settings/setconfigcategories",
+          name: "admin-settings-setconfigcategories",
+          component: () => import("@/pages/admin/settings/SetConfigCategories.vue"),
+        },
+        {
+          path: "settings/setconfig",
+          name: "admin-settings-setconfig",
+          component: () => import("@/pages/admin/settings/SetConfig.vue"),
         },
 
         // 之後要加其他頁面就照這樣加：

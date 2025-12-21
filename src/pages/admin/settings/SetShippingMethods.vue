@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 
 const { t } = useI18n();
 
-const tableName = "S_ORD_StatusList";
+const tableName = "S_SHP_ShippingMethodList";
 
 const rows = ref([]);
 const loading = ref(false);
@@ -26,7 +26,7 @@ const form = ref({
 });
 
 const titleText = computed(() =>
-  mode.value === "create" ? t("order.setstatus.createTitle") : t("order.setstatus.editTitle")
+  mode.value === "create" ? t("settings.setshippingmethod.createTitle") : t("settings.setshippingmethod.editTitle")
 );
 
 const resetForm = () => {
@@ -66,7 +66,7 @@ const closeModal = () => {
   modalInstance?.hide();
 };
 
-const loadStatus = async () => {
+const loadShippingMethods = async () => {
   loading.value = true;
   errorMsg.value = "";
 
@@ -100,13 +100,13 @@ const validateForm = () => {
   const name = form.value.Name?.trim();
   const desc = form.value.Description?.trim();
 
-  if (!name) return t("order.setstatus.validateNameRequired");
-  if (!desc) return t("order.setstatus.validateDescriptionRequired");
+  if (!name) return t("settings.setshippingmethod.validateNameRequired");
+  if (!desc) return t("settings.setshippingmethod.validateDescriptionRequired");
 
   return "";
 };
 
-const createStatus = async () => {
+const createShippingMethod = async () => {
   saveError.value = "";
   const msg = validateForm();
   if (msg) {
@@ -126,7 +126,7 @@ const createStatus = async () => {
     if (error) throw error;
 
     closeModal();
-    await loadStatus();
+    await loadShippingMethods();
   } catch (err) {
     saveError.value = err?.message ?? String(err);
   } finally {
@@ -134,11 +134,11 @@ const createStatus = async () => {
   }
 };
 
-const updateStatus = async () => {
+const updateShippingMethod = async () => {
   saveError.value = "";
 
   if (!form.value.ID) {
-    saveError.value = t("order.setstatus.missingId");
+    saveError.value = t("settings.setshippingmethod.missingId");
     return;
   }
 
@@ -159,7 +159,7 @@ const updateStatus = async () => {
     if (error) throw error;
 
     closeModal();
-    await loadStatus();
+    await loadShippingMethods();
   } catch (err) {
     saveError.value = err?.message ?? String(err);
   } finally {
@@ -168,18 +168,18 @@ const updateStatus = async () => {
 };
 
 const submitModal = async () => {
-  if (mode.value === "create") return createStatus();
-  return updateStatus();
+  if (mode.value === "create") return createShippingMethod();
+  return updateShippingMethod();
 };
 
 const deleteRow = async (row) => {
-  const ok = window.confirm(t("order.setstatus.confirmDelete", { name: row.Name }));
+  const ok = window.confirm(t("settings.setshippingmethod.confirmDelete", { name: row.Name }));
   if (!ok) return;
 
   try {
     const { error } = await db.from(tableName).delete().eq("ID", row.ID);
     if (error) throw error;
-    await loadStatus();
+    await loadShippingMethods();
   } catch (err) {
     errorMsg.value = err?.message ?? String(err);
   }
@@ -187,7 +187,7 @@ const deleteRow = async (row) => {
 
 onMounted(async () => {
   await ensureModal();
-  await loadStatus();
+  await loadShippingMethods();
 });
 </script>
 
@@ -196,8 +196,8 @@ onMounted(async () => {
     <!-- Header -->
     <div class="d-flex align-items-center justify-content-between mb-3">
       <div>
-        <h4 class="mb-1">{{ t("order.setstatus.title") }}</h4>
-        <div class="text-muted small">{{ t("order.setstatus.tableName") }}</div>
+        <h4 class="mb-1">{{ t("settings.setshippingmethod.title") }}</h4>
+        <div class="text-muted small">{{ t("settings.setshippingmethod.tableName") }}</div>
       </div>
 
       <button class="btn btn-primary d-inline-flex align-items-center gap-2" @click="openCreateModal">
@@ -220,9 +220,9 @@ onMounted(async () => {
           <table class="table table-hover mb-0 align-middle">
             <thead class="table-light">
               <tr>
-                <th style="width: 30%">{{ t("order.setstatus.name") }}</th>
-                <th style="width: 45%">{{ t("order.setstatus.description") }}</th>
-                <th style="width: 20%">{{ t("order.setstatus.updatedDate") }}</th>
+                <th style="width: 30%">{{ t("settings.setshippingmethod.name") }}</th>
+                <th style="width: 45%">{{ t("settings.setshippingmethod.description") }}</th>
+                <th style="width: 20%">{{ t("settings.setshippingmethod.updatedDate") }}</th>
                 <th class="text-end" style="width: 5%">{{ t("common.action") }}</th>
               </tr>
             </thead>
@@ -240,13 +240,10 @@ onMounted(async () => {
                 <td>{{ formatDate(r.UpdatedDate) }}</td>
                 <td class="text-end">
                   <div class="btn-group">
-                    <button class="btn btn-sm btn-success btn-icon" @click="openEditModal(r)" :title="t('common.edit')"
-                      type="button">
+                    <button class="btn btn-sm btn-success" @click="openEditModal(r)" :title="t('common.edit')">
                       ✎
                     </button>
-
-                    <button class="btn btn-sm btn-danger btn-icon" @click="deleteRow(r)" :title="t('common.delete')"
-                      type="button">
+                    <button class="btn btn-sm btn-danger" @click="deleteRow(r)" :title="t('common.delete')">
                       🗑
                     </button>
                   </div>
@@ -274,18 +271,28 @@ onMounted(async () => {
             </div>
 
             <div class="mb-3">
-              <label class="form-label">{{ t("order.setstatus.name") }}</label>
-              <input v-model="form.Name" type="text" class="form-control" placeholder="e.g. New"
-                :disabled="saving || mode === 'edit'" />
+              <label class="form-label">{{ t("settings.setshippingmethod.name") }}</label>
+              <input
+                v-model="form.Name"
+                type="text"
+                class="form-control"
+                placeholder="e.g. 7-ELEVEN"
+                :disabled="saving || mode === 'edit'"
+              />
               <div class="form-text">
-                {{ mode === "edit" ? t("order.setstatus.nameHintEdit") : t("order.setstatus.nameHintCreate") }}
+                {{ mode === "edit" ? t("settings.setshippingmethod.nameHintEdit") : t("settings.setshippingmethod.nameHintCreate") }}
               </div>
             </div>
 
             <div class="mb-1">
-              <label class="form-label">{{ t("order.setstatus.description") }}</label>
-              <input v-model="form.Description" type="text" class="form-control" placeholder="e.g. 新訂單"
-                :disabled="saving" />
+              <label class="form-label">{{ t("settings.setshippingmethod.description") }}</label>
+              <input
+                v-model="form.Description"
+                type="text"
+                class="form-control"
+                placeholder="e.g. 7-11"
+                :disabled="saving"
+              />
             </div>
           </div>
 
@@ -303,15 +310,3 @@ onMounted(async () => {
     </div>
   </div>
 </template>
-
-<style scoped>
-  .btn-icon {
-  width: 34px;
-  height: 31px;
-  padding: 0 !important;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-</style>

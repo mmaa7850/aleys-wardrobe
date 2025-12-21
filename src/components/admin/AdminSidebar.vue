@@ -21,24 +21,70 @@ const logout = async () => {
 
 /* ===== Sidebar 結構（你原本那份照用） ===== */
 const sections = [
-  { key: "dashboard", labelKey: "admin.sidebar.dashboard", to: "/admin" },
+  // Dashboard
+  {
+    key: "dashboard",
+    labelKey: "admin.sidebar.dashboard",
+    to: "/admin",
+  },
+
+  // Products
   {
     key: "products",
     labelKey: "admin.sidebar.products",
     children: [
+      { labelKey: "admin.sidebar.productList", to: "/admin/products"},
       { labelKey: "admin.sidebar.categories", to: "/admin/products/setcategories" },
       { labelKey: "admin.sidebar.tags", to: "/admin/products/settags" },
       { labelKey: "admin.sidebar.colors", to: "/admin/products/setcolors" },
       { labelKey: "admin.sidebar.sizes", to: "/admin/products/setsizes" },
     ],
   },
+
+  // Orders
   {
     key: "orders",
     labelKey: "admin.sidebar.orders",
-    children: [{ labelKey: "admin.sidebar.status", to: "/admin/orders/setstatus" }],
+    children: [
+      { labelKey: "admin.sidebar.orderList", to: "/admin/orders" },
+      { labelKey: "admin.sidebar.status", to: "/admin/orders/setstatus" },
+    ],
   },
-  // 其他你之後再加
+
+  // Inventory（庫存）
+  {
+    key: "inventory",
+    labelKey: "admin.sidebar.inventory",
+    children: [
+      { labelKey: "admin.sidebar.stockOverview", to: "/admin/inventory/overview" },
+      { labelKey: "admin.sidebar.stockLogs", to: "/admin/inventory/logs" },
+    ],
+  },
+
+  // Marketing（行銷）
+  {
+    key: "marketing",
+    labelKey: "admin.sidebar.marketing",
+    children: [
+      { labelKey: "admin.sidebar.coupons", to: "/admin/marketing/setcoupons" },
+      { labelKey: "admin.sidebar.banners", to: "/admin/marketing/setbanners" },
+    ],
+  },
+
+  // Settings（系統設定）
+  {
+    key: "settings",
+    labelKey: "admin.sidebar.settings",
+    children: [
+      { labelKey: "admin.sidebar.payMethods", to: "/admin/settings/setpaymethods" },
+      { labelKey: "admin.sidebar.shippingMethods", to: "/admin/settings/setshippingmethods" },
+      { labelKey: "admin.sidebar.configCategories", to: "/admin/settings/setconfigcategories" },
+      { labelKey: "admin.sidebar.config", to: "/admin/settings/setconfig" },
+      { labelKey: "admin.sidebar.adminUsers", to: "/admin/settings/admin-users" },
+    ],
+  },
 ];
+
 
 /* ===== 展開狀態：一次只開一個（你之前要的） ===== */
 const openKey = ref(null);
@@ -91,39 +137,24 @@ const onNavClick = () => {
     <!-- Menu（吃掉中間空間） -->
     <nav class="menu">
       <div v-for="s in sections" :key="s.key" class="mb-2">
-        <button
-          v-if="s.children"
-          class="btn w-100 text-start d-flex justify-content-between align-items-center"
-          :class="{
-            'btn-light fw-semibold': activeSectionKey === s.key,
-            'btn-link text-decoration-none text-dark': activeSectionKey !== s.key
-          }"
-          @click="toggle(s.key)"
-        >
+        <button v-if="s.children" class="btn w-100 text-start d-flex justify-content-between align-items-center" :class="{
+          'btn-light fw-semibold': activeSectionKey === s.key,
+          'btn-link text-decoration-none text-dark': activeSectionKey !== s.key
+        }" @click="toggle(s.key)">
           {{ t(s.labelKey) }}
           <span class="transition" :class="{ rotate: isOpen(s.key) }">▾</span>
         </button>
 
-        <RouterLink
-          v-else
-          :to="s.to"
-          class="btn w-100 text-start"
-          :class="route.path === s.to ? 'btn-light fw-semibold' : 'btn-link text-dark'"
-          @click="onNavClick"
-        >
+        <RouterLink v-else :to="s.to" class="btn w-100 text-start"
+          :class="route.path === s.to ? 'btn-light fw-semibold' : 'btn-link text-dark'" @click="onNavClick">
           {{ t(s.labelKey) }}
         </RouterLink>
 
         <Transition name="collapse">
           <div v-if="s.children && isOpen(s.key)" class="ps-3 mt-1">
-            <RouterLink
-              v-for="c in s.children"
-              :key="c.to"
-              :to="c.to"
+            <RouterLink v-for="c in s.children" :key="c.to" :to="c.to"
               class="d-block py-1 px-2 rounded text-decoration-none text-secondary"
-              :class="{ 'bg-light fw-semibold text-dark': route.path.startsWith(c.to) }"
-              @click="onNavClick"
-            >
+              :class="{ 'bg-light fw-semibold text-dark': route.path.startsWith(c.to) }" @click="onNavClick">
               {{ t(c.labelKey) }}
             </RouterLink>
           </div>
@@ -163,6 +194,7 @@ const onNavClick = () => {
     z-index: 1100;
     transform: translateX(-100%);
   }
+
   .sidebar.open {
     transform: translateX(0);
   }
@@ -199,10 +231,12 @@ const onNavClick = () => {
 .brand-text {
   flex: 1;
 }
+
 .brand-text strong {
   display: block;
   font-size: 14px;
 }
+
 .brand-text span {
   font-size: 12px;
   color: #6b7280;
@@ -229,6 +263,7 @@ const onNavClick = () => {
 .transition {
   transition: transform 0.35s ease;
 }
+
 .rotate {
   transform: rotate(180deg);
 }
@@ -237,11 +272,13 @@ const onNavClick = () => {
 .collapse-leave-active {
   transition: max-height 0.35s ease, opacity 0.35s ease;
 }
+
 .collapse-enter-from,
 .collapse-leave-to {
   max-height: 0;
   opacity: 0;
 }
+
 .collapse-enter-to,
 .collapse-leave-from {
   max-height: 300px;

@@ -2,7 +2,8 @@
 import { ref, onMounted, nextTick, computed } from "vue";
 import { Modal } from "bootstrap";
 import { useI18n } from "vue-i18n";
-import { supabase } from "@/lib/supabase";
+import { db } from "@/lib/db";
+import { formatDateTime } from "@/utils/date";
 
 const { t } = useI18n();
 
@@ -23,6 +24,7 @@ const form = ref({
   ID: null,
   Name: "",
   Description: "",
+  SortOrder: 0,
 });
 
 const titleText = computed(() =>
@@ -33,6 +35,7 @@ const resetForm = () => {
   form.value.ID = null;
   form.value.Name = "";
   form.value.Description = "";
+  form.value.SortOrder = 0;
   saveError.value = "";
 };
 
@@ -57,6 +60,7 @@ const openEditModal = async (row) => {
   form.value.ID = row.ID;
   form.value.Name = row.Name ?? "";
   form.value.Description = row.Description ?? "";
+  form.value.SortOrder = row.SortOrder ?? 0;
 
   await ensureModal();
   modalInstance.show();
@@ -66,15 +70,15 @@ const closeModal = () => {
   modalInstance?.hide();
 };
 
-const loadColors = async () => {
+const loadSizes = async () => {
   loading.value = true;
   errorMsg.value = "";
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from(tableName)
-      .select('ID, "Name", "Description", "UpdatedDate"')
-      .order("ID", { ascending: false });
+      .select('ID, "Name", "Description", "SortOrder", "UpdatedDate"')
+      .order("SortOrder", { ascending: true });
 
     if (error) throw error;
     rows.value = data ?? [];
@@ -85,24 +89,19 @@ const loadColors = async () => {
   }
 };
 
-const formatDate = (v) => {
-  if (!v) return "";
-  const d = new Date(v);
-  if (Number.isNaN(d.getTime())) return v;
-  return d.toLocaleString();
-};
-
 const validateForm = () => {
   const name = form.value.Name?.trim();
   const desc = form.value.Description?.trim();
+  const sortOrder = form.value.SortOrder ?? 0;
 
   if (!name) return t("product.setsizes.validateNameRequired");
   if (!desc) return t("product.setsizes.validateDescriptionRequired");
+  if (!sortOrder) return t("product.setsizes.validateSortOrderRequired");
 
   return "";
 };
 
-const createColor = async () => {
+const createSize = async () => {
   saveError.value = "";
   const msg = validateForm();
   if (msg) {
@@ -115,14 +114,15 @@ const createColor = async () => {
     const payload = {
       Name: form.value.Name.trim(),
       Description: form.value.Description?.trim(),
+      SortOrder: form.value.SortOrder,
       UpdatedDate: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from(tableName).insert(payload);
+    const { error } = await db.from(tableName).insert(payload);
     if (error) throw error;
 
     closeModal();
-    await loadColors();
+    await loadSizes();
   } catch (err) {
     saveError.value = err?.message ?? String(err);
   } finally {
@@ -130,7 +130,7 @@ const createColor = async () => {
   }
 };
 
-const updateColor = async () => {
+const updateSize = async () => {
   saveError.value = "";
 
   if (!form.value.ID) {
@@ -148,14 +148,15 @@ const updateColor = async () => {
   try {
     const payload = {
       Description: form.value.Description?.trim(),
+      SortOrder: form.value.SortOrder,
       UpdatedDate: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from(tableName).update(payload).eq("ID", form.value.ID);
+    const { error } = await db.from(tableName).update(payload).eq("ID", form.value.ID);
     if (error) throw error;
 
     closeModal();
-    await loadColors();
+    await loadSizes();
   } catch (err) {
     saveError.value = err?.message ?? String(err);
   } finally {
@@ -164,8 +165,8 @@ const updateColor = async () => {
 };
 
 const submitModal = async () => {
-  if (mode.value === "create") return createColor();
-  return updateColor();
+  if (mode.value === "create") return createSize();
+  return updateSize();
 };
 
 const deleteRow = async (row) => {
@@ -173,9 +174,9 @@ const deleteRow = async (row) => {
   if (!ok) return;
 
   try {
-    const { error } = await supabase.from(tableName).delete().eq("ID", row.ID);
+    const { error } = await db.from(tableName).delete().eq("ID", row.ID);
     if (error) throw error;
-    await loadColors();
+    await loadSizes();
   } catch (err) {
     errorMsg.value = err?.message ?? String(err);
   }
@@ -183,7 +184,7 @@ const deleteRow = async (row) => {
 
 onMounted(async () => {
   await ensureModal();
-  await loadColors();
+  await loadSizes();
 });
 </script>
 
@@ -217,8 +218,9 @@ onMounted(async () => {
             <thead class="table-light">
               <tr>
                 <th style="width: 30%">{{ t("product.setsizes.name") }}</th>
-                <th style="width: 45%">{{ t("product.setsizes.description") }}</th>
-                <th style="width: 20%">{{ t("product.setsizes.updatedDate") }}</th>
+                <th style="width: 40%">{{ t("product.setsizes.description") }}</th>
+                <th style="width: 10%">{{ t("product.setsizes.sortOrder") }}</th>
+                <th style="width: 15%">{{ t("product.setsizes.updatedDate") }}</th>
                 <th class="text-end" style="width: 5%">{{ t("common.action") }}</th>
               </tr>
             </thead>
@@ -233,7 +235,8 @@ onMounted(async () => {
               <tr v-for="r in rows" :key="r.ID">
                 <td class="fw-semibold">{{ r.Name }}</td>
                 <td class="text-muted">{{ r.Description }}</td>
-                <td>{{ formatDate(r.UpdatedDate) }}</td>
+                <td class="text-muted">{{ r.SortOrder }}</td>
+                <td>{{ formatDateTime(r.UpdatedDate) }}</td>
                 <td class="text-end">
                   <div class="btn-group">
                     <button class="btn btn-sm btn-success" @click="openEditModal(r)" :title="t('common.edit')">
@@ -280,7 +283,7 @@ onMounted(async () => {
               </div>
             </div>
 
-            <div class="mb-1">
+            <div class="mb-3">
               <label class="form-label">{{ t("product.setsizes.description") }}</label>
               <input
                 v-model="form.Description"
@@ -290,15 +293,27 @@ onMounted(async () => {
                 :disabled="saving"
               />
             </div>
+
+            <div class="mb-1">
+              <label class="form-label">{{ t("product.setsizes.sortOrder") }}</label>
+              <input
+                v-model="form.SortOrder"
+                type="num"
+                min="1"
+                class="form-control"
+                placeholder="e.g. 1"
+                :disabled="saving"
+              />
+            </div>
           </div>
 
           <div class="modal-footer">
-            <button class="btn btn-outline-secondary" @click="closeModal" :disabled="saving">
-              {{ t("common.cancel") }}
-            </button>
             <button class="btn btn-primary" @click="submitModal" :disabled="saving">
               <span v-if="saving" class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
               {{ t("common.confirm") }}
+            </button>
+            <button class="btn btn-outline-secondary" @click="closeModal" :disabled="saving">
+              {{ t("common.cancel") }}
             </button>
           </div>
         </div>
