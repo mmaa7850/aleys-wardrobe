@@ -60,6 +60,7 @@ export default {
       filterActive: "Active Only",
       filterInactive: "Inactive Only",
       count: "{n} items",
+      colPicture: "Picture",
       colProductName: "Product Name",
       colPrice: "Price",
       colCategory: "Category",

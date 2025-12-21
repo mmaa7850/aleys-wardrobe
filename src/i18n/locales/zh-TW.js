@@ -60,6 +60,7 @@ export default {
       filterActive: "只看上架",
       filterInactive: "只看未上架",
       count: "共 {n} 筆",
+      colPicture: "圖片",
       colProductName: "商品名稱",
       colPrice: "售價",
       colCategory: "分類",

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -13,10 +14,33 @@ const tableName = "C_PRD_ProductList";
 const rows = ref([]);
 const loading = ref(false);
 const errorMsg = ref("");
+const BUCKET = "product-pictures";
 
 // filters
 const q = ref("");
 const status = ref("all"); // all | active | inactive
+const categoryMap = ref({});
+
+const getPublicUrl = (path) => {
+  if (!path) return "";
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  return data?.publicUrl ?? "";
+};
+
+const loadCategories = async () => {
+  const { data, error } = await db
+    .from("S_PRD_CategoryList")
+    .select("Name, Description");
+
+  if (!error && data) {
+    const map = {};
+    for (const c of data) {
+      map[c.Name] = c.Description;
+    }
+    categoryMap.value = map;
+  }
+};
+
 
 // debounce（避免每打一個字就打 API）
 let _timer = null;
@@ -37,7 +61,19 @@ const loadProducts = async () => {
   try {
     let query = db
       .from(tableName)
-      .select('ID, "ProductName", "Price", "Category", "IsActive", "UpdatedDate"')
+      .select(`
+    ID,
+    ProductName,
+    Category,
+    Price,
+    IsActive,
+    UpdatedDate,
+    C_PRD_ProductPictureList (
+      StoragePath,
+      IsMain,
+      SortOrder
+    )
+  `)
       .order("ID", { ascending: false });
 
     const keyword = q.value.trim();
@@ -69,9 +105,23 @@ const formatDate = (val) => {
   )}:${pad(d.getMinutes())}`;
 };
 
+const pickPreviewPath = (row) => {
+  const pics = row?.C_PRD_ProductPictureList ?? [];
+  if (!pics.length) return "";
+
+  const main = pics.find(p => p.IsMain);
+  if (main?.StoragePath) return main.StoragePath;
+
+  // 沒主圖就用最小 SortOrder
+  const sorted = [...pics].sort((a, b) => (a.SortOrder ?? 999999) - (b.SortOrder ?? 999999));
+  return sorted[0]?.StoragePath ?? "";
+};
+
+
 const badgeClass = (isActive) => (isActive ? "bg-success" : "bg-secondary");
 
 onMounted(async () => {
+  await loadCategories();
   await loadProducts();
 });
 
@@ -101,12 +151,8 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
           <div class="col-12 col-lg-8">
             <div class="input-group">
               <span class="input-group-text">🔍</span>
-              <input
-                v-model="q"
-                type="text"
-                class="form-control"
-                :placeholder="t('product.products.searchPlaceholder')"
-              />
+              <input v-model="q" type="text" class="form-control"
+                :placeholder="t('product.products.searchPlaceholder')" />
               <button class="btn btn-outline-secondary" type="button" @click="q = ''">
                 {{ t("common.clear") }}
               </button>
@@ -152,6 +198,7 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
           <table class="table table-hover mb-0 align-middle">
             <thead class="table-light">
               <tr>
+                <th style="width:72px">{{ t("product.products.colPicture") }}</th>
                 <th style="min-width: 260px">{{ t("product.products.colProductName") }}</th>
                 <th style="width: 140px" class="text-end">{{ t("product.products.colPrice") }}</th>
                 <th style="min-width: 160px">{{ t("product.products.colCategory") }}</th>
@@ -169,6 +216,13 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
               </tr>
 
               <tr v-for="r in rows" :key="r.ID">
+                <td>
+                  <div class="thumb-cell">
+                    <img v-if="pickPreviewPath(r)" :src="getPublicUrl(pickPreviewPath(r))" class="thumb-img" alt="" />
+                    <div v-else class="thumb-empty">—</div>
+                  </div>
+                </td>
+
                 <td class="fw-semibold">
                   {{ r.ProductName }}
                   <div class="text-muted small">#{{ r.ID }}</div>
@@ -179,7 +233,7 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
                 </td>
 
                 <td>
-                  <span class="text-muted">{{ r.Category ?? "-" }}</span>
+                  <span class="text-muted">{{ categoryMap[r.Category] ?? r.Category ?? "-" }}</span>
                 </td>
 
                 <td>
@@ -220,9 +274,32 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
 <style scoped>
 /* RWD 小優化：在很窄的螢幕下，按鈕不要擠爆 */
 @media (max-width: 420px) {
-  .btn-group > .btn {
+  .btn-group>.btn {
     padding-left: 0.5rem;
     padding-right: 0.5rem;
   }
+}
+
+.thumb-cell {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f6f7f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumb-empty {
+  font-size: 12px;
+  color: #999;
 }
 </style>
