@@ -66,7 +66,8 @@ export default {
       colCategory: "Category",
       colStatus: "Status",
       colUpdatedDate: "Last Updated",
-      mobileHint: "Tip: Swipe left or right to view more columns"
+      mobileHint: "Tip: Swipe left or right to view more columns",
+      colStock: "Stock",
     },
     productEdit: {
       titleNew: "Create Product (Draft)",

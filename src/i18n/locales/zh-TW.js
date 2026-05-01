@@ -66,7 +66,8 @@ export default {
       colCategory: "分類",
       colStatus: "狀態",
       colUpdatedDate: "更新時間",
-      mobileHint: "提示：可左右滑動表格查看更多欄位"
+      mobileHint: "提示：可左右滑動表格查看更多欄位",
+      colStock: "庫存",
     },
     productEdit: {
       titleNew: "新增商品（草稿）",

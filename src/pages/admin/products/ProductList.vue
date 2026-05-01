@@ -44,7 +44,8 @@ const loadCategories = async () => {
 
 // debounce（避免每打一個字就打 API）
 let _timer = null;
-watch([q, status], () => {
+const category = ref("all");
+watch([q, status, category], () => {
   clearTimeout(_timer);
   _timer = setTimeout(() => loadProducts(), 300);
 });
@@ -62,19 +63,23 @@ const loadProducts = async () => {
     let query = db
       .from(tableName)
       .select(`
-    ID,
-    ProductName,
-    Category,
-    Price,
-    IsActive,
-    UpdatedDate,
-    C_PRD_ProductPictureList (
-      StoragePath,
-      IsMain,
-      SortOrder,
-      Type
-    )
-  `)
+        ID,
+        ProductName,
+        Category,
+        Price,
+        IsActive,
+        UpdatedDate,
+        C_PRD_ProductPictureList (
+          StoragePath,
+          IsMain,
+          SortOrder,
+          Type
+        ),
+        C_PRD_ProductVariantList (
+          StockQty,
+          IsActive
+        )
+      `)
       .order("ID", { ascending: false });
 
     const keyword = q.value.trim();
@@ -85,6 +90,10 @@ const loadProducts = async () => {
 
     if (status.value === "active") query = query.eq("IsActive", true);
     if (status.value === "inactive") query = query.eq("IsActive", false);
+
+    if (category.value !== "all") {
+      query = query.eq("Category", category.value);
+    }
 
     const { data, error } = await query;
     if (error) throw error;
@@ -118,6 +127,25 @@ const pickPreview = (row) => {
   );
 
   return sorted[0] ?? null;
+};
+
+const getTotalStock = (row) => {
+  const variants = row?.C_PRD_ProductVariantList ?? [];
+  return variants.reduce((sum, v) => sum + (Number(v.StockQty) || 0), 0);
+};
+
+const getActiveVariantCount = (row) => {
+  const variants = row?.C_PRD_ProductVariantList ?? [];
+  return variants.filter(v => v.IsActive).length;
+};
+
+const isLowStock = (row) => {
+  const total = getTotalStock(row);
+  return total > 0 && total <= 5;
+};
+
+const isOutOfStock = (row) => {
+  return getTotalStock(row) === 0;
 };
 
 
@@ -162,8 +190,18 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
             </div>
           </div>
 
+          <!-- Category -->
+          <div class="col-12 col-lg-2">
+            <select v-model="category" class="form-select">
+              <option value="all">全部分類</option>
+              <option v-for="c in Object.keys(categoryMap)" :key="c" :value="c">
+                {{ categoryMap[c] }}
+              </option>
+            </select>
+          </div>
+
           <!-- Status filter -->
-          <div class="col-12 col-lg-4">
+          <div class="col-12 col-lg-2">
             <select v-model="status" class="form-select">
               <option value="all">{{ t("product.products.filterAll") }}</option>
               <option value="active">{{ t("product.products.filterActive") }}</option>
@@ -204,6 +242,7 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
                 <th style="width:72px">{{ t("product.products.colPicture") }}</th>
                 <th style="min-width: 260px">{{ t("product.products.colProductName") }}</th>
                 <th style="width: 140px" class="text-end">{{ t("product.products.colPrice") }}</th>
+                <th style="width: 120px" class="text-end">{{ t("product.products.colStock") }}</th>
                 <th style="min-width: 160px">{{ t("product.products.colCategory") }}</th>
                 <th style="width: 120px">{{ t("product.products.colStatus") }}</th>
                 <th style="min-width: 180px">{{ t("product.products.colUpdatedDate") }}</th>
@@ -213,12 +252,12 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
 
             <tbody>
               <tr v-if="!hasData">
-                <td colspan="6" class="text-center text-muted py-4">
+                <td colspan="8" class="text-center text-muted py-4">
                   {{ t("common.noData") }}
                 </td>
               </tr>
 
-              <tr v-for="r in rows" :key="r.ID">
+              <tr v-for="r in rows" :key="r.ID" :class="{ 'row-inactive': !r.IsActive }">
                 <td>
                   <div class="thumb-cell">
                     <template v-if="pickPreview(r)">
@@ -247,6 +286,20 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
 
                 <td class="text-end">
                   <span class="fw-semibold">{{ r.Price ?? "-" }}</span>
+                </td>
+
+                <td class="text-end">
+                  <span class="badge" :class="{
+                    'bg-danger': isOutOfStock(r),
+                    'bg-warning text-dark': isLowStock(r),
+                    'bg-success': !isOutOfStock(r) && !isLowStock(r)
+                  }">
+                    {{ getTotalStock(r) }}
+                  </span>
+
+                  <div class="text-muted small">
+                    {{ getActiveVariantCount(r) }} 個規格
+                  </div>
                 </td>
 
                 <td>
@@ -331,5 +384,9 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
   bottom: 2px;
   right: 4px;
   font-size: 14px;
+}
+
+.row-inactive {
+  opacity: 0.65;
 }
 </style>
