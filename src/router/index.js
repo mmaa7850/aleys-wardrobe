@@ -10,6 +10,11 @@ const router = createRouter({
   routes: [
     { path: "/", redirect: "/login" },
     { path: "/login", name: "login", component: LoginView },
+    {
+      path: "/reset-password",
+      name: "reset-password",
+      component: () => import("@/views/ResetPasswordView.vue"),
+    },
 
     {
       path: "/admin",
@@ -124,6 +129,11 @@ const router = createRouter({
 
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
+
+  // ✅ 放行 reset-password（超重要）
+  if (to.path === "/reset-password") {
+    return true;
+  }
 
   // ✅ 一定要初始化（你沒有 loading，就直接判斷 user）
   if (!auth.user) {

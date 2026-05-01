@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
+import { supabase } from "@/lib/supabase";
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -12,23 +13,52 @@ const errorMsg = ref("");
 const isSubmitting = ref(false);
 
 const onLogin = async () => {
-  console.log("[Login] clicked"); // ✅ 確認按鈕真的有觸發
+  console.log("[Login] clicked");
   errorMsg.value = "";
+  isSubmitting.value = true;
 
   if (!email.value || !password.value) {
     errorMsg.value = "請輸入 Email / Password";
+    isSubmitting.value = false;
     return;
   }
 
   try {
     await auth.signInWithPassword(email.value, password.value);
 
-    // ✅ 這一行是重點
     const redirect = router.currentRoute.value.query.redirect || "/admin";
+    await router.push(redirect);
+  } catch (e) {
+    console.error("[Login error]", e);
+    errorMsg.value = e?.message || "登入失敗，請確認帳號密碼或 Supabase 設定";
+  } finally {
+    isSubmitting.value = false;
+  }
+};
 
-    router.push(redirect);
-    } catch (e) {
-      console.error(e);
+const onForgotPassword = async () => {
+  errorMsg.value = "";
+
+  if (!email.value) {
+    errorMsg.value = "請先輸入 Email";
+    return;
+  }
+
+  isSubmitting.value = true;
+
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.value, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    if (error) throw error;
+
+    alert("重設密碼信已寄出，請去信箱查看");
+  } catch (e) {
+    console.error("[Forgot password error]", e);
+    errorMsg.value = e?.message || "寄送重設密碼信失敗";
+  } finally {
+    isSubmitting.value = false;
   }
 };
 </script>
@@ -47,22 +77,12 @@ const onLogin = async () => {
       <form class="form" @submit.prevent="onLogin">
         <div class="field">
           <label>Email</label>
-          <input
-            v-model.trim="email"
-            type="email"
-            placeholder="you@example.com"
-            autocomplete="username"
-          />
+          <input v-model.trim="email" type="email" placeholder="you@example.com" autocomplete="username" />
         </div>
 
         <div class="field">
           <label>Password</label>
-          <input
-            v-model="password"
-            type="password"
-            placeholder="••••••••"
-            autocomplete="current-password"
-          />
+          <input v-model="password" type="password" placeholder="••••••••" autocomplete="current-password" />
         </div>
 
         <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
@@ -70,6 +90,10 @@ const onLogin = async () => {
         <button class="btn" type="submit" :disabled="isSubmitting">
           <span v-if="!isSubmitting">Login</span>
           <span v-else>Logging in...</span>
+        </button>
+
+        <button class="link-btn" type="button" @click="onForgotPassword" :disabled="isSubmitting">
+          忘記密碼？
         </button>
 
         <div class="footer">
@@ -226,5 +250,19 @@ const onLogin = async () => {
 
 .hint {
   opacity: 0.85;
+}
+
+.link-btn {
+  border: 0;
+  background: transparent;
+  color: #9d174d;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.link-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>

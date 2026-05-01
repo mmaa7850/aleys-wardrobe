@@ -71,7 +71,8 @@ const loadProducts = async () => {
     C_PRD_ProductPictureList (
       StoragePath,
       IsMain,
-      SortOrder
+      SortOrder,
+      Type
     )
   `)
       .order("ID", { ascending: false });
@@ -105,16 +106,18 @@ const formatDate = (val) => {
   )}:${pad(d.getMinutes())}`;
 };
 
-const pickPreviewPath = (row) => {
+const pickPreview = (row) => {
   const pics = row?.C_PRD_ProductPictureList ?? [];
-  if (!pics.length) return "";
+  if (!pics.length) return null;
 
   const main = pics.find(p => p.IsMain);
-  if (main?.StoragePath) return main.StoragePath;
+  if (main) return main;
 
-  // 沒主圖就用最小 SortOrder
-  const sorted = [...pics].sort((a, b) => (a.SortOrder ?? 999999) - (b.SortOrder ?? 999999));
-  return sorted[0]?.StoragePath ?? "";
+  const sorted = [...pics].sort(
+    (a, b) => (a.SortOrder ?? 999999) - (b.SortOrder ?? 999999)
+  );
+
+  return sorted[0] ?? null;
 };
 
 
@@ -218,7 +221,21 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
               <tr v-for="r in rows" :key="r.ID">
                 <td>
                   <div class="thumb-cell">
-                    <img v-if="pickPreviewPath(r)" :src="getPublicUrl(pickPreviewPath(r))" class="thumb-img" alt="" />
+                    <template v-if="pickPreview(r)">
+
+                      <img v-if="pickPreview(r).Type === 'image'" :src="getPublicUrl(pickPreview(r).StoragePath)"
+                        class="thumb-img" />
+
+                      <div v-else class="video-wrapper">
+                        <video class="thumb-img" autoplay muted loop playsinline>
+                          <source :src="getPublicUrl(pickPreview(r).StoragePath)" />
+                        </video>
+
+                        <span class="video-tag">🎬</span>
+                      </div>
+
+                    </template>
+
                     <div v-else class="thumb-empty">—</div>
                   </div>
                 </td>
@@ -301,5 +318,18 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
 .thumb-empty {
   font-size: 12px;
   color: #999;
+}
+
+.video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.video-tag {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 14px;
 }
 </style>

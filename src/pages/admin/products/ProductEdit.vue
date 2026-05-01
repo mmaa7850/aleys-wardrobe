@@ -385,35 +385,82 @@ const loadVariants = async (productId) => {
 };
 
 const saveVariants = async (productId) => {
-    // 沒勾顏色或尺寸，視為清空 variants（就刪掉即可）
-    // 你也可以改成：不刪、不動，看你要的邏輯
     const rows = variantRows.value ?? [];
 
-    // 1) 先刪掉這個商品的既有 variants（最穩）
-    const { error: delErr } = await db
+    // 1) 先查目前 DB 既有 variants
+    const { data: existingData, error: loadErr } = await db
         .from("C_PRD_ProductVariantList")
-        .delete()
+        .select('ID, "ProductID", "ColorID", "SizeID", "StockQty", "IsActive", "SKU"')
         .eq("ProductID", productId);
 
-    if (delErr) throw delErr;
+    if (loadErr) throw loadErr;
 
-    // 2) 如果沒有 rows，就結束（等於清空）
-    if (rows.length === 0) return;
+    const existingRows = existingData ?? [];
 
-    // 3) 插入新的 rows
-    const payload = rows.map(r => ({
-        ProductID: productId,
-        ColorID: r.ColorID,
-        SizeID: r.SizeID,
-        StockQty: r.StockQty ?? 0,
-        IsActive: r.IsActive ?? false
-    }));
+    // key = ColorID::SizeID
+    const existingMap = new Map(
+        existingRows.map(r => [vKey(r.ColorID, r.SizeID), r])
+    );
 
-    const { error: insErr } = await db
-        .from("C_PRD_ProductVariantList")
-        .insert(payload);
+    const currentMap = new Map(
+        rows.map(r => [vKey(r.ColorID, r.SizeID), r])
+    );
 
-    if (insErr) throw insErr;
+    // 2) 新增 or 更新
+    for (const r of rows) {
+        const key = vKey(r.ColorID, r.SizeID);
+        const existing = existingMap.get(key);
+
+        const sku = existing?.SKU || `AW-P${productId}-C${r.ColorID}-S${r.SizeID}`;
+
+        if (existing) {
+            // 已存在：只更新庫存、是否可賣、SKU補值
+            const { error: updateErr } = await db
+                .from("C_PRD_ProductVariantList")
+                .update({
+                    StockQty: r.StockQty ?? 0,
+                    IsActive: r.IsActive ?? false,
+                    SKU: sku,
+                    UpdatedDate: new Date().toISOString()
+                })
+                .eq("ID", existing.ID);
+
+            if (updateErr) throw updateErr;
+        } else {
+            // 不存在：新增
+            const { error: insertErr } = await db
+                .from("C_PRD_ProductVariantList")
+                .insert({
+                    ProductID: productId,
+                    ColorID: r.ColorID,
+                    SizeID: r.SizeID,
+                    SKU: sku,
+                    StockQty: r.StockQty ?? 0,
+                    IsActive: r.IsActive ?? false,
+                    CreatedDate: new Date().toISOString(),
+                    UpdatedDate: new Date().toISOString()
+                });
+
+            if (insertErr) throw insertErr;
+        }
+    }
+
+    // 3) DB 有，但現在畫面沒有的組合：刪除
+    for (const oldRow of existingRows) {
+        const key = vKey(oldRow.ColorID, oldRow.SizeID);
+
+        if (!currentMap.has(key)) {
+            const { error: disableErr } = await db
+                .from("C_PRD_ProductVariantList")
+                .update({
+                    IsActive: false,
+                    UpdatedDate: new Date().toISOString()
+                })
+                .eq("ID", oldRow.ID);
+
+            if (disableErr) throw disableErr;
+        }
+    }
 };
 
 const saveSizeSpecs = async (productId) => {
@@ -574,7 +621,7 @@ const loadPictures = async (productId) => {
     try {
         const { data, error } = await db
             .from("C_PRD_ProductPictureList")
-            .select('ID, ProductID, "AltText", "SortOrder", "IsMain", "StoragePath"')
+            .select('ID, ProductID, "AltText", "SortOrder", "IsMain", "StoragePath", "Type"')
             .eq("ProductID", productId)
             .order("IsMain", { ascending: false })
             .order("SortOrder", { ascending: true });
@@ -598,16 +645,17 @@ const uploadPictures = async (files) => {
     picError.value = "";
 
     if (!form.value.ID) {
-        picError.value = "請先儲存草稿後再上傳圖片";
+        picError.value = "請先儲存草稿後再上傳圖片/影片";
         return;
     }
+
     if (!files || files.length === 0) return;
 
     picSaving.value = true;
+
     try {
         const productId = form.value.ID;
 
-        // 目前最大 SortOrder（新增在最後）
         const maxSort = pictures.value.length
             ? Math.max(...pictures.value.map(p => p.SortOrder ?? 0))
             : 0;
@@ -617,15 +665,17 @@ const uploadPictures = async (files) => {
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
 
-            // 建議限制一下檔案類型（避免上傳奇怪檔）
-            if (!file.type.startsWith("image/")) continue;
+            const isImage = file.type.startsWith("image/");
+            const isVideo = file.type.startsWith("video/");
 
-            // 建議路徑：products/{productId}/{timestamp}_{rand}.{ext}
-            const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+            if (!isImage && !isVideo) continue;
+
+            const mediaType = isImage ? "image" : "video";
+
+            const ext = file.name.split(".").pop()?.toLowerCase() || (isImage ? "jpg" : "mp4");
             const fileName = `${Date.now()}_${Math.random().toString(16).slice(2)}.${ext}`;
             const storagePath = `products/${productId}/${fileName}`;
 
-            // 上傳到 Storage
             const { error: upErr } = await supabase.storage
                 .from(BUCKET)
                 .upload(storagePath, file, {
@@ -641,13 +691,15 @@ const uploadPictures = async (files) => {
                 StoragePath: storagePath,
                 AltText: "",
                 SortOrder: maxSort + i + 1,
-                IsMain: false
+                IsMain: false,
+                Type: mediaType
             });
         }
 
         if (inserts.length > 0) {
-            // 如果目前沒有主圖，第一張自動設主圖
             const hasMain = pictures.value.some(p => p.IsMain);
+
+            // 建議只讓圖片當主圖，不要讓影片當主圖
             if (!hasMain) {
                 inserts[0].IsMain = true;
             }
@@ -664,40 +716,63 @@ const uploadPictures = async (files) => {
         picError.value = err?.message ?? String(err);
     } finally {
         picSaving.value = false;
+
+        // 清空 input，讓同一個檔案可以再次選取
+        if (fileInput.value) {
+            fileInput.value.value = "";
+        }
     }
 };
 
 const deletePicture = async (pic) => {
-    const ok = window.confirm("確定要刪除這張圖片嗎？");
+    const ok = window.confirm("確定要刪除這個檔案嗎？");
     if (!ok) return;
 
     picError.value = "";
     picSaving.value = true;
+
     try {
         const productId = form.value.ID;
+        const storagePath = pic.StoragePath;
 
-        // 1) 刪 Storage
-        const { error: rmErr } = await supabase.storage
+        if (!productId || !storagePath) {
+            throw new Error("缺少商品 ID 或檔案路徑");
+        }
+
+        const folder = `products/${productId}`;
+
+        const { data: listData, error: listErr } = await supabase.storage
             .from(BUCKET)
-            .remove([pic.StoragePath]);
+            .list(folder);
+
+        // 1. 刪 Storage
+        const { data: removeData, error: rmErr } = await supabase.storage
+            .from(BUCKET)
+            .remove([storagePath]);
 
         if (rmErr) throw rmErr;
 
-        // 2) 刪 DB
+        // 2. 刪 DB
         const { error: delErr } = await db
             .from("C_PRD_ProductPictureList")
             .delete()
             .eq("ProductID", productId)
-            .eq("StoragePath", pic.StoragePath);
+            .eq("StoragePath", storagePath);
 
         if (delErr) throw delErr;
 
-        // 3) 如果刪的是主圖，重新指定第一張為主圖
         await loadPictures(productId);
+
         if (!pictures.value.some(p => p.IsMain) && pictures.value.length > 0) {
-            await setMainPicture(pictures.value[0]);
+            const firstMedia = [...pictures.value].sort(
+                (a, b) => (a.SortOrder ?? 999999) - (b.SortOrder ?? 999999)
+            )[0];
+
+            await setMainPicture(firstMedia);
         }
+
     } catch (err) {
+        console.error("[deletePicture]", err);
         picError.value = err?.message ?? String(err);
     } finally {
         picSaving.value = false;
@@ -859,6 +934,71 @@ const generateSizeSpecs = () => {
     sizeSpecs.value = rows;
 };
 
+const deleteProduct = async () => {
+    if (!form.value.ID) return;
+
+    const ok = window.confirm("確定要刪除這個商品嗎？此動作無法復原！");
+    if (!ok) return;
+
+    const productId = form.value.ID;
+
+    loading.value = true;
+    errorMsg.value = "";
+
+    try {
+        // 🟡 1️⃣ 先抓圖片（一定要最前面）
+        const { data: pics } = await db
+            .from("C_PRD_ProductPictureList")
+            .select("StoragePath")
+            .eq("ProductID", productId);
+
+        // 🟡 2️⃣ 刪 Storage
+        if (pics?.length) {
+            const paths = pics.map(p => p.StoragePath);
+
+            const { error: storageErr } = await supabase.storage
+                .from("product-pictures")
+                .remove(paths);
+
+            if (storageErr) throw storageErr;
+        }
+
+        // 🟡 3️⃣ 刪子表
+        const tables = [
+            "C_PRD_ProductPictureList",
+            "C_PRD_ProductSizeSpecList",
+            "C_PRD_ProductTag",
+            "C_PRD_ProductVariantList"
+        ];
+
+        for (const table of tables) {
+            const { error } = await db
+                .from(table)
+                .delete()
+                .eq("ProductID", productId);
+
+            if (error) throw error;
+        }
+
+        // 🟡 4️⃣ 刪主表
+        const { error: mainErr } = await db
+            .from("C_PRD_ProductList")
+            .delete()
+            .eq("ID", productId);
+
+        if (mainErr) throw mainErr;
+
+        alert("刪除成功");
+        router.push("/admin/products");
+
+    } catch (err) {
+        console.error(err);
+        errorMsg.value = err?.message ?? "刪除失敗";
+    } finally {
+        loading.value = false;
+    }
+};
+
 
 
 watch([selectedColorIds, selectedSizeIds], () => {
@@ -921,7 +1061,7 @@ onMounted(async () => {
                     {{ form.IsActive ? t("product.productEdit.unpublish") : t("product.productEdit.publish") }}
                 </button>
 
-                <button class="btn btn-outline-danger" disabled>
+                <button class="btn btn-outline-danger" @click="deleteProduct" :disabled="loading || saving">
                     {{ t("common.delete") }}
                 </button>
             </div>
@@ -1036,7 +1176,7 @@ onMounted(async () => {
                     </div>
 
                     <div class="card-body">
-                        <input ref="fileInput" type="file" accept="image/*" multiple class="d-none"
+                        <input ref="fileInput" type="file" accept="image/*, video/*" multiple class="d-none"
                             @change="(e) => uploadPictures(e.target.files)" />
 
                         <div v-if="!form.ID" class="text-muted small mb-2">
@@ -1055,14 +1195,21 @@ onMounted(async () => {
                             <div v-for="p in pictures" :key="p.StoragePath" class="pic-item">
                                 <div class="card h-100">
                                     <div class="thumb-wrap">
-                                        <img :src="getPublicUrl(p.StoragePath)" class="thumb" :alt="p.AltText || ''" />
+                                        <img v-if="p.Type === 'image'" :src="getPublicUrl(p.StoragePath)" class="thumb"
+                                            :alt="p.AltText || ''" />
+
+                                        <video v-else-if="p.Type === 'video'" class="thumb" controls preload="metadata">
+                                            <source :src="getPublicUrl(p.StoragePath)" />
+                                            你的瀏覽器不支援影片播放
+                                        </video>
 
                                         <button class="badge-btn" type="button" :class="p.IsMain ? 'is-main' : 'is-sub'"
                                             @click="setMainPicture(p)" :disabled="picSaving || p.IsMain"
                                             :title="p.IsMain ? t('product.pictures.main') : t('product.pictures.setMain')">
                                             <span class="dot"></span>
-                                            <span class="txt">{{ p.IsMain ? t("product.pictures.main") :
-                                                t("product.pictures.sub") }}</span>
+                                            <span class="txt">
+                                                {{ p.IsMain ? t("product.pictures.main") : t("product.pictures.sub") }}
+                                            </span>
                                         </button>
                                     </div>
 
@@ -1348,6 +1495,7 @@ onMounted(async () => {
     aspect-ratio: 1 / 1;
     object-fit: cover;
     display: block;
+    background: #000;
 }
 
 /* Badge：放在圖片左上角 */
