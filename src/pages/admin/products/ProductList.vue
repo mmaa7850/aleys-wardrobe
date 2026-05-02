@@ -228,165 +228,170 @@ const hasData = computed(() => (rows.value?.length ?? 0) > 0);
       {{ errorMsg }}
     </div>
 
-    <!-- Table -->
-    <div class="card">
-      <div class="card-body p-0">
-        <div v-if="loading" class="p-3">
-          <div class="text-muted">{{ t("common.loading") }}</div>
-        </div>
-
-        <div v-else class="table-responsive">
-          <table class="table table-hover mb-0 align-middle">
-            <thead class="table-light">
-              <tr>
-                <th style="width:72px">{{ t("product.products.colPicture") }}</th>
-                <th style="min-width: 260px">{{ t("product.products.colProductName") }}</th>
-                <th style="width: 140px" class="text-end">{{ t("product.products.colPrice") }}</th>
-                <th style="width: 120px" class="text-end">{{ t("product.products.colStock") }}</th>
-                <th style="min-width: 160px">{{ t("product.products.colCategory") }}</th>
-                <th style="width: 120px">{{ t("product.products.colStatus") }}</th>
-                <th style="min-width: 180px">{{ t("product.products.colUpdatedDate") }}</th>
-                <th class="text-end" style="width: 120px">{{ t("common.action") }}</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              <tr v-if="!hasData">
-                <td colspan="8" class="text-center text-muted py-4">
-                  {{ t("common.noData") }}
-                </td>
-              </tr>
-
-              <tr v-for="r in rows" :key="r.ID" :class="{ 'row-inactive': !r.IsActive }">
-                <td>
-                  <div class="thumb-cell">
-                    <template v-if="pickPreview(r)">
-
-                      <img v-if="pickPreview(r).Type === 'image'" :src="getPublicUrl(pickPreview(r).StoragePath)"
-                        class="thumb-img" />
-
-                      <div v-else class="video-wrapper">
-                        <video class="thumb-img" autoplay muted loop playsinline>
-                          <source :src="getPublicUrl(pickPreview(r).StoragePath)" />
-                        </video>
-
-                        <span class="video-tag">🎬</span>
-                      </div>
-
-                    </template>
-
-                    <div v-else class="thumb-empty">—</div>
-                  </div>
-                </td>
-
-                <td class="fw-semibold">
-                  {{ r.ProductName }}
-                  <div class="text-muted small">#{{ r.ID }}</div>
-                </td>
-
-                <td class="text-end">
-                  <span class="fw-semibold">{{ r.Price ?? "-" }}</span>
-                </td>
-
-                <td class="text-end">
-                  <span class="badge" :class="{
-                    'bg-danger': isOutOfStock(r),
-                    'bg-warning text-dark': isLowStock(r),
-                    'bg-success': !isOutOfStock(r) && !isLowStock(r)
-                  }">
-                    {{ getTotalStock(r) }}
-                  </span>
-
-                  <div class="text-muted small">
-                    {{ getActiveVariantCount(r) }} 個規格
-                  </div>
-                </td>
-
-                <td>
-                  <span class="text-muted">{{ categoryMap[r.Category] ?? r.Category ?? "-" }}</span>
-                </td>
-
-                <td>
-                  <span class="badge" :class="badgeClass(r.IsActive)">
-                    {{ r.IsActive ? t("common.active") : t("common.inactive") }}
-                  </span>
-                </td>
-
-                <td>
-                  <span class="text-muted">{{ formatDate(r.UpdatedDate) }}</span>
-                </td>
-
-                <td class="text-end">
-                  <div class="btn-group">
-                    <button class="btn btn-sm btn-success" @click="goEdit(r.ID)" :title="t('common.edit')">
-                      ✎
-                    </button>
-                    <!-- 先留著：刪除之後再做 -->
-                    <button class="btn btn-sm btn-outline-secondary" disabled :title="t('common.delete')">
-                      🗑
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+    <!-- Loading -->
+    <div v-if="loading" class="text-muted py-4 text-center">
+      {{ t("common.loading") }}
     </div>
 
-    <!-- Mobile helper hint -->
-    <div class="text-muted small mt-2 d-lg-none">
-      {{ t("product.products.mobileHint") }}
+    <!-- No data -->
+    <div v-else-if="!hasData" class="text-muted py-4 text-center">
+      {{ t("common.noData") }}
+    </div>
+
+    <!-- Card Grid -->
+    <div v-else class="row row-cols-2 row-cols-md-4 row-cols-xl-6 g-2">
+      <div v-for="r in rows" :key="r.ID" class="col">
+        <div class="product-card" :class="{ 'card-inactive': !r.IsActive }">
+
+          <!-- 圖片區 -->
+          <div class="product-img-wrap">
+            <template v-if="pickPreview(r)">
+              <img v-if="pickPreview(r).Type === 'image'"
+                :src="getPublicUrl(pickPreview(r).StoragePath)"
+                class="product-img" />
+              <div v-else class="product-img-wrap">
+                <video class="product-img" autoplay muted loop playsinline>
+                  <source :src="getPublicUrl(pickPreview(r).StoragePath)" />
+                </video>
+                <span class="video-badge">🎬</span>
+              </div>
+            </template>
+            <div v-else class="product-img-empty">—</div>
+
+            <!-- 狀態 badge 疊在右上角 -->
+            <span class="status-badge badge" :class="badgeClass(r.IsActive)">
+              {{ r.IsActive ? t("common.active") : t("common.inactive") }}
+            </span>
+          </div>
+
+          <!-- 資訊區 -->
+          <div class="product-body">
+            <div class="product-name fw-semibold">{{ r.ProductName }}</div>
+            <div class="text-muted small mb-2">#{{ r.ID }} · {{ categoryMap[r.Category] ?? r.Category ?? "-" }}</div>
+
+            <div class="d-flex align-items-center justify-content-between">
+              <span class="product-price">NT$ {{ r.Price ?? "-" }}</span>
+              <span class="badge" :class="{
+                'bg-danger': isOutOfStock(r),
+                'bg-warning text-dark': isLowStock(r),
+                'bg-success': !isOutOfStock(r) && !isLowStock(r)
+              }">
+                庫存 {{ getTotalStock(r) }}
+              </span>
+            </div>
+
+            <div class="text-muted small mt-1">{{ getActiveVariantCount(r) }} 個規格</div>
+          </div>
+
+          <!-- 底部操作 -->
+          <div class="product-footer">
+            <span class="text-muted small">{{ formatDate(r.UpdatedDate) }}</span>
+            <div class="btn-group">
+              <button class="btn btn-sm btn-success" @click="goEdit(r.ID)" :title="t('common.edit')">
+                ✎
+              </button>
+              <button class="btn btn-sm btn-outline-secondary" disabled :title="t('common.delete')">
+                🗑
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* RWD 小優化：在很窄的螢幕下，按鈕不要擠爆 */
-@media (max-width: 420px) {
-  .btn-group>.btn {
-    padding-left: 0.5rem;
-    padding-right: 0.5rem;
-  }
-}
-
-.thumb-cell {
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
+.product-card {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
   overflow: hidden;
-  background: #f6f7f9;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  transition: box-shadow 0.2s;
 }
 
-.thumb-img {
+.product-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.card-inactive {
+  opacity: 0.6;
+}
+
+/* 圖片 */
+.product-img-wrap {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: #f6f7f9;
+  overflow: hidden;
+}
+
+.product-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.thumb-empty {
-  font-size: 12px;
-  color: #999;
-}
-
-.video-wrapper {
-  position: relative;
+.product-img-empty {
   width: 100%;
   height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #bbb;
+  font-size: 18px;
 }
 
-.video-tag {
+.video-badge {
   position: absolute;
-  bottom: 2px;
-  right: 4px;
-  font-size: 14px;
+  bottom: 4px;
+  right: 6px;
+  font-size: 12px;
 }
 
-.row-inactive {
-  opacity: 0.65;
+.status-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  padding: 2px 5px;
+}
+
+/* 資訊 */
+.product-body {
+  padding: 7px 9px 4px;
+  flex: 1;
+}
+
+.product-name {
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.product-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* 底部 */
+.product-footer {
+  padding: 5px 9px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.product-footer .text-muted {
+  font-size: 10px;
 }
 </style>

@@ -64,6 +64,11 @@ const router = createRouter({
 
         // Orders
         {
+          path: "orders",
+          name: "admin-orders",
+          component: () => import("@/pages/admin/orders/OrderList.vue"),
+        },
+        {
           path: "orders/setstatus",
           name: "admin-orders-setstatus",
           component: () => import("@/pages/admin/orders/SetStatus.vue"),
