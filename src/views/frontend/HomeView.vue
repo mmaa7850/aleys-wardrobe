@@ -2,6 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
 
 const newArrivals = ref([])
 const isLoading = ref(true)
@@ -203,6 +206,19 @@ onMounted(async () => {
       </RouterLink>
     </div>
   </section>
+
+  <!-- Admin shortcut (only visible to admins) -->
+  <RouterLink
+    v-if="auth.canEnterAdmin"
+    to="/admin"
+    class="admin-fab"
+    title="管理後台"
+  >
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>
+  </RouterLink>
 
   <!-- ══════════════════════════════
        BRAND STORY
@@ -698,5 +714,30 @@ onMounted(async () => {
   color: var(--fe-muted);
   line-height: 2;
   margin: 0 0 44px;
+}
+
+/* ── Admin FAB ── */
+.admin-fab {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  width: 44px;
+  height: 44px;
+  background: rgba(28, 23, 20, 0.82);
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  z-index: 200;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.admin-fab:hover {
+  background: rgba(28, 23, 20, 1);
+  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.26);
 }
 </style>

@@ -85,6 +85,14 @@ onUnmounted(() => {
             ☰
           </button>
 
+          <RouterLink to="/" class="topbar-home" title="前往前台">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            <span class="d-none d-sm-inline">前台首頁</span>
+          </RouterLink>
+
           <h1 class="title ms-2 mb-0">Admin</h1>
         </div>
 
@@ -199,5 +207,24 @@ onUnmounted(() => {
 }
 .dropdown-menu.show {
   display: block;
+}
+
+.topbar-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: #6b7280;
+  text-decoration: none;
+  padding: 5px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  white-space: nowrap;
+}
+.topbar-home:hover {
+  color: #374151;
+  border-color: #9ca3af;
+  background: #f9fafb;
 }
 </style>
