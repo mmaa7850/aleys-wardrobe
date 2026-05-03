@@ -7,13 +7,38 @@ import AdminHome from "@/views/admin/AdminHome.vue";
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    return { top: 0, behavior: 'instant' }
+  },
   routes: [
-    { path: "/", redirect: "/login" },
+    // ── Frontend ──
+    {
+      path: "/",
+      component: () => import("@/views/frontend/FrontendLayout.vue"),
+      children: [
+        { path: "", name: "home", component: () => import("@/views/frontend/HomeView.vue") },
+        { path: "products", name: "products", component: () => import("@/views/frontend/ProductListView.vue") },
+        { path: "products/:id", name: "product-detail", component: () => import("@/views/frontend/ProductDetailView.vue") },
+        { path: "account", name: "account", component: () => import("@/views/frontend/AccountView.vue"), meta: { requiresAuth: true } },
+        { path: "cart", name: "cart", component: () => import("@/views/frontend/CartView.vue") },
+        { path: "checkout", name: "checkout", component: () => import("@/views/frontend/CheckoutView.vue"), meta: { requiresAuth: true } },
+        { path: "order-success/:orderNo", name: "order-success", component: () => import("@/views/frontend/OrderSuccessView.vue"), meta: { requiresAuth: true } },
+        { path: "orders/:orderNo", name: "order-detail", component: () => import("@/views/frontend/OrderDetailView.vue"), meta: { requiresAuth: true } },
+        { path: "wishlist", name: "wishlist", component: () => import("@/views/frontend/WishlistView.vue"), meta: { requiresAuth: true } },
+      ],
+    },
+
     { path: "/login", name: "login", component: LoginView },
     {
       path: "/reset-password",
       name: "reset-password",
       component: () => import("@/views/ResetPasswordView.vue"),
+    },
+    {
+      path: "/auth/callback",
+      name: "auth-callback",
+      component: () => import("@/views/AuthCallbackView.vue"),
     },
 
     {
@@ -135,8 +160,8 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
 
-  // ✅ 放行 reset-password（超重要）
-  if (to.path === "/reset-password") {
+  // 放行不需要驗證的頁面
+  if (to.path === "/reset-password" || to.path === "/auth/callback") {
     return true;
   }
 

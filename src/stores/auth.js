@@ -73,6 +73,22 @@ export const useAuthStore = defineStore("auth", {
       await this.loadAdminProfile();
     },
 
+    async signUp(email, password) {
+      const { data, error } = await supabase.auth.signUp({ email, password })
+      if (error) throw error
+      return data
+    },
+
+    async signInWithLine() {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "custom:line",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) throw error;
+    },
+
     async signOut() {
       await supabase.auth.signOut();
       this.user = null;

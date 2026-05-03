@@ -1,0 +1,204 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+// AES-256-CBC 加密 — 使用 Web Crypto 標準 PKCS7-16 padding
+// 藍新 PHP 的 strippadding() 可正確識別並移除此 padding
+async function aesEncrypt(plaintext: string, key: string, iv: string): Promise<string> {
+  const keyBytes = new Uint8Array(32)
+  keyBytes.set(new TextEncoder().encode(key).slice(0, 32))
+  const ivBytes = new Uint8Array(16)
+  ivBytes.set(new TextEncoder().encode(iv).slice(0, 16))
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', keyBytes, { name: 'AES-CBC' }, false, ['encrypt']
+  )
+  const data = new TextEncoder().encode(plaintext)
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-CBC', iv: ivBytes }, cryptoKey, data)
+  return Array.from(new Uint8Array(encrypted)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+async function sha256Upper(str: string): Promise<string> {
+  const data = new TextEncoder().encode(str)
+  const hash = await crypto.subtle.digest('SHA-256', data)
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+      { global: { headers: { Authorization: authHeader } } }
+    )
+
+    const { data: { user }, error: authErr } = await supabase.auth.getUser()
+    if (authErr || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const body = await req.json()
+    const { orderNo, amount, email, itemDesc, recipientName, recipientPhone, shippingAddress, customerNote, items, paymentMethod, shippingMethod, storeId, storeName } = body
+
+    if (!orderNo || !amount || !email) {
+      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    const merchantId = Deno.env.get('NEWEBPAY_MERCHANT_ID')!
+    const hashKey = Deno.env.get('NEWEBPAY_HASH_KEY')!.trim()
+    const hashIV = Deno.env.get('NEWEBPAY_HASH_IV')!.trim()
+    const env = Deno.env.get('NEWEBPAY_ENV') || 'test'
+    const siteUrl = Deno.env.get('SITE_URL') || 'https://aleys-wardrobe.vercel.app'
+
+    const gatewayUrl = env === 'prod'
+      ? 'https://core.newebpay.com/MPG/mpg_gateway'
+      : 'https://ccore.newebpay.com/MPG/mpg_gateway'
+
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
+    const dbSchema = Deno.env.get('DB_SCHEMA') || 'public'
+
+    // 結帳前檢查庫存
+    const variantIds = (items as Array<{ variantId: number; qty: number; productName: string }>).map(i => i.variantId)
+    const { data: variants } = await supabaseAdmin
+      .schema(dbSchema)
+      .from('C_PRD_ProductVariantList')
+      .select('ID, StockQty')
+      .in('ID', variantIds)
+
+    for (const item of items as Array<{ variantId: number; qty: number; productName: string }>) {
+      const v = variants?.find((x: { ID: number; StockQty: number }) => x.ID === item.variantId)
+      if (!v || v.StockQty < item.qty) {
+        return new Response(JSON.stringify({
+          error: `「${item.productName}」庫存不足，請調整數量後再試`
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+    }
+
+    const { data: order, error: orderErr } = await supabaseAdmin
+      .schema(dbSchema)
+      .from('C_ORD_OrderList')
+      .insert({
+        OrderNo: orderNo,
+        CustomerName: recipientName,
+        CustomerEmail: email,
+        CustomerPhone: recipientPhone,
+        ShippingName: recipientName,
+        ShippingPhone: recipientPhone,
+        ShippingAddress: shippingMethod === 'cvs_711' ? (storeName || '') : (shippingAddress || ''),
+        ShippingFee: 0,
+        PaymentStatus: 'pending',
+        ItemsTotal: amount,
+        FinalAmount: amount,
+        CustomerNote: customerNote || null,
+        ShippingMethod: shippingMethod || 'home',
+        StoreID: storeId || null,
+        StoreName: storeName || null,
+      })
+      .select('ID')
+      .single()
+
+    if (orderErr) throw new Error(`Order insert failed: ${orderErr.message}`)
+
+    const orderItems = (items as Array<{
+      productId: number; productName: string; variantId: number
+      colorName: string; sizeName: string; unitPrice: number; qty: number
+    }>).map(item => ({
+      OrderID: order.ID,
+      ProductID: item.productId,
+      ProductName: item.productName,
+      VariantID: item.variantId,
+      ColorName: item.colorName,
+      SizeName: item.sizeName,
+      UnitPrice: item.unitPrice,
+      Qty: item.qty,
+      SubTotal: item.unitPrice * item.qty,
+    }))
+
+    const { error: itemsErr } = await supabaseAdmin
+      .schema(dbSchema)
+      .from('C_ORD_OrderItemList')
+      .insert(orderItems)
+
+    if (itemsErr) throw new Error(`Items insert failed: ${itemsErr.message}`)
+
+    const timeStamp = Math.floor(Date.now() / 1000)
+
+    const params: Record<string, string | number> = {
+      Amt: amount,
+      ClientBackURL: `${siteUrl}/orders/${orderNo}`,
+      Email: email,
+      ItemDesc: (itemDesc || '商品購買').slice(0, 50),
+      LoginType: 0,
+      MerchantID: merchantId,
+      MerchantOrderNo: orderNo,
+      NotifyURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-notify`,
+      RespondType: 'JSON',
+      ReturnURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-return`,
+      TimeStamp: timeStamp,
+      Version: '2.0',
+    }
+
+    const pad = (n: number) => String(n).padStart(2, '0')
+
+    if (paymentMethod === 'cvs') {
+      params.CVS = 1
+      const expire = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      params.ExpireDate = `${expire.getFullYear()}${pad(expire.getMonth()+1)}${pad(expire.getDate())}${pad(expire.getHours())}${pad(expire.getMinutes())}${pad(expire.getSeconds())}`
+    } else if (paymentMethod === 'atm') {
+      params.VACC = 1
+      const expire = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+      params.ExpireDate = `${expire.getFullYear()}${pad(expire.getMonth()+1)}${pad(expire.getDate())}`
+    } else if (paymentMethod === 'webatm') {
+      params.WEBATM = 1
+    } else {
+      params.CREDIT = 1
+    }
+
+    const sortedKeys = Object.keys(params).sort()
+    const queryStr = sortedKeys.map(k => `${k}=${params[k]}`).join('&')
+
+    const tradeInfo = await aesEncrypt(queryStr, hashKey, hashIV)
+    const tradeSha = await sha256Upper(`HashKey=${hashKey}&${tradeInfo}&HashIV=${hashIV}`)
+
+    return new Response(JSON.stringify({
+      gatewayUrl,
+      MerchantID: merchantId,
+      TradeInfo: tradeInfo,
+      TradeSha: tradeSha,
+      TimeStamp: timeStamp,
+      Version: '2.0',
+      MerchantOrderNo: orderNo,
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[create-payment] error:', msg)
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    })
+  }
+})
