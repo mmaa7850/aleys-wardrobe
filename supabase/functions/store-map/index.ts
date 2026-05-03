@@ -49,7 +49,6 @@ Deno.serve(async (req) => {
       : 'https://ccore.newebpay.com/API/Logistic/storeMap'
 
     const timeStamp   = Math.floor(Date.now() / 1000)
-    const tempOrderNo = `TEMP_${timeStamp}`
     const returnUrl = `${supabaseUrl}/functions/v1/store-callback`
 
     // Logistics API expects JSON-encoded inner data (NOT query string)

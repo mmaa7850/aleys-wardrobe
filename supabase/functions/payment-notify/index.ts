@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from '@supabase/supabase-js'
 
 async function aesEncrypt(text: string, key: string, iv: string): Promise<string> {
   const k = new Uint8Array(32); k.set(new TextEncoder().encode(key).slice(0, 32))
