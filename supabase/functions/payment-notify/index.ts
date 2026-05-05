@@ -41,10 +41,22 @@ async function callLogisticsApi(apiUrl: string, innerParams: string, merchantId:
 
   const res = await fetch(apiUrl, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept':       'application/json,text/plain,*/*',
+      'User-Agent':   'Mozilla/5.0',
+    },
     body:    form.toString(),
   })
-  return res.json()
+
+  const rawText = await res.text()
+  console.log('[logistics] status:', res.status, '| content-type:', res.headers.get('content-type'))
+  console.log('[logistics] raw response:', rawText.slice(0, 500))
+  console.log('[logistics] innerParams:', innerParams)
+  console.log('[logistics] encryptData:', encryptData.slice(0, 80))
+  console.log('[logistics] hashData:', hashData)
+
+  return JSON.parse(rawText)
 }
 
 // 解密藍新物流 API 回傳的 EncryptData
@@ -59,10 +71,10 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 })
 
   try {
-    const hashKey    = Deno.env.get('NEWEBPAY_HASH_KEY')!
-    const hashIV     = Deno.env.get('NEWEBPAY_HASH_IV')!
-    const lgsHashKey = Deno.env.get('NEWEBPAY_LGS_HASH_KEY') || hashKey
-    const lgsHashIV  = Deno.env.get('NEWEBPAY_LGS_HASH_IV')  || hashIV
+    const hashKey    = Deno.env.get('NEWEBPAY_HASH_KEY')!.trim()
+    const hashIV     = Deno.env.get('NEWEBPAY_HASH_IV')!.trim()
+    const lgsHashKey = hashKey
+    const lgsHashIV  = hashIV
     const merchantId = Deno.env.get('NEWEBPAY_MERCHANT_ID')!
     const env        = Deno.env.get('NEWEBPAY_ENV') || 'test'
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -71,6 +83,9 @@ Deno.serve(async (req) => {
       ? 'https://core.newebpay.com/API/Logistic'
       : 'https://ccore.newebpay.com/API/Logistic'
 
+    console.log('[logistics] hashKey length:', lgsHashKey.length)
+    console.log('[logistics] hashIV length:', lgsHashIV.length)
+
     const ct = req.headers.get('content-type') || ''
     let tradeInfo = '', tradeSha = '', status = ''
 
@@ -78,14 +93,22 @@ Deno.serve(async (req) => {
       const body = await req.json()
       tradeInfo = body.TradeInfo ?? ''; tradeSha = body.TradeSha ?? ''; status = body.Status ?? ''
     } else {
-      const params = new URLSearchParams(await req.text())
+      const rawBody = await req.text()
+      console.log('[DEBUG] raw body:', rawBody.slice(0, 500))
+      const params = new URLSearchParams(rawBody)
       tradeInfo = params.get('TradeInfo') ?? ''; tradeSha = params.get('TradeSha') ?? ''; status = params.get('Status') ?? ''
     }
 
     if (!tradeInfo || !tradeSha) return new Response('Missing TradeInfo or TradeSha', { status: 400 })
 
-    const expectedSha = await sha256Upper(`HashKey=${hashKey}&${tradeInfo}&HashIV=${hashIV}`)
-    if (expectedSha !== tradeSha) { console.error('[payment-notify] TradeSha mismatch'); return new Response('Invalid signature', { status: 400 }) }
+    console.log('[DEBUG] tradeInfo:', tradeInfo.slice(0, 100))
+    console.log('[DEBUG] tradeSha (from newebpay):', tradeSha)
+    const rawString = `HashKey=${hashKey}&${tradeInfo}&HashIV=${hashIV}`
+    console.log('[DEBUG] raw string:', rawString.slice(0, 200))
+    const mySha = await sha256Upper(rawString)
+    console.log('[DEBUG] mySha:', mySha)
+
+    if (mySha !== tradeSha) { console.error('[payment-notify] TradeSha mismatch'); return new Response('Invalid signature', { status: 400 }) }
 
     const decrypted = await aesDecrypt(tradeInfo, hashKey, hashIV)
     let result: Record<string, string> = {}
@@ -101,6 +124,17 @@ Deno.serve(async (req) => {
     const dbSchema = Deno.env.get('DB_SCHEMA') || 'public'
 
     console.log('[payment-notify] orderNo:', orderNo, '| payStatus:', payStatus)
+
+    // 冪等檢查：已經 paid 就不重複處理
+    const { data: existingOrder } = await supabase.schema(dbSchema).from('C_ORD_OrderList')
+      .select('PaymentStatus')
+      .eq('OrderNo', orderNo)
+      .single()
+
+    if (existingOrder?.PaymentStatus === 'paid') {
+      console.log('[payment-notify] Already paid, skipping duplicate notify')
+      return new Response('OK', { status: 200 })
+    }
 
     // 更新付款狀態
     const { error: updateErr } = await supabase.schema(dbSchema).from('C_ORD_OrderList')
@@ -147,20 +181,21 @@ Deno.serve(async (req) => {
           try {
             const ts = Math.floor(Date.now() / 1000)
 
-            // NPA-B52：建立物流寄貨單
+            // NPA-B52：建立物流寄貨單（內層明文不可 URL encode）
             const b52Params = [
+              `MerchantID=${merchantId}`,
               `MerchantOrderNo=${orderNo}`,
               `TradeType=3`,
               `UserName=${orderData.ShippingName}`,
               `UserTel=${orderData.CustomerPhone}`,
               `UserEmail=${orderData.CustomerEmail}`,
               `StoreID=${orderData.StoreID}`,
-              `Amt=${orderData.FinalAmount}`,
+              `Amt=${Math.round(Number(orderData.FinalAmount))}`,
+              `NotifyURL=${supabaseUrl}/functions/v1/logistics-notify`,
+              `ItemDesc=商品`,
               `LgsType=C2C`,
               `ShipType=1`,
               `TimeStamp=${ts}`,
-              `NotifyURL=${supabaseUrl}/functions/v1/logistics-notify`,
-              `ItemDesc=商品`,
             ].join('&')
 
             const b52Res = await callLogisticsApi(`${lgsBase}/createShipment`, b52Params, merchantId, lgsHashKey, lgsHashIV)

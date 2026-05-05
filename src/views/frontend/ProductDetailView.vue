@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
@@ -26,6 +26,7 @@ const activeTab       = ref('desc')
 
 const addingToCart = ref(false)
 const cartAdded    = ref(false)
+const qty          = ref(1)
 
 // ── media ─────────────────────────────────────────────
 const sortedMedia = computed(() => {
@@ -65,6 +66,13 @@ const selectedVariant = computed(() =>
     v => v.ColorID === selectedColor.value && v.SizeID === selectedSize.value
   ) || null
 )
+
+const maxQty = computed(() => selectedVariant.value?.StockQty ?? 1)
+
+watch(selectedVariant, () => { qty.value = 1 })
+
+function decQty() { if (qty.value > 1) qty.value-- }
+function incQty() { if (qty.value < maxQty.value) qty.value++ }
 
 const stockStatus = computed(() => {
   if (!selectedVariant.value) return null
@@ -146,9 +154,10 @@ function selectColor(id) {
 
 async function onAddToCart() {
   if (!selectedVariant.value) return
+  if (!auth.isLoggedIn) { router.push('/login'); return }
   addingToCart.value = true
   try {
-    await cart.addItem(product.value.ID, selectedVariant.value.ID)
+    await cart.addItem(product.value.ID, selectedVariant.value.ID, qty.value)
     cartAdded.value = true
     setTimeout(() => { cartAdded.value = false }, 2000)
   } catch (err) {
@@ -302,6 +311,13 @@ onMounted(async () => {
         <p v-if="stockStatus" :class="['pd-stock', `pd-stock--${stockStatus.cls}`]">
           {{ stockStatus.label }}
         </p>
+
+        <!-- Quantity selector -->
+        <div v-if="selectedVariant && stockStatus?.cls !== 'out'" class="pd-qty-row">
+          <button class="pd-qty-btn" @click="decQty" :disabled="qty <= 1">−</button>
+          <span class="pd-qty-val">{{ qty }}</span>
+          <button class="pd-qty-btn" @click="incQty" :disabled="qty >= maxQty">+</button>
+        </div>
 
         <!-- Add to cart + Wishlist -->
         <div class="pd-cart-row">
@@ -663,6 +679,43 @@ onMounted(async () => {
 .pd-stock--in  { color: #15803D; }
 .pd-stock--low { color: #B45309; }
 .pd-stock--out { color: #DC2626; }
+
+/* Quantity selector */
+.pd-qty-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 14px;
+  border: 1px solid var(--fe-border);
+  width: fit-content;
+}
+
+.pd-qty-btn {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: var(--fe-text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.pd-qty-btn:hover:not(:disabled) { background: var(--fe-linen); }
+.pd-qty-btn:disabled { color: var(--fe-muted); cursor: not-allowed; }
+
+.pd-qty-val {
+  min-width: 40px;
+  text-align: center;
+  font-size: 14px;
+  border-left: 1px solid var(--fe-border);
+  border-right: 1px solid var(--fe-border);
+  line-height: 40px;
+}
 
 /* Cart row */
 .pd-cart-row {

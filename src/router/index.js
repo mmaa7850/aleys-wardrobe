@@ -141,7 +141,7 @@ const router = createRouter({
         // { path: "orders", name: "admin-orders", component: () => import("@/pages/admin/orders/Orders.vue") },
         // { path: "orders/status", name: "admin-orders-status", component: () => import("@/pages/admin/orders/OrderStatus.vue") },
 
-        // { path: "wms", name: "admin-wms", component: () => import("@/pages/admin/wms/StockOverview.vue") },
+        { path: "inventory/overview", name: "admin-inventory-overview", component: () => import("@/pages/admin/inventory/StockOverview.vue") },
         // { path: "wms/logs", name: "admin-wms-logs", component: () => import("@/pages/admin/wms/StockLogs.vue") },
 
         // { path: "marketing/coupons", name: "admin-marketing-coupons", component: () => import("@/pages/admin/marketing/Coupons.vue") },
