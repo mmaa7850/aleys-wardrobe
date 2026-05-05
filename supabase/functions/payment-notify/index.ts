@@ -39,6 +39,7 @@ async function callLogisticsApi(apiUrl: string, innerParams: string, merchantId:
     RespondType_:  'JSON',
   })
 
+  console.log('[logistics] FINAL URL:', apiUrl)
   const res = await fetch(apiUrl, {
     method:  'POST',
     headers: {
@@ -56,7 +57,7 @@ async function callLogisticsApi(apiUrl: string, innerParams: string, merchantId:
   console.log('[logistics] encryptData:', encryptData.slice(0, 80))
   console.log('[logistics] hashData:', hashData)
 
-  return JSON.parse(rawText)
+  try { return JSON.parse(rawText) } catch { return { Status: 'PARSE_ERROR', Message: rawText.slice(0, 200) } }
 }
 
 // 解密藍新物流 API 回傳的 EncryptData
@@ -78,6 +79,13 @@ Deno.serve(async (req) => {
     const merchantId = Deno.env.get('NEWEBPAY_MERCHANT_ID')!
     const env        = Deno.env.get('NEWEBPAY_ENV') || 'test'
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+
+    console.log('[logistics] env:', env)
+    console.log('[logistics] merchantId:', merchantId)
+    console.log('[logistics] has lgsHashKey:', !!lgsHashKey)
+    console.log('[logistics] has lgsHashIV:', !!lgsHashIV)
+    console.log('[logistics] hashKey length:', lgsHashKey.length)
+    console.log('[logistics] hashIV length:', lgsHashIV.length)
 
     const lgsBase = env === 'prod'
       ? 'https://core.newebpay.com/API/Logistic'
