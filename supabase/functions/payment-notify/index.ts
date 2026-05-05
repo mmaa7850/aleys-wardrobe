@@ -39,12 +39,19 @@ async function callLogisticsApi(apiUrl: string, innerParams: string, merchantId:
     RespondType_:  'JSON',
   })
 
+  console.log('[logistics] FINAL URL:', apiUrl)
   const res = await fetch(apiUrl, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json,text/plain,*/*',
+      'User-Agent': 'Mozilla/5.0',
+    },
     body:    form.toString(),
   })
-  return res.json()
+  const text = await res.text()
+  console.log('[logistics] raw response:', text.slice(0, 300))
+  try { return JSON.parse(text) } catch { return { Status: 'PARSE_ERROR', Message: text.slice(0, 200) } }
 }
 
 // 解密藍新物流 API 回傳的 EncryptData
@@ -59,13 +66,20 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 })
 
   try {
-    const hashKey    = Deno.env.get('NEWEBPAY_HASH_KEY')!
-    const hashIV     = Deno.env.get('NEWEBPAY_HASH_IV')!
-    const lgsHashKey = Deno.env.get('NEWEBPAY_LGS_HASH_KEY') || hashKey
-    const lgsHashIV  = Deno.env.get('NEWEBPAY_LGS_HASH_IV')  || hashIV
+    const hashKey    = Deno.env.get('NEWEBPAY_HASH_KEY')!.trim()
+    const hashIV     = Deno.env.get('NEWEBPAY_HASH_IV')!.trim()
+    const lgsHashKey = (Deno.env.get('NEWEBPAY_LGS_HASH_KEY') || hashKey).trim()
+    const lgsHashIV  = (Deno.env.get('NEWEBPAY_LGS_HASH_IV')  || hashIV).trim()
     const merchantId = Deno.env.get('NEWEBPAY_MERCHANT_ID')!
     const env        = Deno.env.get('NEWEBPAY_ENV') || 'test'
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+
+    console.log('[logistics] env:', env)
+    console.log('[logistics] merchantId:', merchantId)
+    console.log('[logistics] has lgsHashKey:', !!lgsHashKey)
+    console.log('[logistics] has lgsHashIV:', !!lgsHashIV)
+    console.log('[logistics] hashKey length:', lgsHashKey.length)
+    console.log('[logistics] hashIV length:', lgsHashIV.length)
 
     const lgsBase = env === 'prod'
       ? 'https://core.newebpay.com/API/Logistic'
