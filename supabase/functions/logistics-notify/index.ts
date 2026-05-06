@@ -39,8 +39,11 @@ Deno.serve(async (req) => {
 
     const orderNo   = result.MerchantOrderNo || ''
     const lgsNo     = result.LgsNo           || ''
-    const retId     = result.RetId || result.Retld || ''
+    const retId     = result.RetId           || ''
     const retString = result.RetString       || ''
+
+    console.log('[logistics-notify] raw keys:', Object.keys(result).join(', '))
+    console.log('[logistics-notify] orderNo:', orderNo, '| retId:', retId, '| retString:', retString)
 
     if (!orderNo) return new Response('Missing orderNo', { status: 400 })
 
