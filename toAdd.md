@@ -27,15 +27,16 @@
 
 ---
 
-## 3. 訂單出貨流程（藍新物流後續）
+## 3. 訂單出貨流程（藍新 CVSCOM）
 
-**現況：** `payment-notify` 付款成功後會呼叫藍新物流 API 啟動 7-11 C2C，但完整出貨流程尚未釐清。
+**現況：**
+- 付款/取號完成後，藍新自動建立物流單並在 `payment-notify` / `payment-return` 回傳 `LgsNo`（寄件代碼）、`StoreCode`、`StoreName` 等，寫入 `C_ORD_OrderList`
+- `logistics-notify` 已接收 NPA-B58 推播，自動更新 `ShippingStatus` / `ShippingStatusText`
+- 客戶訂單頁顯示取貨門市與「出貨後收簡訊通知」說明
 
-**待釐清與實作：**
-- 後台手動觸發出貨（建立出貨單）的操作流程
-- `logistics-notify` webhook 接收藍新物流狀態更新後，訂單狀態的對應更新邏輯
-- 前台訂單詳情頁顯示物流追蹤資訊（物流單號、目前狀態）
-- 宅配出貨流程（目前只有 7-11，宅配的後續出貨動作待定）
+**待做：**
+- 後台訂單列表加入「出貨操作」：商家確認商品備好後，需帶著 LgsNo 至指定門市的 ibon 機台列印寄件單，後台應顯示 LgsNo 並有「標記已出貨」按鈕更新 ShippingStatus
+- 前台訂單詳情頁在商家出貨後顯示物流追蹤狀態（目前 ShippingStatusText 已有但樣式待確認）
 
 ---
 

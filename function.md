@@ -14,9 +14,9 @@
 | 商品列表 | `/products` | 分類 pill 篩選 + 排序下拉、Load More 分頁、商品卡片（售價/原價/sale badge/收藏愛心）|
 | 商品詳情 | `/products/:id` | 圖片/影片 Gallery、顏色→尺寸選擇、**數量選擇器（上限卡庫存）**、規格表、加入購物車（未登入自動導 /login）、收藏 |
 | 購物車 | `/cart` | 商品列表、數量 ± 控制、刪除、訂單摘要（小計/運費/總計）|
-| 結帳 | `/checkout` | 收件人表單、配送方式（宅配/7-11 C2C）、7-11 門市地圖選擇（popup）、付款方式（信用卡/超商/ATM/WebATM）、備註欄、串接藍新金流 |
+| 結帳 | `/checkout` | 收件人姓名/電話/備註、確認送出後導向藍新金流頁面（付款方式與超商門市皆在藍新頁選擇）|
 | 結帳成功 | `/order-success/:orderNo` | 動畫打勾、訂單編號、回首頁/查訂單連結 |
-| 訂單詳情 | `/orders/:orderNo` | 訂單狀態、付款狀態 badge、收件人資訊、商品明細、ATM 繳費帳號（如適用）、重新付款按鈕 |
+| 訂單詳情 | `/orders/:orderNo` | 訂單狀態、付款狀態 badge、收件人資訊、取貨門市、商品明細、ATM 繳費帳號（付款前顯示）、重新付款按鈕 |
 | 會員中心 | `/account` | 個人資料（姓名/電話/性別/生日）、訂單歷史、收藏捷徑、登出 |
 | 收藏清單 | `/wishlist` | 收藏商品格狀顯示、移除收藏 |
 | 登入/註冊 | `/login` | Email 登入、LINE OAuth、註冊、忘記密碼 |
@@ -52,14 +52,15 @@
 
 ## Supabase Edge Functions
 
-| Function | 說明 |
-|----------|------|
-| `create-payment` | 建立訂單（驗庫存、寫入 DB）、加密藍新金流參數、回傳 Gateway URL |
-| `payment-notify` | 藍新付款回調 webhook：解密驗簽、更新付款狀態、扣庫存、啟動 7-11 物流 |
-| `retry-payment` | 重新付款：在訂單號加 `_R1/_R2` 後綴、回傳新加密參數 |
-| `store-map` | 產生 7-11 門市選擇地圖的加密表單參數 |
-| `store-callback` | 接收門市選擇結果，透過 postMessage 傳回結帳頁 |
-| `logistics-notify` | 7-11 出貨狀態 webhook：更新訂單物流資訊 |
+| Function | JWT 驗證 | 說明 |
+|----------|----------|------|
+| `create-payment` | ✅ 需要 | 驗庫存、建立訂單（ShippingMethod=cvscom）、加密藍新參數（CREDIT+VACC+CVSCOM=1+LgsType=C2C）、回傳 Gateway URL |
+| `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態、扣庫存、儲存 CVSCOM 回傳的 StoreCode/LgsNo 等物流資訊 |
+| `payment-return` | ❌ 關閉 | 藍新前台導回：儲存付款方式、ATM 帳號、CVSCOM 門市資訊，導向 /order-success/:orderNo |
+| `retry-payment` | ✅ 需要 | 重新付款：在訂單號加 `_R1/_R2` 後綴、回傳新加密參數 |
+| `logistics-notify` | ❌ 關閉 | 藍新物流 NPA-B58 webhook：接收貨態推播、更新 ShippingStatus/ShippingStatusText |
+| `store-map` | ✅ 需要 | （舊流程殘留）產生 7-11 門市選擇地圖參數，現已不在結帳流程使用 |
+| `store-callback` | ❌ 關閉 | （舊流程殘留）接收門市選擇 postMessage，現已不在結帳流程使用 |
 
 ---
 
@@ -100,8 +101,8 @@
 
 | 服務 | 用途 |
 |------|------|
-| 藍新金流 (NewebPay) | 信用卡、超商代碼、ATM、WebATM 付款 |
-| 藍新物流 | 7-11 C2C 超商取貨 |
+| 藍新金流 (NewebPay) MPG | 信用卡、ATM 轉帳付款；CVSCOM=1 讓藍新 MPG 頁面處理超商門市選擇 |
+| 藍新物流 (NewebPay Logistics) | 7-11 C2C 超商取貨不付款；藍新自動建立物流單並回傳 LgsNo；NPA-B58 推播貨態 |
 | Supabase Auth | Email 登入、LINE OAuth |
 | Supabase Storage | 商品圖片/影片存放 |
 
