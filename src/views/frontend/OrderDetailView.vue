@@ -221,8 +221,8 @@ onMounted(async () => {
           </div>
         </section>
 
-        <!-- ATM virtual account info -->
-        <section v-if="order.ATMBankCode || order.ATMAccount" class="od-card od-atm-card">
+        <!-- ATM virtual account info (only before payment confirmed) -->
+        <section v-if="order.PaymentStatus !== 'paid' && (order.ATMBankCode || order.ATMAccount)" class="od-card od-atm-card">
           <h2 class="od-card__title">ATM 轉帳資訊</h2>
           <p class="od-atm-hint">請於期限內至 ATM 轉帳，完成付款後系統將自動確認。</p>
           <div class="od-info-grid">
