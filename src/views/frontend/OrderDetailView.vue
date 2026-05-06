@@ -60,7 +60,7 @@ function payStatusLabel(s) {
 }
 
 function shippingMethodLabel(m) {
-  return m === 'cvs_711' ? '7-11 超商取貨不付款' : '宅配到府'
+  return m === 'cvscom' ? '超商取貨不付款' : '宅配到府'
 }
 
 onMounted(async () => {
@@ -187,13 +187,13 @@ onMounted(async () => {
             </div>
 
             <!-- 宅配：顯示地址 -->
-            <div v-if="order.ShippingMethod !== 'cvs_711'" class="od-info-item od-info-item--full">
+            <div v-if="order.ShippingMethod !== 'cvscom'" class="od-info-item od-info-item--full">
               <span class="od-info-item__label">收件地址</span>
               <span class="od-info-item__val">{{ order.ShippingAddress }}</span>
             </div>
 
-            <!-- 7-11 取貨：顯示門市 + 取貨代碼 -->
-            <template v-if="order.ShippingMethod === 'cvs_711'">
+            <!-- 超商取貨：顯示門市 + 取貨代碼 -->
+            <template v-if="order.ShippingMethod === 'cvscom'">
               <div class="od-info-item od-info-item--full">
                 <span class="od-info-item__label">取貨門市</span>
                 <span class="od-info-item__val">{{ order.StoreName || order.ShippingAddress }}</span>

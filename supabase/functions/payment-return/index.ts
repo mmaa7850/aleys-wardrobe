@@ -47,21 +47,33 @@ Deno.serve(async (req) => {
       )
 
       const methodMap: Record<string, string> = {
-        CREDIT: 'credit', WEBATM: 'webatm', VACC: 'atm', CVS: 'cvs',
+        CREDIT: 'credit', WEBATM: 'webatm', VACC: 'atm', CVS: 'cvs', CVSCOM: 'cvscom',
       }
-      const updates: Record<string, string> = {
+      const updates: Record<string, string | null> = {
         PaymentMethod: methodMap[paymentType] || paymentType.toLowerCase(),
         UpdatedDate:   new Date().toISOString(),
       }
+      // ATM 取號資訊
       if (result.BankCode) updates.ATMBankCode = result.BankCode
       if (result.CodeNo)   updates.ATMAccount  = result.CodeNo
+      // CVSCOM 物流資訊（ATM 取號完成 / 信用卡付款完成皆可能帶回）
+      if (result.StoreCode)   updates.StoreID         = result.StoreCode
+      if (result.StoreName)   updates.StoreName       = result.StoreName
+      if (result.StoreAddr)   updates.ShippingAddress = result.StoreAddr
+      if (result.CVSCOMName)  updates.ShippingName    = result.CVSCOMName
+      if (result.CVSCOMPhone) updates.ShippingPhone   = result.CVSCOMPhone
+      if (result.LgsNo)       updates.LgsNo           = result.LgsNo
+      if (result.StoreCode || result.LgsNo) {
+        updates.ShippingStatus     = '0_1'
+        updates.ShippingStatusText = '訂單未處理'
+      }
 
       const { error } = await supabase.schema(dbSchema)
         .from('C_ORD_OrderList')
         .update(updates)
         .eq('OrderNo', orderNo)
       if (error) console.error('[payment-return] DB update error:', error.message)
-      else console.log('[payment-return] saved PaymentMethod:', updates.PaymentMethod, '| ATM:', result.BankCode, result.CodeNo)
+      else console.log('[payment-return] saved PaymentMethod:', updates.PaymentMethod, '| StoreCode:', result.StoreCode, '| LgsNo:', result.LgsNo)
     }
 
     if (!orderNo) return Response.redirect(`${siteUrl}/`, 302)

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
@@ -12,13 +12,7 @@ const auth = useAuthStore()
 
 const recipientName = ref('')
 const recipientPhone = ref('')
-const address = ref('')
 const customerNote = ref('')
-
-const shippingMethod = ref('home')
-const selectedStore  = ref({ id: '', name: '', addr: '' })
-
-const paymentMethod = ref('credit')
 
 const isSubmitting = ref(false)
 const errorMsg = ref('')
@@ -26,65 +20,6 @@ const errorMsg = ref('')
 // Hidden form for POST redirect to NewebPay
 const paymentForm = ref(null)
 const paymentParams = ref(null)
-
-function handleStoreMessage(e) {
-  console.log('[checkout] message received:', e.data)
-  if (e.data?.type === 'STORE_SELECTED') {
-    selectedStore.value = {
-      id:   e.data.storeId   || '',
-      name: e.data.storeName || '',
-      addr: e.data.storeAddr || '',
-    }
-  }
-}
-
-async function selectStore() {
-  errorMsg.value = ''
-  try {
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/store-map`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      }
-    )
-    if (!res.ok) { errorMsg.value = '無法開啟門市選擇，請稍後再試'; return }
-    const params = await res.json()
-    if (params.error) { errorMsg.value = params.error; return }
-
-    // Open named popup first — this sets window.opener in the child window,
-    // allowing store-callback to postMessage back and close itself.
-    const popup = window.open('', 'storeMapWindow', 'width=960,height=700,scrollbars=yes,resizable=yes')
-    if (!popup) { errorMsg.value = '請允許瀏覽器彈出視窗後再試'; return }
-
-    const form = document.createElement('form')
-    form.method = 'POST'
-    form.action = params.url
-    form.target = 'storeMapWindow'
-    for (const [name, value] of Object.entries({
-      UID_:          params.UID_,
-      EncryptData_:  params.EncryptData_,
-      HashData_:     params.HashData_,
-      Version_:      params.Version_,
-      RespondType_:  params.RespondType_,
-    })) {
-      const input = document.createElement('input')
-      input.type = 'hidden'
-      input.name = name
-      input.value = value
-      form.appendChild(input)
-    }
-    document.body.appendChild(form)
-    form.submit()
-    document.body.removeChild(form)
-  } catch (err) {
-    errorMsg.value = '開啟門市選擇失敗，請稍後再試'
-  }
-}
 
 function validatePhone(val) {
   return /^[\d\-]+$/.test(val)
@@ -112,39 +47,16 @@ onMounted(async () => {
       if (age < 30 * 60 * 1000) {
         recipientName.value  = d.recipientName  || ''
         recipientPhone.value = d.recipientPhone || ''
-        address.value        = d.address        || ''
         customerNote.value   = d.customerNote   || ''
-        shippingMethod.value = d.shippingMethod || 'home'
-        selectedStore.value  = d.selectedStore  || { id: '', name: '', addr: '' }
-        paymentMethod.value  = d.paymentMethod  || 'credit'
       }
     } catch {}
     sessionStorage.removeItem('checkoutDraft')
   }
 
-  // Handle fallback when popup was blocked — store-callback wrote to sessionStorage
-  const pending = sessionStorage.getItem('pendingStore')
-  if (pending) {
-    try {
-      const d = JSON.parse(pending)
-      if (d.type === 'STORE_SELECTED') {
-        selectedStore.value = { id: d.storeId || '', name: d.storeName || '', addr: d.storeAddr || '' }
-        shippingMethod.value = 'cvs_711'
-      }
-    } catch {}
-    sessionStorage.removeItem('pendingStore')
-  }
-
-  window.addEventListener('message', handleStoreMessage)
-
   const tasks = [prefillFromProfile()]
   if (cart.isEmpty && !cart.cartId) tasks.push(cart.fetchCart())
   await Promise.all(tasks)
   if (cart.isEmpty) router.push('/cart')
-})
-
-onUnmounted(() => {
-  window.removeEventListener('message', handleStoreMessage)
 })
 
 async function submitOrder() {
@@ -160,14 +72,6 @@ async function submitOrder() {
   }
   if (!validatePhone(recipientPhone.value)) {
     errorMsg.value = '電話格式錯誤，請只輸入數字和連字號'
-    return
-  }
-  if (shippingMethod.value === 'home' && !address.value.trim()) {
-    errorMsg.value = '請填寫收件地址'
-    return
-  }
-  if (shippingMethod.value === 'cvs_711' && !selectedStore.value.id) {
-    errorMsg.value = '請選擇取貨門市'
     return
   }
 
@@ -205,11 +109,6 @@ async function submitOrder() {
           itemDesc,
           recipientName: recipientName.value.trim(),
           recipientPhone: recipientPhone.value.trim(),
-          shippingAddress: address.value.trim(),
-          shippingMethod: shippingMethod.value,
-          storeId:   shippingMethod.value === 'cvs_711' ? selectedStore.value.id   : null,
-          storeName: shippingMethod.value === 'cvs_711' ? selectedStore.value.name : null,
-          paymentMethod: paymentMethod.value,
           customerNote: customerNote.value.trim() || null,
           items: cart.items.map(i => ({
             productId: i.productId,
@@ -236,11 +135,7 @@ async function submitOrder() {
       _ts:            Date.now(),
       recipientName:  recipientName.value,
       recipientPhone: recipientPhone.value,
-      address:        address.value,
       customerNote:   customerNote.value,
-      shippingMethod: shippingMethod.value,
-      selectedStore:  selectedStore.value,
-      paymentMethod:  paymentMethod.value,
     }))
 
     // Clear cart before redirect
@@ -316,35 +211,6 @@ async function submitOrder() {
             />
           </div>
 
-          <!-- Address (宅配) -->
-          <div v-if="shippingMethod === 'home'" class="co-field co-field--full">
-            <label class="co-label" for="address">收件地址 <span class="co-required">*</span></label>
-            <input
-              id="address"
-              v-model="address"
-              type="text"
-              class="co-input"
-              placeholder="請輸入完整收件地址"
-            />
-          </div>
-
-          <!-- Store selector (7-11) -->
-          <div v-else class="co-field co-field--full">
-            <label class="co-label">取貨門市 <span class="co-required">*</span></label>
-            <div class="co-store-row">
-              <div class="co-store-display">
-                <template v-if="selectedStore.id">
-                  <span class="co-store-name">{{ selectedStore.name }}</span>
-                  <span class="co-store-addr">{{ selectedStore.addr }}</span>
-                </template>
-                <span v-else class="co-store-placeholder">尚未選擇取貨門市</span>
-              </div>
-              <button type="button" class="co-store-btn" @click="selectStore">
-                {{ selectedStore.id ? '重新選擇' : '選擇門市' }}
-              </button>
-            </div>
-          </div>
-
           <div class="co-field co-field--full">
             <label class="co-label" for="customerNote">備註（選填）</label>
             <textarea
@@ -357,62 +223,10 @@ async function submitOrder() {
           </div>
         </div>
 
-        <!-- Shipping method -->
-        <h2 class="co-section-title co-pay-title">配送方式</h2>
-        <div class="co-pay-methods">
-          <label class="co-pay-method" :class="{ 'co-pay-method--active': shippingMethod === 'home' }">
-            <input type="radio" v-model="shippingMethod" value="home" class="co-pay-radio" />
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16,8 20,8 23,11 23,16 16,16 16,8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
-            <div class="co-pay-method__text">
-              <span class="co-pay-method__name">宅配到府</span>
-              <span class="co-pay-method__desc">填寫收件地址，到府配送</span>
-            </div>
-          </label>
-          <label class="co-pay-method" :class="{ 'co-pay-method--active': shippingMethod === 'cvs_711' }">
-            <input type="radio" v-model="shippingMethod" value="cvs_711" class="co-pay-radio" />
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
-            <div class="co-pay-method__text">
-              <span class="co-pay-method__name">7-11 取貨不付款</span>
-              <span class="co-pay-method__desc">選擇取貨門市，到店取件（先付款後取貨）</span>
-            </div>
-          </label>
-        </div>
-
-        <!-- Payment method -->
-        <h2 class="co-section-title co-pay-title">付款方式</h2>
-        <div class="co-pay-methods">
-          <label class="co-pay-method" :class="{ 'co-pay-method--active': paymentMethod === 'credit' }">
-            <input type="radio" v-model="paymentMethod" value="credit" class="co-pay-radio" />
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
-            <div class="co-pay-method__text">
-              <span class="co-pay-method__name">信用卡</span>
-              <span class="co-pay-method__desc">Visa / MasterCard / JCB</span>
-            </div>
-          </label>
-          <label class="co-pay-method" :class="{ 'co-pay-method--active': paymentMethod === 'cvs' }">
-            <input type="radio" v-model="paymentMethod" value="cvs" class="co-pay-radio" />
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
-            <div class="co-pay-method__text">
-              <span class="co-pay-method__name">超商代碼繳費</span>
-              <span class="co-pay-method__desc">7-11 / 全家 / 萊爾富（7 天內繳費）</span>
-            </div>
-          </label>
-          <label class="co-pay-method" :class="{ 'co-pay-method--active': paymentMethod === 'atm' }">
-            <input type="radio" v-model="paymentMethod" value="atm" class="co-pay-radio" />
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M7 15h2m4 0h4"/></svg>
-            <div class="co-pay-method__text">
-              <span class="co-pay-method__name">ATM 轉帳</span>
-              <span class="co-pay-method__desc">取得虛擬帳號，3 天內至 ATM 轉帳</span>
-            </div>
-          </label>
-          <label class="co-pay-method" :class="{ 'co-pay-method--active': paymentMethod === 'webatm' }">
-            <input type="radio" v-model="paymentMethod" value="webatm" class="co-pay-radio" />
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
-            <div class="co-pay-method__text">
-              <span class="co-pay-method__name">Web ATM</span>
-              <span class="co-pay-method__desc">透過網路銀行即時轉帳付款</span>
-            </div>
-          </label>
+        <!-- NewebPay notice -->
+        <div class="co-notice">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>送出後將進入藍新金流付款頁面，可選擇付款方式（信用卡、ATM 轉帳）及超商取貨門市。</span>
         </div>
 
         <!-- Error message -->
@@ -622,111 +436,25 @@ async function submitOrder() {
 
 .co-textarea:focus { border-color: var(--fe-text); }
 
-/* Payment methods */
-.co-pay-title {
-  margin-top: 32px;
-  font-size: 16px;
-}
-
-.co-pay-methods {
+/* NewebPay notice */
+.co-notice {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-.co-pay-method {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 18px;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 12px 16px;
+  background: var(--fe-cream);
   border: 1px solid var(--fe-border);
   border-radius: 4px;
-  cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
-  background: var(--fe-white);
-}
-
-.co-pay-method--active {
-  border-color: var(--fe-text);
-  background: var(--fe-cream);
-}
-
-.co-pay-method svg { flex-shrink: 0; color: var(--fe-muted); }
-.co-pay-method--active svg { color: var(--fe-text); }
-
-.co-pay-radio { display: none; }
-
-.co-pay-method__text {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.co-pay-method__name {
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--fe-text);
-}
-
-.co-pay-method__desc {
-  font-size: 11.5px;
   color: var(--fe-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
-/* Store selector */
-.co-store-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid var(--fe-border);
-  border-radius: 2px;
-  padding: 10px 14px;
-  background: var(--fe-white);
-  min-height: 44px;
-}
-
-.co-store-display {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.co-store-name {
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--fe-text);
-}
-
-.co-store-addr {
-  font-size: 11.5px;
-  color: var(--fe-muted);
-}
-
-.co-store-placeholder {
-  font-size: 13.5px;
-  color: #bbb;
-}
-
-.co-store-btn {
+.co-notice svg {
   flex-shrink: 0;
-  padding: 6px 16px;
-  border: 1px solid var(--fe-text);
-  background: transparent;
-  color: var(--fe-text);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  cursor: pointer;
-  font-family: inherit;
-  transition: background 0.2s, color 0.2s;
-  border-radius: 2px;
-}
-
-.co-store-btn:hover {
-  background: var(--fe-text);
-  color: #fff;
+  margin-top: 1px;
+  color: var(--fe-gold-d);
 }
 
 /* Error */

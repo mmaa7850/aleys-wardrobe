@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    const { orderNo, amount, email, itemDesc, recipientName, recipientPhone, shippingAddress, customerNote, items, paymentMethod, shippingMethod, storeId, storeName } = body
+    const { orderNo, amount, email, itemDesc, recipientName, recipientPhone, customerNote, items } = body
 
     if (!orderNo || !amount || !email) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -106,15 +106,15 @@ Deno.serve(async (req) => {
         CustomerPhone: recipientPhone,
         ShippingName: recipientName,
         ShippingPhone: recipientPhone,
-        ShippingAddress: shippingMethod === 'cvs_711' ? (storeName || '') : (shippingAddress || ''),
+        ShippingAddress: '',
         ShippingFee: 0,
         PaymentStatus: 'pending',
         ItemsTotal: amount,
         FinalAmount: amount,
         CustomerNote: customerNote || null,
-        ShippingMethod: shippingMethod || 'home',
-        StoreID: storeId || null,
-        StoreName: storeName || null,
+        ShippingMethod: 'cvscom',
+        StoreID: null,
+        StoreName: null,
       })
       .select('ID')
       .single()
@@ -145,35 +145,30 @@ Deno.serve(async (req) => {
 
     const timeStamp = Math.floor(Date.now() / 1000)
 
+    const pad = (n: number) => String(n).padStart(2, '0')
+
+    // ATM 轉帳繳費期限 3 天
+    const atmExpire = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    const expireDate = `${atmExpire.getFullYear()}${pad(atmExpire.getMonth()+1)}${pad(atmExpire.getDate())}`
+
     const params: Record<string, string | number> = {
       Amt: amount,
       ClientBackURL: `${siteUrl}/orders/${orderNo}`,
+      CREDIT: 1,
+      CustomerURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-return`,
+      CVSCOM: 1,
       Email: email,
+      ExpireDate: expireDate,
       ItemDesc: (itemDesc || '商品購買').slice(0, 50),
-      LoginType: 0,
+      LgsType: 'C2C',
       MerchantID: merchantId,
       MerchantOrderNo: orderNo,
       NotifyURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-notify`,
       RespondType: 'JSON',
       ReturnURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-return`,
       TimeStamp: timeStamp,
+      VACC: 1,
       Version: '2.0',
-    }
-
-    const pad = (n: number) => String(n).padStart(2, '0')
-
-    if (paymentMethod === 'cvs') {
-      params.CVS = 1
-      const expire = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      params.ExpireDate = `${expire.getFullYear()}${pad(expire.getMonth()+1)}${pad(expire.getDate())}${pad(expire.getHours())}${pad(expire.getMinutes())}${pad(expire.getSeconds())}`
-    } else if (paymentMethod === 'atm') {
-      params.VACC = 1
-      const expire = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
-      params.ExpireDate = `${expire.getFullYear()}${pad(expire.getMonth()+1)}${pad(expire.getDate())}`
-    } else if (paymentMethod === 'webatm') {
-      params.WEBATM = 1
-    } else {
-      params.CREDIT = 1
     }
 
     const sortedKeys = Object.keys(params).sort()

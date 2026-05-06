@@ -1,13 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
 
-async function aesEncrypt(text: string, key: string, iv: string): Promise<string> {
-  const k = new Uint8Array(32); k.set(new TextEncoder().encode(key).slice(0, 32))
-  const i = new Uint8Array(16); i.set(new TextEncoder().encode(iv).slice(0, 16))
-  const ck = await crypto.subtle.importKey('raw', k, { name: 'AES-CBC' }, false, ['encrypt'])
-  const enc = await crypto.subtle.encrypt({ name: 'AES-CBC', iv: i }, ck, new TextEncoder().encode(text))
-  return Array.from(new Uint8Array(enc)).map(b => b.toString(16).padStart(2, '0')).join('')
-}
-
 async function aesDecrypt(hexStr: string, key: string, iv: string): Promise<string> {
   const k = new Uint8Array(32); k.set(new TextEncoder().encode(key).slice(0, 32))
   const i = new Uint8Array(16); i.set(new TextEncoder().encode(iv).slice(0, 16))
@@ -26,73 +18,14 @@ async function sha256Upper(str: string): Promise<string> {
   return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase()
 }
 
-// 呼叫藍新物流 API (Form POST)
-async function callLogisticsApi(apiUrl: string, innerParams: string, merchantId: string, hashKey: string, hashIV: string): Promise<Record<string, unknown>> {
-  const encryptData = await aesEncrypt(innerParams, hashKey, hashIV)
-  const hashData    = await sha256Upper(`HashKey=${hashKey}&${encryptData}&HashIV=${hashIV}`)
-
-  const form = new URLSearchParams({
-    UID_:          merchantId,
-    EncryptData_:  encryptData,
-    HashData_:     hashData,
-    Version_:      '1.0',
-    RespondType_:  'JSON',
-  })
-
-  console.log('[logistics] FINAL URL:', apiUrl)
-  const res = await fetch(apiUrl, {
-    method:  'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Accept':       'application/json,text/plain,*/*',
-      'User-Agent':   'Mozilla/5.0',
-    },
-    body:    form.toString(),
-  })
-
-  const rawText = await res.text()
-  console.log('[logistics] status:', res.status, '| content-type:', res.headers.get('content-type'))
-  console.log('[logistics] raw response:', rawText.slice(0, 500))
-  console.log('[logistics] innerParams:', innerParams)
-  console.log('[logistics] encryptData:', encryptData.slice(0, 80))
-  console.log('[logistics] hashData:', hashData)
-
-  try { return JSON.parse(rawText) } catch { return { Status: 'PARSE_ERROR', Message: rawText.slice(0, 200) } }
-}
-
-// 解密藍新物流 API 回傳的 EncryptData
-async function decryptLogisticsResponse(json: Record<string, unknown>, hashKey: string, hashIV: string): Promise<Record<string, unknown>> {
-  const encryptData = (json.EncryptData as string) || ''
-  if (!encryptData) throw new Error(`Logistics API error: ${json.Message}`)
-  const plain = await aesDecrypt(encryptData, hashKey, hashIV)
-  try { return JSON.parse(plain) } catch { return Object.fromEntries(new URLSearchParams(plain)) }
-}
 
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return new Response('Method Not Allowed', { status: 405 })
 
   try {
-    const hashKey    = Deno.env.get('NEWEBPAY_HASH_KEY')!.trim()
-    const hashIV     = Deno.env.get('NEWEBPAY_HASH_IV')!.trim()
-    const lgsHashKey = hashKey
-    const lgsHashIV  = hashIV
-    const merchantId = Deno.env.get('NEWEBPAY_MERCHANT_ID')!
-    const env        = Deno.env.get('NEWEBPAY_ENV') || 'test'
+    const hashKey     = Deno.env.get('NEWEBPAY_HASH_KEY')!.trim()
+    const hashIV      = Deno.env.get('NEWEBPAY_HASH_IV')!.trim()
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-
-    console.log('[logistics] env:', env)
-    console.log('[logistics] merchantId:', merchantId)
-    console.log('[logistics] has lgsHashKey:', !!lgsHashKey)
-    console.log('[logistics] has lgsHashIV:', !!lgsHashIV)
-    console.log('[logistics] hashKey length:', lgsHashKey.length)
-    console.log('[logistics] hashIV length:', lgsHashIV.length)
-
-    const lgsBase = env === 'prod'
-      ? 'https://core.newebpay.com/API/Logistic'
-      : 'https://ccore.newebpay.com/API/Logistic'
-
-    console.log('[logistics] hashKey length:', lgsHashKey.length)
-    console.log('[logistics] hashIV length:', lgsHashIV.length)
 
     const ct = req.headers.get('content-type') || ''
     let tradeInfo = '', tradeSha = '', status = ''
@@ -184,66 +117,27 @@ Deno.serve(async (req) => {
           else console.log(`[payment-notify] Stock deducted: variant ${item.VariantID} ${variant.StockQty} → ${newQty}`)
         }
 
-        // 建立物流訂單（7-11 取貨不付款）
-        if (orderData.ShippingMethod === 'cvs_711' && orderData.StoreID) {
-          try {
-            const ts = Math.floor(Date.now() / 1000)
-
-            // NPA-B52：建立物流寄貨單（內層明文不可 URL encode）
-            const b52Params = [
-              `MerchantID=${merchantId}`,
-              `MerchantOrderNo=${orderNo}`,
-              `TradeType=3`,
-              `UserName=${orderData.ShippingName}`,
-              `UserTel=${orderData.CustomerPhone}`,
-              `UserEmail=${orderData.CustomerEmail}`,
-              `StoreID=${orderData.StoreID}`,
-              `Amt=${Math.round(Number(orderData.FinalAmount))}`,
-              `NotifyURL=${supabaseUrl}/functions/v1/logistics-notify`,
-              `ItemDesc=商品`,
-              `LgsType=C2C`,
-              `ShipType=1`,
-              `TimeStamp=${ts}`,
-            ].join('&')
-
-            const b52Res = await callLogisticsApi(`${lgsBase}/createShipment`, b52Params, merchantId, lgsHashKey, lgsHashIV)
-            console.log('[payment-notify] NPA-B52 status:', b52Res.Status, b52Res.Message)
-
-            if (b52Res.Status === 'SUCCESS') {
-              const b52Data = await decryptLogisticsResponse(b52Res as Record<string, unknown>, lgsHashKey, lgsHashIV)
-              const logisticsTradeNo = b52Data.TradeNo as string || ''
-
-              // NPA-B53：取得寄件代碼
-              const ts2 = Math.floor(Date.now() / 1000)
-              const b53Params = `MerchantOrderNo=["${orderNo}"]&TimeStamp=${ts2}`
-              const b53Res = await callLogisticsApi(`${lgsBase}/getShipmentNo`, b53Params, merchantId, lgsHashKey, lgsHashIV)
-              console.log('[payment-notify] NPA-B53 status:', b53Res.Status, b53Res.Message)
-
-              let lgsNo = '', storePrintNo = ''
-              if (b53Res.Status === 'SUCCESS') {
-                const b53Data = await decryptLogisticsResponse(b53Res as Record<string, unknown>, lgsHashKey, lgsHashIV)
-                const successList = (b53Data.SUCCESS as Array<Record<string, string>>) || []
-                if (successList.length > 0) {
-                  lgsNo        = successList[0].LgsNo        || ''
-                  storePrintNo = successList[0].StorePrintNo || ''
-                }
-              }
-
-              // 回寫物流資料到訂單
-              await supabase.schema(dbSchema).from('C_ORD_OrderList').update({
-                LogisticsTradeNo:  logisticsTradeNo,
-                LgsNo:             lgsNo,
-                StorePrintNo:      storePrintNo,
-                ShippingStatus:    '0_1',
-                ShippingStatusText: '訂單未處理',
-                UpdatedDate:       new Date().toISOString(),
-              }).eq('OrderNo', orderNo)
-            } else {
-              console.error('[payment-notify] NPA-B52 failed:', b52Res.Message)
-            }
-          } catch (lgsErr) {
-            console.error('[payment-notify] Logistics error:', lgsErr instanceof Error ? lgsErr.message : lgsErr)
+        // 儲存藍新 CVSCOM 回傳的物流資訊
+        const storeCode = result.StoreCode || ''
+        const lgsNo     = result.LgsNo     || ''
+        if (storeCode || lgsNo) {
+          const lgsUpdate: Record<string, string | null> = {
+            ShippingStatus:     '0_1',
+            ShippingStatusText: '訂單未處理',
+            UpdatedDate:        new Date().toISOString(),
           }
+          if (storeCode)           lgsUpdate.StoreID         = storeCode
+          if (result.StoreName)    lgsUpdate.StoreName       = result.StoreName
+          if (result.StoreAddr)    lgsUpdate.ShippingAddress = result.StoreAddr
+          if (result.CVSCOMName)   lgsUpdate.ShippingName    = result.CVSCOMName
+          if (result.CVSCOMPhone)  lgsUpdate.ShippingPhone   = result.CVSCOMPhone
+          if (lgsNo)               lgsUpdate.LgsNo           = lgsNo
+
+          const { error: lgsErr } = await supabase.schema(dbSchema).from('C_ORD_OrderList')
+            .update(lgsUpdate)
+            .eq('OrderNo', orderNo)
+          if (lgsErr) console.error('[payment-notify] CVSCOM update error:', lgsErr.message)
+          else console.log('[payment-notify] CVSCOM store info saved:', storeCode, lgsNo)
         }
       }
     }
