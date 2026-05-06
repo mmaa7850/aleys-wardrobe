@@ -192,24 +192,16 @@ onMounted(async () => {
               <span class="od-info-item__val">{{ order.ShippingAddress }}</span>
             </div>
 
-            <!-- 超商取貨：顯示門市 + 取貨代碼 -->
+            <!-- 超商取貨：顯示門市 -->
             <template v-if="order.ShippingMethod === 'cvscom'">
               <div class="od-info-item od-info-item--full">
                 <span class="od-info-item__label">取貨門市</span>
                 <span class="od-info-item__val">{{ order.StoreName || order.ShippingAddress }}</span>
               </div>
-              <div v-if="order.LgsNo" class="od-info-item">
-                <span class="od-info-item__label">寄件代碼（ibon）</span>
-                <span class="od-info-item__val od-info-item__val--strong od-lgsno">{{ order.LgsNo }}</span>
-              </div>
-              <div v-if="order.StorePrintNo" class="od-info-item">
-                <span class="od-info-item__label">門市列印代碼</span>
-                <span class="od-info-item__val od-lgsno">{{ order.StorePrintNo }}</span>
-              </div>
-              <div v-if="order.LgsNo" class="od-info-item od-info-item--full">
+              <div class="od-info-item od-info-item--full">
                 <span class="od-info-item__label">取貨說明</span>
                 <span class="od-info-item__val od-info-item__val--hint">
-                  請攜帶以上寄件代碼至任一 7-11 門市，在 ibon 機器選擇「超商物流 → 店到店」輸入代碼列印寄件單後交由門市寄出。
+                  商品出貨後您將收到簡訊通知，請憑通知至指定門市取貨。
                 </span>
               </div>
             </template>
