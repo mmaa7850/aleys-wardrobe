@@ -54,7 +54,7 @@
 
 | Function | JWT 驗證 | 說明 |
 |----------|----------|------|
-| `create-payment` | ✅ 需要 | 驗庫存、建立訂單（ShippingMethod=cvscom）、加密藍新參數（CREDIT+VACC+CVSCOM=1+LgsType=C2C）、回傳 Gateway URL |
+| `create-payment` | ✅ 需要 | 驗庫存、**後端驗證優惠券**（有效期/使用次數/啟用狀態，防前端繞過）、計算折扣後金額、建立訂單（ShippingMethod=cvscom，寫入 DiscountAmount/FinalAmount）、扣除優惠券 UsageCount、加密藍新參數（CREDIT+VACC+CVSCOM=1+LgsType=C2C）、回傳 Gateway URL |
 | `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態、扣庫存、儲存 CVSCOM 回傳的 StoreCode/LgsNo 等物流資訊 |
 | `payment-return` | ❌ 關閉 | 藍新前台導回：儲存付款方式、ATM 帳號、CVSCOM 門市資訊，導向 /order-success/:orderNo |
 | `retry-payment` | ✅ 需要 | 重新付款：在訂單號加 `_R1/_R2` 後綴、回傳新加密參數 |
@@ -89,7 +89,7 @@
 - `C_CART_CartList` / `C_CART_CartItemList` — 購物車
 
 ### 訂單
-- `C_ORD_OrderList` — 訂單主檔（含付款狀態、配送方式、ATM 帳號等）
+- `C_ORD_OrderList` — 訂單主檔（含付款狀態、配送方式、ATM 帳號、DiscountAmount 折扣金額、FinalAmount 實付金額等）
 - `C_ORD_OrderItemList` — 訂單明細
 
 ### 系統
