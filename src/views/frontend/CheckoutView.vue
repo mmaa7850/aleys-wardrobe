@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
@@ -16,6 +16,46 @@ const customerNote = ref('')
 
 const isSubmitting = ref(false)
 const errorMsg = ref('')
+
+// ── Coupon ────────────────────────────────────────────
+const couponCode = ref('')
+const couponApplied = ref(null) // { ID, Name, DiscountValue }
+const couponError = ref('')
+const couponLoading = ref(false)
+
+const discountAmount = computed(() => couponApplied.value?.DiscountValue ?? 0)
+const finalTotal = computed(() => Math.max(1, cart.total - discountAmount.value))
+
+async function applyCoupon() {
+  const code = couponCode.value.trim()
+  if (!code) return
+  couponLoading.value = true
+  couponError.value = ''
+  couponApplied.value = null
+  try {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data, error } = await db
+      .from('S_PRM_CouponList')
+      .select('ID, Name, Description, DiscountValue, IsActive, UsageCount')
+      .eq('Name', code)
+      .lte('StartDate', today)
+      .gte('EndDate', today)
+      .maybeSingle()
+    if (error) throw error
+    if (!data || !data.IsActive || data.UsageCount <= 0) { couponError.value = '優惠券無效或已過期'; return }
+    couponApplied.value = { ID: data.ID, Name: data.Name, Description: data.Description, DiscountValue: data.DiscountValue }
+  } catch {
+    couponError.value = '驗證失敗，請稍後再試'
+  } finally {
+    couponLoading.value = false
+  }
+}
+
+function removeCoupon() {
+  couponApplied.value = null
+  couponCode.value = ''
+  couponError.value = ''
+}
 
 // Hidden form for POST redirect to NewebPay
 const paymentForm = ref(null)
@@ -105,6 +145,7 @@ async function submitOrder() {
         body: JSON.stringify({
           orderNo,
           amount: cart.total,
+          couponCode: couponApplied.value?.Name ?? null,
           email: auth.user.email,
           itemDesc,
           recipientName: recipientName.value.trim(),
@@ -295,11 +336,43 @@ async function submitOrder() {
           <span class="co-summary__free">免運費</span>
         </div>
 
+        <!-- 優惠券 -->
+        <div class="co-coupon">
+          <template v-if="!couponApplied">
+            <div class="co-coupon__row">
+              <input
+                v-model="couponCode"
+                class="co-coupon__input"
+                placeholder="輸入優惠碼"
+                :disabled="couponLoading"
+                @keydown.enter.prevent="applyCoupon"
+              />
+              <button
+                class="co-coupon__btn"
+                :disabled="couponLoading || !couponCode.trim()"
+                @click="applyCoupon"
+              >{{ couponLoading ? '…' : '套用' }}</button>
+            </div>
+            <p v-if="couponError" class="co-coupon__error">{{ couponError }}</p>
+          </template>
+          <template v-else>
+            <div class="co-coupon__applied">
+              <span class="co-coupon__tag">{{ couponApplied.Name }}</span>
+              <button class="co-coupon__remove" @click="removeCoupon">✕</button>
+            </div>
+          </template>
+        </div>
+
+        <div v-if="couponApplied" class="co-summary__row co-summary__row--discount">
+          <span>折扣</span>
+          <span>－NT$ {{ discountAmount.toLocaleString() }}</span>
+        </div>
+
         <div class="co-summary__divider"></div>
 
         <div class="co-summary__row co-summary__row--total">
           <span>訂單總計</span>
-          <span>NT$ {{ cart.total.toLocaleString() }}</span>
+          <span>NT$ {{ finalTotal.toLocaleString() }}</span>
         </div>
 
         <!-- Submit (desktop) -->
@@ -610,6 +683,92 @@ async function submitOrder() {
   color: var(--fe-text);
   margin-bottom: 0;
 }
+
+.co-summary__row--discount {
+  color: #15803D;
+}
+
+/* Coupon */
+.co-coupon {
+  margin: 12px 0 4px;
+}
+
+.co-coupon__row {
+  display: flex;
+  gap: 8px;
+}
+
+.co-coupon__input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--fe-border);
+  background: var(--fe-white);
+  font-size: 12.5px;
+  color: var(--fe-text);
+  font-family: inherit;
+  outline: none;
+  border-radius: 2px;
+  transition: border-color 0.2s;
+}
+
+.co-coupon__input:focus { border-color: var(--fe-text); }
+
+.co-coupon__btn {
+  height: 36px;
+  padding: 0 14px;
+  background: var(--fe-text);
+  color: #fff;
+  border: none;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 2px;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+
+.co-coupon__btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.co-coupon__error {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: #DC2626;
+}
+
+.co-coupon__applied {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.co-coupon__tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: rgba(21, 128, 61, 0.08);
+  border: 1px solid rgba(21, 128, 61, 0.25);
+  color: #15803D;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  border-radius: 2px;
+}
+
+.co-coupon__remove {
+  background: none;
+  border: none;
+  color: var(--fe-muted);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.co-coupon__remove:hover { color: #DC2626; }
 
 /* Responsive */
 @media (max-width: 767px) {

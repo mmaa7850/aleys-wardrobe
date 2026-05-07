@@ -132,6 +132,11 @@ const router = createRouter({
           name: "admin-settings-setconfig",
           component: () => import("@/pages/admin/settings/SetConfig.vue"),
         },
+        {
+          path: "settings/admin-users",
+          name: "admin-settings-admin-users",
+          component: () => import("@/pages/admin/settings/AdminUsers.vue"),
+        },
 
         // 之後要加其他頁面就照這樣加：
         // { path: "products/categories", name: "admin-products-categories", component: () => import("@/pages/admin/products/Categories.vue") },
@@ -142,7 +147,7 @@ const router = createRouter({
         // { path: "orders/status", name: "admin-orders-status", component: () => import("@/pages/admin/orders/OrderStatus.vue") },
 
         { path: "inventory/overview", name: "admin-inventory-overview", component: () => import("@/pages/admin/inventory/StockOverview.vue") },
-        // { path: "wms/logs", name: "admin-wms-logs", component: () => import("@/pages/admin/wms/StockLogs.vue") },
+        { path: "inventory/logs", name: "admin-inventory-logs", component: () => import("@/pages/admin/inventory/StockLogs.vue") },
 
         // { path: "marketing/coupons", name: "admin-marketing-coupons", component: () => import("@/pages/admin/marketing/Coupons.vue") },
         // { path: "marketing/banners", name: "admin-marketing-banners", component: () => import("@/pages/admin/marketing/Banners.vue") },

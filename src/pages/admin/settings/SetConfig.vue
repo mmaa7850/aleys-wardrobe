@@ -23,6 +23,8 @@ const form = ref({
   ID: null,
   Name: "",
   Description: "",
+  Value: "",
+  Category: "",
 });
 
 const titleText = computed(() =>
@@ -33,6 +35,8 @@ const resetForm = () => {
   form.value.ID = null;
   form.value.Name = "";
   form.value.Description = "";
+  form.value.Value = "";
+  form.value.Category = "";
   saveError.value = "";
 };
 
@@ -57,6 +61,8 @@ const openEditModal = async (row) => {
   form.value.ID = row.ID;
   form.value.Name = row.Name ?? "";
   form.value.Description = row.Description ?? "";
+  form.value.Value = row.Value ?? "";
+  form.value.Category = row.Category ?? "";
 
   await ensureModal();
   modalInstance.show();
@@ -73,7 +79,7 @@ const loadConfig = async () => {
   try {
     const { data, error } = await db
       .from(tableName)
-      .select('ID, "Name", "Description", "UpdatedDate"')
+      .select('ID, "Name", "Description", "Value", "Category", "UpdatedDate"')
       .order("ID", { ascending: false });
 
     if (error) throw error;
@@ -119,6 +125,8 @@ const createConfig = async () => {
     const payload = {
       Name: form.value.Name.trim(),
       Description: form.value.Description?.trim(),
+      Value: form.value.Value?.trim() ?? "",
+      Category: form.value.Category?.trim() ?? "",
       UpdatedDate: new Date().toISOString(),
     };
 
@@ -152,6 +160,8 @@ const updateConfig = async () => {
   try {
     const payload = {
       Description: form.value.Description?.trim(),
+      Value: form.value.Value?.trim() ?? "",
+      Category: form.value.Category?.trim() ?? "",
       UpdatedDate: new Date().toISOString(),
     };
 
@@ -220,9 +230,11 @@ onMounted(async () => {
           <table class="table table-hover mb-0 align-middle">
             <thead class="table-light">
               <tr>
-                <th style="width: 30%">{{ t("settings.setconfig.name") }}</th>
-                <th style="width: 45%">{{ t("settings.setconfig.description") }}</th>
-                <th style="width: 20%">{{ t("settings.setconfig.updatedDate") }}</th>
+                <th style="width: 15%">{{ t("settings.setconfig.name") }}</th>
+                <th style="width: 15%">分類</th>
+                <th style="width: 20%">值</th>
+                <th style="width: 30%">{{ t("settings.setconfig.description") }}</th>
+                <th style="width: 15%">{{ t("settings.setconfig.updatedDate") }}</th>
                 <th class="text-end" style="width: 5%">{{ t("common.action") }}</th>
               </tr>
             </thead>
@@ -236,6 +248,8 @@ onMounted(async () => {
 
               <tr v-for="r in rows" :key="r.ID">
                 <td class="fw-semibold">{{ r.Name }}</td>
+                <td><span class="badge bg-secondary">{{ r.Category }}</span></td>
+                <td class="font-monospace">{{ r.Value }}</td>
                 <td class="text-muted">{{ r.Description }}</td>
                 <td>{{ formatDate(r.UpdatedDate) }}</td>
                 <td class="text-end">
@@ -284,15 +298,19 @@ onMounted(async () => {
               </div>
             </div>
 
+            <div class="mb-3">
+              <label class="form-label">分類（Category）</label>
+              <input v-model="form.Category" type="text" class="form-control" placeholder="e.g. payment, shipping, site" :disabled="saving" />
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">值（Value）</label>
+              <input v-model="form.Value" type="text" class="form-control" placeholder="e.g. true / false / 100" :disabled="saving" />
+            </div>
+
             <div class="mb-1">
               <label class="form-label">{{ t("settings.setconfig.description") }}</label>
-              <input
-                v-model="form.Description"
-                type="text"
-                class="form-control"
-                placeholder="e.g. 出貨"
-                :disabled="saving"
-              />
+              <input v-model="form.Description" type="text" class="form-control" placeholder="e.g. 是否開放付款" :disabled="saving" />
             </div>
           </div>
 
