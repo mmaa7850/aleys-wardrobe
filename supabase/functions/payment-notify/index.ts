@@ -77,12 +77,19 @@ Deno.serve(async (req) => {
       return new Response('OK', { status: 200 })
     }
 
-    // 更新付款狀態
+    // 更新付款狀態、藍新交易序號、付款方式
+    const baseUpdate: Record<string, string | null> = {
+      PaymentStatus: payStatus,
+      UpdatedDate: new Date().toISOString(),
+    }
+    if (result.TradeNo)     baseUpdate.TradeNo      = result.TradeNo
+    if (result.PaymentType) baseUpdate.PaymentMethod = result.PaymentType
+
     const { error: updateErr } = await supabase.schema(dbSchema).from('C_ORD_OrderList')
-      .update({ PaymentStatus: payStatus, UpdatedDate: new Date().toISOString() })
+      .update(baseUpdate)
       .eq('OrderNo', orderNo)
     if (updateErr) console.error('[payment-notify] PaymentStatus update error:', updateErr.message)
-    else console.log('[payment-notify] PaymentStatus updated to', payStatus)
+    else console.log('[payment-notify] PaymentStatus updated to', payStatus, '| TradeNo:', result.TradeNo, '| PaymentType:', result.PaymentType)
 
     if (payStatus === 'paid') {
       // 查詢完整訂單資料

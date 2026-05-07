@@ -229,7 +229,140 @@ CheckValue = SHA256(str).toUpperCase()
 
 ---
 
-## 7. 錯誤代碼（常見）
+## 7. 退款 / 取消授權 API
+
+> **加密方式與 MPG 相同**：`PostData_` = AES-256-CBC → hex（同 `TradeInfo`）。參數名稱改為 `MerchantID_` + `PostData_`（注意結尾底線）。
+
+---
+
+### 7.1 取消授權 NPA-B01（當日授權取消，未請款前）
+
+| 環境 | 網址 |
+|------|------|
+| 測試 | `https://ccore.newebpay.com/API/CreditCard/Cancel` |
+| 正式 | `https://core.newebpay.com/API/CreditCard/Cancel` |
+
+> 適用情境：交易當日、信用卡尚未請款，執行放棄授權。
+
+**POST 外層**
+
+| 參數 | 必填 | 說明 |
+|------|------|------|
+| `MerchantID_` | V | 商店代號 |
+| `PostData_` | V | AES 加密資料 |
+
+**PostData_ 內層**
+
+| 參數 | 必填 | 型態 | 說明 |
+|------|------|------|------|
+| `RespondType` | V | String(5) | `JSON` 或 `String` |
+| `Version` | V | String(5) | `1.0` |
+| `TimeStamp` | V | String(30) | Unix timestamp |
+| `Amt` | V | Int(10) | 需與授權金額相同 |
+| `MerchantOrderNo` | + | String(30) | 與 TradeNo 二擇一 |
+| `TradeNo` | + | String(17) | 藍新交易序號，與 MerchantOrderNo 二擇一 |
+| `IndexType` | V | Int(1) | `1`=用商店訂單編號，`2`=用藍新交易序號 |
+
+**回應**
+
+| 參數 | 說明 |
+|------|------|
+| `Status` | `SUCCESS` 或錯誤代碼（`TRA20001`=需批次處理） |
+| `Result.MerchantID` | 商店代號 |
+| `Result.TradeNo` | 藍新交易序號 |
+| `Result.Amt` | 交易金額 |
+| `Result.MerchantOrderNo` | 商店訂單編號 |
+| `Result.CheckCode` | 驗證碼 |
+
+---
+
+### 7.2 ⭐ 信用卡退款 NPA-B031~34（請款後退款，最常用）
+
+| 環境 | 網址 |
+|------|------|
+| 測試 | `https://ccore.newebpay.com/API/CreditCard/Close` |
+| 正式 | `https://core.newebpay.com/API/CreditCard/Close` |
+
+> **功能對照：**
+> - `B031` 請款（CloseType=1）
+> - **`B032` 退款（CloseType=2）← 7天鑑賞期退款用此**
+> - `B033` 取消請款（CloseType=1, Cancel=1）
+> - `B034` 取消退款（CloseType=2, Cancel=1）
+
+**POST 外層**
+
+| 參數 | 必填 | 說明 |
+|------|------|------|
+| `MerchantID_` | V | 商店代號 |
+| `PostData_` | V | AES 加密資料 |
+
+**PostData_ 內層**
+
+| 參數 | 必填 | 型態 | 說明 |
+|------|------|------|------|
+| `RespondType` | V | String(5) | `JSON` 或 `String` |
+| `Version` | V | String(5) | `1.1` |
+| `TimeStamp` | V | String(30) | Unix timestamp |
+| `Amt` | V | Int(10) | 請退款金額 |
+| `MerchantOrderNo` | V | String(30) | 商店訂單編號 |
+| `TradeNo` | V | String(20) | 藍新交易序號 |
+| `IndexType` | V | Int(1) | `1`=用商店訂單編號，`2`=用藍新交易序號 |
+| `CloseType` | V | Int(1) | `1`=請款，`2`=退款 |
+| `Cancel` | | Int(1) | `1`=取消（搭配 CloseType 使用，發動 B033/B034） |
+
+> **退款金額限制：**
+> - 一次付清（含三大 Pay / 國外卡）：支援**整筆或部分**退款，可多次退款
+> - 分期付款 / 紅利折抵：僅支援**整筆**退款
+> - 銀聯卡：請款整筆，退款整筆或部分
+
+**回應**
+
+| 參數 | 說明 |
+|------|------|
+| `Status` | `SUCCESS` 或錯誤代碼 |
+| `Result.MerchantID` | 商店代號 |
+| `Result.Amt` | 請退款金額 |
+| `Result.TradeNo` | 藍新交易序號 |
+| `Result.MerchantOrderNo` | 商店訂單編號 |
+
+---
+
+### 7.3 ATM 付款退款
+
+> **藍新無 ATM 退款 API**，需人工匯款至顧客帳戶，並在自己系統標記退款完成。
+
+---
+
+### 7.4 電子錢包退款 NPA-B06（LINE Pay / 台灣 Pay / 玉山 Wallet / TWQR）
+
+| 環境 | 網址 |
+|------|------|
+| 測試 | `https://ccore.newebpay.com/API/EWallet/refund` |
+| 正式 | `https://core.newebpay.com/API/EWallet/refund` |
+
+> 加密格式與 MPG 相同（AES hex），但外層參數名稱不同：`UID_`、`EncryptData_`、`HashData_`。
+
+**退款期限對照：**
+
+| 付款方式 | 退款期限 | 部分退款 |
+|----------|----------|----------|
+| 玉山 Wallet | 交易後 89 日曆日 | ✅ |
+| 台灣 Pay | 交易後 29 日曆日 | ❌（僅全額） |
+| LINE Pay | 交易後 60 天 | ✅ |
+| TWQR | 請款日起 89 日曆日 | ✅ |
+
+**PostData_ 內層（JSON 格式）**
+
+| 參數 | 必填 | 說明 |
+|------|------|------|
+| `MerchantOrderNo` | V | 商店訂單編號 |
+| `Amount` | V | 退款金額 |
+| `TimeStamp` | V | Unix timestamp |
+| `PaymentType` | V | `ESUNWALLET` / `LINEPAY` / `TAIWANPAY` / `TWQR` |
+
+---
+
+## 8. 錯誤代碼（常見）
 
 | 代碼 | 說明 |
 |------|------|

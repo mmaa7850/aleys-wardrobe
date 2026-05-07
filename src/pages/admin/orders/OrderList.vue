@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Modal } from "bootstrap";
 import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 const { t } = useI18n();
 
@@ -44,6 +45,10 @@ const editShippingAddress = ref("");
 const saveLoading = ref(false);
 const saveSuccess = ref(false);
 const saveError = ref("");
+
+const refundLoading = ref(false);
+const refundError = ref("");
+const refundSuccess = ref(false);
 
 // ── Load lookups ──────────────────────────────────────
 const loadLookups = async () => {
@@ -103,6 +108,8 @@ const openDetail = async (id) => {
   detailLogs.value = [];
   saveSuccess.value = false;
   saveError.value = "";
+  refundSuccess.value = false;
+  refundError.value = "";
   activeTab.value = "info";
   detailLoading.value = true;
 
@@ -196,6 +203,58 @@ const saveDetail = async () => {
     saveError.value = err?.message ?? String(err);
   } finally {
     saveLoading.value = false;
+  }
+};
+
+// ── Refund ────────────────────────────────────────────
+const CREDIT_METHODS = new Set(['CREDIT', 'APPLEPAY', 'GOOGLEPAY', 'SAMSUNGPAY', 'WEBATM', 'UNIONPAY', 'CREDITAE', 'FOREIGN']);
+
+const canRefund = computed(() => detailOrder.value?.PaymentStatus === 'paid');
+const canApiRefund = computed(() => {
+  const m = detailOrder.value?.PaymentMethod;
+  return canRefund.value && (!m || CREDIT_METHODS.has(m));
+});
+
+const doRefund = async (manual = false) => {
+  if (!detailOrder.value) return;
+  const label = manual ? '標記已退款（ATM / 手動）' : '信用卡 API 退款';
+  const confirmMsg = manual
+    ? `確定將此訂單標記為「已退款」？\n請確認已完成手動匯款給顧客。`
+    : `確定向藍新發動退款？\n退款金額：NT$ ${detailOrder.value.FinalAmount?.toLocaleString()}\n此操作無法撤銷。`;
+  if (!window.confirm(confirmMsg)) return;
+
+  refundLoading.value = true;
+  refundError.value = "";
+  refundSuccess.value = false;
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/refund-payment`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderNo: detailOrder.value.OrderNo, manual }),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || '退款失敗');
+
+    // 更新本地狀態
+    detailOrder.value = { ...detailOrder.value, PaymentStatus: 'refunded' };
+    const idx = rows.value.findIndex(r => r.ID === detailOrder.value.ID);
+    if (idx !== -1) rows.value[idx].PaymentStatus = 'refunded';
+
+    refundSuccess.value = true;
+  } catch (err) {
+    refundError.value = err?.message ?? String(err);
+  } finally {
+    refundLoading.value = false;
   }
 };
 
@@ -575,17 +634,49 @@ onMounted(async () => {
               </ul>
             </div>
 
-            <!-- Feedback -->
+            <!-- Save feedback -->
             <div v-if="saveSuccess" class="alert alert-success mt-3 mb-0 py-2 small">
               {{ t("order.orders.saveSuccess") }}
             </div>
             <div v-if="saveError" class="alert alert-danger mt-3 mb-0 py-2 small">
               {{ saveError }}
             </div>
+
+            <!-- Refund feedback -->
+            <div v-if="refundSuccess" class="alert alert-success mt-3 mb-0 py-2 small">
+              退款完成，訂單已更新為「已退款」。
+            </div>
+            <div v-if="refundError" class="alert alert-danger mt-3 mb-0 py-2 small">
+              {{ refundError }}
+            </div>
           </template>
         </div>
 
-        <div class="modal-footer">
+        <div class="modal-footer flex-wrap gap-2">
+          <!-- 退款區塊（只有已付款才顯示） -->
+          <template v-if="detailOrder && canRefund && !refundSuccess">
+            <button
+              v-if="canApiRefund"
+              type="button"
+              class="btn btn-outline-danger me-auto"
+              :disabled="refundLoading"
+              @click="doRefund(false)"
+            >
+              <span v-if="refundLoading" class="spinner-border spinner-border-sm me-1"></span>
+              {{ refundLoading ? '退款中…' : '信用卡退款（藍新 API）' }}
+            </button>
+            <button
+              v-else
+              type="button"
+              class="btn btn-outline-danger me-auto"
+              :disabled="refundLoading"
+              @click="doRefund(true)"
+            >
+              <span v-if="refundLoading" class="spinner-border spinner-border-sm me-1"></span>
+              {{ refundLoading ? '處理中…' : '標記已退款（ATM / 手動）' }}
+            </button>
+          </template>
+
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
             {{ t("common.close") }}
           </button>
