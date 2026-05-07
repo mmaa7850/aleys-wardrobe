@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    const { orderNo, amount, email, itemDesc, recipientName, recipientPhone, customerNote, items } = body
+    const { orderNo, amount, couponCode, email, itemDesc, recipientName, recipientPhone, customerNote, items } = body
 
     if (!orderNo || !amount || !email) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -78,6 +78,37 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
     const dbSchema = Deno.env.get('DB_SCHEMA') || 'public'
+
+    // 驗證優惠券（後端再次確認，防止前端繞過）
+    let discountAmount = 0
+    let couponId: number | null = null
+    let couponUsageCount = 0
+
+    if (couponCode) {
+      const today = new Date().toISOString().slice(0, 10)
+      const { data: coupon, error: couponErr } = await supabaseAdmin
+        .schema(dbSchema)
+        .from('S_PRM_CouponList')
+        .select('ID, DiscountValue, UsageCount')
+        .eq('Name', couponCode)
+        .eq('IsActive', true)
+        .lte('StartDate', today)
+        .gte('EndDate', today)
+        .gt('UsageCount', 0)
+        .single()
+
+      if (couponErr || !coupon) {
+        return new Response(JSON.stringify({ error: '優惠券無效或已過期' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
+      discountAmount  = coupon.DiscountValue
+      couponId        = coupon.ID
+      couponUsageCount = coupon.UsageCount
+    }
+
+    const finalAmount = Math.max(1, amount - discountAmount)
 
     // 結帳前檢查庫存
     const variantIds = (items as Array<{ variantId: number; qty: number; productName: string }>).map(i => i.variantId)
@@ -110,7 +141,8 @@ Deno.serve(async (req) => {
         ShippingFee: 0,
         PaymentStatus: 'pending',
         ItemsTotal: amount,
-        FinalAmount: amount,
+        DiscountAmount: discountAmount,
+        FinalAmount: finalAmount,
         CustomerNote: customerNote || null,
         ShippingMethod: 'cvscom',
         StoreID: null,
@@ -143,6 +175,15 @@ Deno.serve(async (req) => {
 
     if (itemsErr) throw new Error(`Items insert failed: ${itemsErr.message}`)
 
+    // 扣除優惠券使用次數
+    if (couponId !== null) {
+      await supabaseAdmin
+        .schema(dbSchema)
+        .from('S_PRM_CouponList')
+        .update({ UsageCount: couponUsageCount - 1, UpdatedDate: new Date().toISOString() })
+        .eq('ID', couponId)
+    }
+
     const timeStamp = Math.floor(Date.now() / 1000)
 
     const pad = (n: number) => String(n).padStart(2, '0')
@@ -152,7 +193,7 @@ Deno.serve(async (req) => {
     const expireDate = `${atmExpire.getFullYear()}${pad(atmExpire.getMonth()+1)}${pad(atmExpire.getDate())}`
 
     const params: Record<string, string | number> = {
-      Amt: amount,
+      Amt: finalAmount,
       ClientBackURL: `${siteUrl}/orders/${orderNo}`,
       CREDIT: 1,
       CustomerURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-return`,
