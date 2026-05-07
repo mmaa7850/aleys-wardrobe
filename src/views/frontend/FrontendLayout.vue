@@ -138,15 +138,15 @@ onUnmounted(() => {
         </div>
         <div>
           <h6>購物指南</h6>
-          <a href="#">尺寸指南</a>
-          <a href="#">退換貨政策</a>
-          <a href="#">運費說明</a>
-          <a href="#">常見問題</a>
+          <RouterLink to="/size-guide">尺寸指南</RouterLink>
+          <RouterLink to="/returns">退換貨政策</RouterLink>
+          <RouterLink to="/shipping">運費說明</RouterLink>
+          <RouterLink to="/faq">常見問題</RouterLink>
         </div>
         <div>
           <h6>關於我們</h6>
-          <a href="#">品牌故事</a>
-          <a href="#">聯絡我們</a>
+          <RouterLink to="/brand-story">品牌故事</RouterLink>
+          <RouterLink to="/contact">聯絡我們</RouterLink>
         </div>
       </div>
       <div class="fe-footer__bottom">© 2025 Aley's Wardrobe. All rights reserved.</div>

@@ -393,12 +393,17 @@ WITH CHECK (
 | UpdatedDate | timestamptz | YES | — |
 
 ### S_SHP_ShippingMethodList
-| 欄位 | 型別 | Nullable |
-|------|------|----------|
-| ID | bigint | NO |
-| Name | varchar | NO |
-| Description | varchar | NO |
-| UpdatedDate | timestamptz | YES |
+| 欄位 | 型別 | Nullable | Default |
+|------|------|----------|---------|
+| ID | bigint | NO | — |
+| Name | varchar | NO | — |
+| Description | varchar | YES | — |
+| Fee | bigint | NO | 0 |
+| MethodCode | varchar(20) | YES | — |
+| IsActive | boolean | NO | true |
+| UpdatedDate | timestamptz | YES | — |
+
+> `MethodCode` 決定結帳流程：`cvscom` = 超商取貨（藍新 CVSCOM）、`home` = 宅配到府（需填地址）
 
 ### S_SYS_AdminUserList
 | 欄位 | 型別 | Nullable | Default |

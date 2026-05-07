@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    const { orderNo, amount, couponCode, email, itemDesc, recipientName, recipientPhone, customerNote, items } = body
+    const { orderNo, amount, shippingFee = 0, shippingMethodCode = 'cvscom', shippingAddress = '', couponCode, email, itemDesc, recipientName, recipientPhone, customerNote, items } = body
 
     if (!orderNo || !amount || !email) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
       couponUsageCount = coupon.UsageCount
     }
 
-    const finalAmount = Math.max(1, amount - discountAmount)
+    const finalAmount = Math.max(1, amount + shippingFee - discountAmount)
 
     // 結帳前檢查庫存
     const variantIds = (items as Array<{ variantId: number; qty: number; productName: string }>).map(i => i.variantId)
@@ -138,13 +138,14 @@ Deno.serve(async (req) => {
         ShippingName: recipientName,
         ShippingPhone: recipientPhone,
         ShippingAddress: '',
-        ShippingFee: 0,
+        ShippingFee: shippingFee,
         PaymentStatus: 'pending',
         ItemsTotal: amount,
         DiscountAmount: discountAmount,
         FinalAmount: finalAmount,
         CustomerNote: customerNote || null,
-        ShippingMethod: 'cvscom',
+        ShippingMethod: shippingMethodCode,
+        ShippingAddress: shippingAddress || '',
         StoreID: null,
         StoreName: null,
       })
@@ -192,16 +193,16 @@ Deno.serve(async (req) => {
     const atmExpire = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
     const expireDate = `${atmExpire.getFullYear()}${pad(atmExpire.getMonth()+1)}${pad(atmExpire.getDate())}`
 
+    const isCVS = shippingMethodCode === 'cvscom'
+
     const params: Record<string, string | number> = {
       Amt: finalAmount,
       ClientBackURL: `${siteUrl}/orders/${orderNo}`,
       CREDIT: 1,
       CustomerURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-return`,
-      CVSCOM: 1,
       Email: email,
       ExpireDate: expireDate,
       ItemDesc: (itemDesc || '商品購買').slice(0, 50),
-      LgsType: 'C2C',
       MerchantID: merchantId,
       MerchantOrderNo: orderNo,
       NotifyURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-notify`,
@@ -210,6 +211,12 @@ Deno.serve(async (req) => {
       TimeStamp: timeStamp,
       VACC: 1,
       Version: '2.0',
+    }
+
+    // 超商取貨：加入 CVSCOM 物流參數；宅配不需要
+    if (isCVS) {
+      params['CVSCOM'] = 1
+      params['LgsType'] = 'C2C'
     }
 
     const sortedKeys = Object.keys(params).sort()

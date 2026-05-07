@@ -141,13 +141,13 @@ onMounted(async () => {
         </div>
         <div class="cart-summary__row">
           <span>運費</span>
-          <span class="cart-summary__free">免運費</span>
+          <span class="cart-summary__shipping-tbd">結帳時選擇</span>
         </div>
 
         <div class="cart-summary__divider"></div>
 
         <div class="cart-summary__row cart-summary__row--total">
-          <span>訂單總計</span>
+          <span>商品小計</span>
           <span>NT$ {{ cart.total.toLocaleString() }}</span>
         </div>
 
@@ -429,9 +429,10 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 
-.cart-summary__free {
-  color: #15803D;
+.cart-summary__shipping-tbd {
   font-size: 12px;
+  color: var(--fe-muted);
+  font-style: italic;
 }
 
 .cart-summary__divider {

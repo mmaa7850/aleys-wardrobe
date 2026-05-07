@@ -26,6 +26,14 @@ const router = createRouter({
         { path: "order-success/:orderNo", name: "order-success", component: () => import("@/views/frontend/OrderSuccessView.vue"), meta: { requiresAuth: true } },
         { path: "orders/:orderNo", name: "order-detail", component: () => import("@/views/frontend/OrderDetailView.vue"), meta: { requiresAuth: true } },
         { path: "wishlist", name: "wishlist", component: () => import("@/views/frontend/WishlistView.vue"), meta: { requiresAuth: true } },
+
+        // Info pages
+        { path: "size-guide", name: "size-guide", component: () => import("@/views/frontend/info/SizeGuideView.vue") },
+        { path: "returns", name: "returns", component: () => import("@/views/frontend/info/ReturnPolicyView.vue") },
+        { path: "shipping", name: "shipping", component: () => import("@/views/frontend/info/ShippingInfoView.vue") },
+        { path: "faq", name: "faq", component: () => import("@/views/frontend/info/FAQView.vue") },
+        { path: "brand-story", name: "brand-story", component: () => import("@/views/frontend/info/BrandStoryView.vue") },
+        { path: "contact", name: "contact", component: () => import("@/views/frontend/info/ContactView.vue") },
       ],
     },
 

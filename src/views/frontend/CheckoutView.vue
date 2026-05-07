@@ -23,8 +23,18 @@ const couponApplied = ref(null) // { ID, Name, DiscountValue }
 const couponError = ref('')
 const couponLoading = ref(false)
 
+// ── Shipping methods ──────────────────────────────────
+const shippingMethods = ref([])
+const selectedMethodId = ref(null)
+const shippingAddress = ref('')
+
+const selectedMethod = computed(() => shippingMethods.value.find(m => m.ID === selectedMethodId.value) ?? null)
+const shippingFee = computed(() => selectedMethod.value?.Fee ?? 0)
+const isHome = computed(() => selectedMethod.value?.MethodCode === 'home')
+
+// ── Coupon / totals ───────────────────────────────────
 const discountAmount = computed(() => couponApplied.value?.DiscountValue ?? 0)
-const finalTotal = computed(() => Math.max(1, cart.total - discountAmount.value))
+const finalTotal = computed(() => Math.max(1, cart.total + shippingFee.value - discountAmount.value))
 
 async function applyCoupon() {
   const code = couponCode.value.trim()
@@ -93,9 +103,18 @@ onMounted(async () => {
     sessionStorage.removeItem('checkoutDraft')
   }
 
-  const tasks = [prefillFromProfile()]
-  if (cart.isEmpty && !cart.cartId) tasks.push(cart.fetchCart())
-  await Promise.all(tasks)
+  const [, , methodsResult] = await Promise.all([
+    prefillFromProfile(),
+    cart.isEmpty && !cart.cartId ? cart.fetchCart() : Promise.resolve(),
+    db.from('S_SHP_ShippingMethodList')
+      .select('ID, Name, Description, Fee, MethodCode, IsActive')
+      .eq('IsActive', true)
+      .order('ID'),
+  ])
+  if (methodsResult.data?.length) {
+    shippingMethods.value = methodsResult.data
+    selectedMethodId.value = methodsResult.data[0].ID
+  }
   if (cart.isEmpty) router.push('/cart')
 })
 
@@ -112,6 +131,14 @@ async function submitOrder() {
   }
   if (!validatePhone(recipientPhone.value)) {
     errorMsg.value = '電話格式錯誤，請只輸入數字和連字號'
+    return
+  }
+  if (isHome.value && !shippingAddress.value.trim()) {
+    errorMsg.value = '請填寫收件地址'
+    return
+  }
+  if (!selectedMethod.value) {
+    errorMsg.value = '請選擇配送方式'
     return
   }
 
@@ -145,6 +172,9 @@ async function submitOrder() {
         body: JSON.stringify({
           orderNo,
           amount: cart.total,
+          shippingFee: shippingFee.value,
+          shippingMethodCode: selectedMethod.value?.MethodCode ?? 'cvscom',
+          shippingAddress: isHome.value ? shippingAddress.value.trim() : '',
           couponCode: couponApplied.value?.Name ?? null,
           email: auth.user.email,
           itemDesc,
@@ -227,11 +257,37 @@ async function submitOrder() {
 
       <!-- Left: form -->
       <div class="co-form-wrap">
-        <h2 class="co-section-title">收件資訊</h2>
+
+        <!-- Shipping method -->
+        <h2 class="co-section-title">配送方式</h2>
+        <div v-if="shippingMethods.length === 0" class="co-notice">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>載入配送方式中...</span>
+        </div>
+        <div v-else class="co-shipping-methods">
+          <label
+            v-for="m in shippingMethods"
+            :key="m.ID"
+            class="co-shipping-card"
+            :class="{ 'co-shipping-card--active': selectedMethodId === m.ID }"
+          >
+            <input type="radio" :value="m.ID" v-model="selectedMethodId" class="co-shipping-radio" />
+            <div class="co-shipping-card__body">
+              <span class="co-shipping-card__name">{{ m.Name }}</span>
+              <span class="co-shipping-card__desc">{{ m.Description }}</span>
+            </div>
+            <span class="co-shipping-card__fee">NT$ {{ m.Fee }}</span>
+          </label>
+        </div>
+
+        <!-- Recipient info -->
+        <h2 class="co-section-title co-section-title--mt">{{ isHome ? '收件資訊' : '訂購人資訊' }}</h2>
 
         <div class="co-form">
           <div class="co-field">
-            <label class="co-label" for="recipientName">收件人姓名 <span class="co-required">*</span></label>
+            <label class="co-label" for="recipientName">
+              {{ isHome ? '收件人姓名' : '訂購人姓名' }} <span class="co-required">*</span>
+            </label>
             <input
               id="recipientName"
               v-model="recipientName"
@@ -242,13 +298,27 @@ async function submitOrder() {
           </div>
 
           <div class="co-field">
-            <label class="co-label" for="recipientPhone">收件人電話 <span class="co-required">*</span></label>
+            <label class="co-label" for="recipientPhone">
+              {{ isHome ? '收件人電話' : '訂購人電話' }} <span class="co-required">*</span>
+            </label>
             <input
               id="recipientPhone"
               v-model="recipientPhone"
               type="tel"
               class="co-input"
               placeholder="例：0912-345-678"
+            />
+          </div>
+
+          <!-- Address: only for home delivery -->
+          <div v-if="isHome" class="co-field co-field--full">
+            <label class="co-label" for="shippingAddress">收件地址 <span class="co-required">*</span></label>
+            <input
+              id="shippingAddress"
+              v-model="shippingAddress"
+              type="text"
+              class="co-input"
+              placeholder="例：台北市中山區中山北路一段100號5樓"
             />
           </div>
 
@@ -259,15 +329,16 @@ async function submitOrder() {
               v-model="customerNote"
               class="co-textarea"
               rows="3"
-              placeholder="如有特殊需求或備注，請在此填寫"
+              :placeholder="isHome ? '如有到貨時間需求、樓層備注等請填寫' : '如有特殊需求或備注，請在此填寫'"
             ></textarea>
           </div>
         </div>
 
-        <!-- NewebPay notice -->
+        <!-- Notice -->
         <div class="co-notice">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-          <span>送出後將進入藍新金流付款頁面，可選擇付款方式（信用卡、ATM 轉帳）及超商取貨門市。</span>
+          <span v-if="isHome">送出後將進入藍新金流付款頁面，選擇付款方式（信用卡、ATM 轉帳）完成付款後由黑貓宅急便配送至指定地址。</span>
+          <span v-else>送出後將進入藍新金流付款頁面，可選擇付款方式（信用卡、ATM 轉帳）並在該頁面選擇超商取貨門市。</span>
         </div>
 
         <!-- Error message -->
@@ -332,8 +403,8 @@ async function submitOrder() {
           <span>NT$ {{ cart.total.toLocaleString() }}</span>
         </div>
         <div class="co-summary__row">
-          <span>運費</span>
-          <span class="co-summary__free">免運費</span>
+          <span>{{ selectedMethod ? selectedMethod.Name : '運費' }}</span>
+          <span>NT$ {{ shippingFee.toLocaleString() }}</span>
         </div>
 
         <!-- 優惠券 -->
@@ -455,8 +526,70 @@ async function submitOrder() {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 20px;
   font-weight: 500;
-  margin: 0 0 24px;
+  margin: 0 0 16px;
   color: var(--fe-text);
+}
+
+.co-section-title--mt { margin-top: 36px; }
+
+/* Shipping method cards */
+.co-shipping-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.co-shipping-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1.5px solid var(--fe-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: var(--fe-white);
+}
+
+.co-shipping-card--active {
+  border-color: var(--fe-text);
+  background: var(--fe-cream);
+}
+
+.co-shipping-radio {
+  accent-color: var(--fe-text);
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.co-shipping-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.co-shipping-card__name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--fe-text);
+  letter-spacing: 0.02em;
+}
+
+.co-shipping-card__desc {
+  font-size: 12px;
+  color: var(--fe-muted);
+  line-height: 1.5;
+}
+
+.co-shipping-card__fee {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fe-text);
+  white-space: nowrap;
 }
 
 /* Form */
@@ -672,10 +805,6 @@ async function submitOrder() {
   margin-bottom: 10px;
 }
 
-.co-summary__free {
-  color: #15803D;
-  font-size: 12px;
-}
 
 .co-summary__row--total {
   font-size: 15px;
