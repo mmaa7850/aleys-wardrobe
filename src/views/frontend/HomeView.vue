@@ -1,15 +1,16 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
 
+// ── Products ────────────────────────────────────────────────
 const newArrivals = ref([])
 const isLoading = ref(true)
 
-function getImageUrl(storagePath) {
+function getProductImageUrl(storagePath) {
   if (!storagePath) return null
   const { data } = supabase.storage.from('product-pictures').getPublicUrl(storagePath)
   return data?.publicUrl || null
@@ -22,29 +23,112 @@ function getMainMedia(product) {
 
 function getMainImage(product) {
   const main = getMainMedia(product)
-  return main ? getImageUrl(main.StoragePath) : null
+  return main ? getProductImageUrl(main.StoragePath) : null
 }
 
-onMounted(async () => {
-  const { data } = await db
-    .from('C_PRD_ProductList')
-    .select(`
-      ID, ProductName, Price, OriginPrice,
-      C_PRD_ProductPictureList(StoragePath, AltText, IsMain, Type)
-    `)
-    .or('IsActive.is.null,IsActive.eq.true')
-    .order('CreatedDate', { ascending: false })
-    .limit(8)
+// ── Banners ─────────────────────────────────────────────────
+const BANNER_BUCKET = 'banners'
 
-  if (data) newArrivals.value = data
+const heroBanners = ref([])   // position: home-hero
+const homeBanners = ref([])   // position: home-banner
+const heroIdx = ref(0)
+const bannerIdx = ref(0)
+let heroTimer = null
+let bannerTimer = null
+
+function getBannerUrl(path) {
+  if (!path) return null
+  if (path.startsWith('http')) return path
+  const { data } = supabase.storage.from(BANNER_BUCKET).getPublicUrl(path)
+  return data?.publicUrl || null
+}
+
+function resolveLink(url) {
+  if (!url) return null
+  return url
+}
+
+function bannerTarget(url) {
+  if (!url) return undefined
+  return url.startsWith('http') ? '_blank' : undefined
+}
+
+const currentHero  = computed(() => heroBanners.value[heroIdx.value]  || null)
+const currentBanner = computed(() => homeBanners.value[bannerIdx.value] || null)
+
+function goHero(i) {
+  heroIdx.value = i
+  restartHeroTimer()
+}
+
+function goBanner(i) {
+  bannerIdx.value = i
+  restartBannerTimer()
+}
+
+function restartHeroTimer() {
+  clearInterval(heroTimer)
+  if (heroBanners.value.length > 1) {
+    heroTimer = setInterval(() => {
+      heroIdx.value = (heroIdx.value + 1) % heroBanners.value.length
+    }, 5000)
+  }
+}
+
+function restartBannerTimer() {
+  clearInterval(bannerTimer)
+  if (homeBanners.value.length > 1) {
+    bannerTimer = setInterval(() => {
+      bannerIdx.value = (bannerIdx.value + 1) % homeBanners.value.length
+    }, 6000)
+  }
+}
+
+async function loadBanners() {
+  const today = new Date().toISOString().split('T')[0]
+  const { data } = await db
+    .from('S_MKT_BannerList')
+    .select('ID, ImagePath, LinkURL, AltText, Position, SortOrder')
+    .eq('IsActive', true)
+    .or(`StartDate.is.null,StartDate.lte.${today}`)
+    .or(`EndDate.is.null,EndDate.gte.${today}`)
+    .order('SortOrder', { ascending: true })
+
+  if (!data) return
+  heroBanners.value = data.filter(b => b.Position === 'home-hero')
+  homeBanners.value = data.filter(b => b.Position === 'home-banner')
+  restartHeroTimer()
+  restartBannerTimer()
+}
+
+// ── Lifecycle ────────────────────────────────────────────────
+onMounted(async () => {
+  await Promise.all([
+    loadBanners(),
+    db
+      .from('C_PRD_ProductList')
+      .select(`
+        ID, ProductName, Price, OriginPrice,
+        C_PRD_ProductPictureList(StoragePath, AltText, IsMain, Type)
+      `)
+      .or('IsActive.is.null,IsActive.eq.true')
+      .order('CreatedDate', { ascending: false })
+      .limit(8)
+      .then(({ data }) => { if (data) newArrivals.value = data })
+  ])
   isLoading.value = false
+})
+
+onUnmounted(() => {
+  clearInterval(heroTimer)
+  clearInterval(bannerTimer)
 })
 </script>
 
 <template>
-  <!-- ══════════════════════════════
+  <!-- ════════════════════════════════
        HERO
-  ══════════════════════════════ -->
+  ════════════════════════════════ -->
   <section class="hero">
     <div class="hero__left">
       <div class="hero__content">
@@ -61,27 +145,63 @@ onMounted(async () => {
         </RouterLink>
       </div>
     </div>
-    <div class="hero__right">
-      <div class="hero__deco">
-        <div class="hero__deco-frame">
-          <span class="hero__deco-label">New Arrivals</span>
-          <div class="hero__deco-dots">
-            <span></span><span></span><span></span>
-            <span></span><span></span><span></span>
-            <span></span><span></span><span></span>
+
+    <!-- Hero right: banner image or decorative fallback -->
+    <div class="hero__right" :class="{ 'hero__right--img': heroBanners.length }">
+
+      <!-- ▸ Banner image mode -->
+      <template v-if="heroBanners.length && currentHero">
+        <transition name="hfade" mode="out-in">
+          <component
+            :is="currentHero.LinkURL ? 'a' : 'div'"
+            :key="heroIdx"
+            :href="resolveLink(currentHero.LinkURL)"
+            :target="bannerTarget(currentHero.LinkURL)"
+            class="hero-img"
+          >
+            <img
+              :src="getBannerUrl(currentHero.ImagePath)"
+              :alt="currentHero.AltText || 'Banner'"
+              class="hero-img__pic"
+            />
+          </component>
+        </transition>
+        <!-- Dots: only if multiple -->
+        <div v-if="heroBanners.length > 1" class="hero-dots">
+          <button
+            v-for="(_, i) in heroBanners"
+            :key="i"
+            class="hero-dot"
+            :class="{ 'hero-dot--active': i === heroIdx }"
+            @click="goHero(i)"
+          ></button>
+        </div>
+      </template>
+
+      <!-- ▸ Decorative fallback (no banners) -->
+      <template v-else>
+        <div class="hero__deco">
+          <div class="hero__deco-frame">
+            <span class="hero__deco-label">New Arrivals</span>
+            <div class="hero__deco-dots">
+              <span></span><span></span><span></span>
+              <span></span><span></span><span></span>
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+          <div class="hero__deco-tag">
+            <p>日韓選品</p>
+            <p>品味生活</p>
           </div>
         </div>
-        <div class="hero__deco-tag">
-          <p>日韓選品</p>
-          <p>品味生活</p>
-        </div>
-      </div>
+      </template>
+
     </div>
   </section>
 
-  <!-- ══════════════════════════════
+  <!-- ════════════════════════════════
        TICKER
-  ══════════════════════════════ -->
+  ════════════════════════════════ -->
   <div class="ticker">
     <div class="ticker__track">
       <span v-for="n in 4" :key="n">
@@ -90,9 +210,42 @@ onMounted(async () => {
     </div>
   </div>
 
-  <!-- ══════════════════════════════
+  <!-- ════════════════════════════════
+       HOME BANNER STRIP
+  ════════════════════════════════ -->
+  <section v-if="homeBanners.length && currentBanner" class="hbanner">
+    <div class="hbanner__wrap">
+      <transition name="bfade" mode="out-in">
+        <component
+          :is="currentBanner.LinkURL ? 'a' : 'div'"
+          :key="bannerIdx"
+          :href="resolveLink(currentBanner.LinkURL)"
+          :target="bannerTarget(currentBanner.LinkURL)"
+          class="hbanner__item"
+        >
+          <img
+            :src="getBannerUrl(currentBanner.ImagePath)"
+            :alt="currentBanner.AltText || 'Banner'"
+            class="hbanner__img"
+          />
+        </component>
+      </transition>
+      <!-- Dots -->
+      <div v-if="homeBanners.length > 1" class="hbanner__dots">
+        <button
+          v-for="(_, i) in homeBanners"
+          :key="i"
+          class="hbanner__dot"
+          :class="{ 'hbanner__dot--active': i === bannerIdx }"
+          @click="goBanner(i)"
+        ></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════
        NEW ARRIVALS
-  ══════════════════════════════ -->
+  ════════════════════════════════ -->
   <section class="section-products">
     <div class="section-header">
       <span class="section-header__eyebrow">New In</span>
@@ -100,7 +253,6 @@ onMounted(async () => {
       <div class="section-header__line"></div>
     </div>
 
-    <!-- Loading skeleton -->
     <div v-if="isLoading" class="products-grid">
       <div v-for="n in 4" :key="n" class="product-card product-card--skeleton">
         <div class="product-card__img-wrap skeleton-box"></div>
@@ -111,7 +263,6 @@ onMounted(async () => {
       </div>
     </div>
 
-    <!-- Product grid -->
     <div v-else-if="newArrivals.length" class="products-grid">
       <RouterLink
         v-for="product in newArrivals"
@@ -138,12 +289,8 @@ onMounted(async () => {
           <div v-if="!getMainImage(product)" class="product-card__img-placeholder">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
           </div>
-          <div class="product-card__overlay">
-            <span>查看商品</span>
-          </div>
-          <div v-if="product.OriginPrice && product.OriginPrice > product.Price" class="product-card__badge">
-            SALE
-          </div>
+          <div class="product-card__overlay"><span>查看商品</span></div>
+          <div v-if="product.OriginPrice && product.OriginPrice > product.Price" class="product-card__badge">SALE</div>
         </div>
         <div class="product-card__info">
           <p class="product-card__name">{{ product.ProductName }}</p>
@@ -157,7 +304,6 @@ onMounted(async () => {
       </RouterLink>
     </div>
 
-    <!-- Empty state -->
     <div v-else class="products-empty">
       <p>商品即將上架，敬請期待</p>
     </div>
@@ -167,9 +313,9 @@ onMounted(async () => {
     </div>
   </section>
 
-  <!-- ══════════════════════════════
+  <!-- ════════════════════════════════
        CATEGORIES
-  ══════════════════════════════ -->
+  ════════════════════════════════ -->
   <section class="section-categories">
     <div class="section-header">
       <span class="section-header__eyebrow">Shop By Style</span>
@@ -207,7 +353,7 @@ onMounted(async () => {
     </div>
   </section>
 
-  <!-- Admin shortcut (only visible to admins) -->
+  <!-- Admin shortcut -->
   <RouterLink
     v-if="auth.canEnterAdmin"
     to="/admin"
@@ -220,9 +366,9 @@ onMounted(async () => {
     </svg>
   </RouterLink>
 
-  <!-- ══════════════════════════════
+  <!-- ════════════════════════════════
        BRAND STORY
-  ══════════════════════════════ -->
+  ════════════════════════════════ -->
   <section class="section-story">
     <div class="story-inner">
       <p class="story-eyebrow">Our Story</p>
@@ -238,7 +384,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* ── Hero ── */
+/* ── Hero ────────────────────────────────────────────────── */
 .hero {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -259,6 +405,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 120px 60px 80px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* When a banner image is loaded, remove padding so image fills edge-to-edge */
+.hero__right--img {
+  padding: 0;
+  background: #1a1714;
 }
 
 .hero__content { max-width: 420px; }
@@ -327,14 +481,13 @@ onMounted(async () => {
   border-color: var(--fe-gold-d);
 }
 
-/* Decorative right panel */
+/* Decorative fallback */
 .hero__deco {
   position: relative;
   width: 100%;
   max-width: 360px;
   aspect-ratio: 3/4;
 }
-
 .hero__deco-frame {
   width: 100%;
   height: 100%;
@@ -344,7 +497,6 @@ onMounted(async () => {
   align-items: flex-end;
   padding: 24px;
 }
-
 .hero__deco-label {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 13px;
@@ -352,7 +504,6 @@ onMounted(async () => {
   letter-spacing: 0.08em;
   color: var(--fe-muted);
 }
-
 .hero__deco-dots {
   position: absolute;
   top: 28px;
@@ -361,7 +512,6 @@ onMounted(async () => {
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
 }
-
 .hero__deco-dots span {
   width: 4px;
   height: 4px;
@@ -369,7 +519,6 @@ onMounted(async () => {
   border-radius: 50%;
   opacity: 0.6;
 }
-
 .hero__deco-tag {
   position: absolute;
   bottom: -20px;
@@ -383,6 +532,53 @@ onMounted(async () => {
   font-weight: 500;
 }
 
+/* ── Hero banner image ───────────────────────────────────── */
+.hero-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  text-decoration: none;
+  position: absolute;
+  inset: 0;
+}
+.hero-img__pic {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Carousel dots */
+.hero-dots {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+.hero-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.7);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s, transform 0.2s;
+}
+.hero-dot--active {
+  background: #fff;
+  transform: scale(1.3);
+}
+
+/* Hero fade transition */
+.hfade-enter-active,
+.hfade-leave-active { transition: opacity 0.6s ease; }
+.hfade-enter-from,
+.hfade-leave-to { opacity: 0; }
+
 /* Hero mobile */
 @media (max-width: 767px) {
   .hero { grid-template-columns: 1fr; min-height: auto; }
@@ -392,14 +588,13 @@ onMounted(async () => {
   .hero__title--bold { font-size: 72px; }
 }
 
-/* ── Ticker ── */
+/* ── Ticker ──────────────────────────────────────────────── */
 .ticker {
   background: var(--fe-text);
   color: rgba(255,255,255,0.55);
   overflow: hidden;
   padding: 12px 0;
 }
-
 .ticker__track {
   display: inline-flex;
   white-space: nowrap;
@@ -407,13 +602,65 @@ onMounted(async () => {
   font-size: 11px;
   letter-spacing: 0.12em;
 }
-
 @keyframes ticker-scroll {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
 }
 
-/* ── Section shared ── */
+/* ── Home Banner strip ───────────────────────────────────── */
+.hbanner {
+  width: 100%;
+  background: #f5ede2;
+  position: relative;
+}
+.hbanner__wrap {
+  position: relative;
+  width: 100%;
+  line-height: 0;
+}
+.hbanner__item {
+  display: block;
+  width: 100%;
+  text-decoration: none;
+}
+.hbanner__img {
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: cover;
+  display: block;
+}
+.hbanner__dots {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  z-index: 2;
+}
+.hbanner__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255,255,255,0.8);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s, transform 0.2s;
+}
+.hbanner__dot--active {
+  background: #fff;
+  transform: scale(1.25);
+}
+
+/* Banner fade transition */
+.bfade-enter-active,
+.bfade-leave-active { transition: opacity 0.7s ease; }
+.bfade-enter-from,
+.bfade-leave-to { opacity: 0; }
+
+/* ── Section shared ──────────────────────────────────────── */
 .section-products,
 .section-categories {
   padding: 96px 36px;
@@ -421,10 +668,7 @@ onMounted(async () => {
   margin: 0 auto;
 }
 
-.section-header {
-  text-align: center;
-  margin-bottom: 56px;
-}
+.section-header { text-align: center; margin-bottom: 56px; }
 
 .section-header__eyebrow {
   font-size: 11px;
@@ -448,7 +692,7 @@ onMounted(async () => {
   margin: 0 auto;
 }
 
-/* ── Products grid ── */
+/* ── Products grid ───────────────────────────────────────── */
 .products-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -479,9 +723,7 @@ onMounted(async () => {
   transition: transform 0.5s ease;
 }
 
-.product-card:hover .product-card__img {
-  transform: scale(1.04);
-}
+.product-card:hover .product-card__img { transform: scale(1.04); }
 
 .product-card__img-placeholder {
   width: 100%;
@@ -502,9 +744,7 @@ onMounted(async () => {
   opacity: 0;
   transition: opacity 0.3s ease;
 }
-
 .product-card:hover .product-card__overlay { opacity: 1; }
-
 .product-card__overlay span {
   font-size: 12px;
   letter-spacing: 0.14em;
@@ -532,35 +772,16 @@ onMounted(async () => {
   line-height: 1.4;
 }
 
-.product-card__price-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.product-card__origin {
-  font-size: 12px;
-  color: var(--fe-muted);
-  text-decoration-color: var(--fe-muted);
-}
-
-.product-card__price {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--fe-text);
-}
+.product-card__price-row { display: flex; align-items: center; gap: 8px; }
+.product-card__origin { font-size: 12px; color: var(--fe-muted); text-decoration-color: var(--fe-muted); }
+.product-card__price { font-size: 14px; font-weight: 500; color: var(--fe-text); }
 
 /* Skeleton */
-.product-card--skeleton .product-card__img-wrap {
-  animation: shimmer 1.5s infinite;
-}
-
 .skeleton-box {
   background: linear-gradient(90deg, var(--fe-linen) 25%, var(--fe-cream) 50%, var(--fe-linen) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
-
 .skeleton-text {
   height: 12px;
   border-radius: 2px;
@@ -570,7 +791,6 @@ onMounted(async () => {
   margin-bottom: 8px;
   width: 80%;
 }
-
 .skeleton-text--lg { width: 60%; height: 14px; }
 
 @keyframes shimmer {
@@ -586,11 +806,7 @@ onMounted(async () => {
   letter-spacing: 0.06em;
 }
 
-.section-cta {
-  text-align: center;
-  margin-top: 56px;
-}
-
+.section-cta { text-align: center; margin-top: 56px; }
 .btn-outline {
   display: inline-block;
   font-size: 12px;
@@ -602,19 +818,14 @@ onMounted(async () => {
   padding: 14px 40px;
   transition: border-color 0.25s, background 0.25s;
 }
+.btn-outline:hover { border-color: var(--fe-text); background: var(--fe-cream); }
 
-.btn-outline:hover {
-  border-color: var(--fe-text);
-  background: var(--fe-cream);
-}
-
-/* ── Categories ── */
+/* ── Categories ──────────────────────────────────────────── */
 .section-categories {
   background: var(--fe-cream);
   max-width: 100%;
   padding: 96px 36px;
 }
-
 .section-categories .section-header { max-width: 1400px; margin: 0 auto 56px; }
 
 .categories-grid {
@@ -624,10 +835,7 @@ onMounted(async () => {
   max-width: 1400px;
   margin: 0 auto;
 }
-
-@media (max-width: 767px) {
-  .categories-grid { grid-template-columns: 1fr; }
-}
+@media (max-width: 767px) { .categories-grid { grid-template-columns: 1fr; } }
 
 .cat-card {
   aspect-ratio: 3/4;
@@ -638,85 +846,25 @@ onMounted(async () => {
   overflow: hidden;
   transition: transform 0.3s;
 }
-
 .cat-card:hover { transform: translateY(-4px); }
-
 .cat-card--a { background: linear-gradient(145deg, #E8DDD0 0%, #C9B99E 100%); }
 .cat-card--b { background: linear-gradient(145deg, #D6CBBC 0%, #B8A48A 100%); }
 .cat-card--c { background: linear-gradient(145deg, #C8B8A4 0%, #9E8870 100%); }
 
-.cat-card__content {
-  padding: 28px;
-  position: relative;
-  z-index: 1;
-}
+.cat-card__content { padding: 28px; position: relative; z-index: 1; }
+.cat-card__tag { font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: rgba(28,23,20,0.5); margin: 0 0 8px; }
+.cat-card__title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 30px; font-weight: 500; color: var(--fe-text); margin: 0 0 6px; line-height: 1.2; }
+.cat-card__desc { font-size: 12.5px; color: rgba(28,23,20,0.65); margin: 0 0 16px; line-height: 1.6; }
+.cat-card__link { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fe-text); border-bottom: 1px solid rgba(28,23,20,0.4); padding-bottom: 2px; }
 
-.cat-card__tag {
-  font-size: 10px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(28,23,20,0.5);
-  margin: 0 0 8px;
-}
-
-.cat-card__title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: 30px;
-  font-weight: 500;
-  color: var(--fe-text);
-  margin: 0 0 6px;
-  line-height: 1.2;
-}
-
-.cat-card__desc {
-  font-size: 12.5px;
-  color: rgba(28,23,20,0.65);
-  margin: 0 0 16px;
-  line-height: 1.6;
-}
-
-.cat-card__link {
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--fe-text);
-  border-bottom: 1px solid rgba(28,23,20,0.4);
-  padding-bottom: 2px;
-}
-
-/* ── Brand Story ── */
-.section-story {
-  padding: 120px 36px;
-  text-align: center;
-}
-
+/* ── Brand Story ─────────────────────────────────────────── */
+.section-story { padding: 120px 36px; text-align: center; }
 .story-inner { max-width: 600px; margin: 0 auto; }
+.story-eyebrow { font-size: 11px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--fe-gold-d); margin: 0 0 16px; }
+.story-title { font-family: 'Cormorant Garamond', Georgia, serif; font-size: clamp(36px, 5vw, 52px); font-weight: 500; font-style: italic; margin: 0 0 28px; line-height: 1.2; }
+.story-text { font-size: 14px; color: var(--fe-muted); line-height: 2; margin: 0 0 44px; }
 
-.story-eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--fe-gold-d);
-  margin: 0 0 16px;
-}
-
-.story-title {
-  font-family: 'Cormorant Garamond', Georgia, serif;
-  font-size: clamp(36px, 5vw, 52px);
-  font-weight: 500;
-  font-style: italic;
-  margin: 0 0 28px;
-  line-height: 1.2;
-}
-
-.story-text {
-  font-size: 14px;
-  color: var(--fe-muted);
-  line-height: 2;
-  margin: 0 0 44px;
-}
-
-/* ── Admin FAB ── */
+/* ── Admin FAB ───────────────────────────────────────────── */
 .admin-fab {
   position: fixed;
   bottom: 32px;
