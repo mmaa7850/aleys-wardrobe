@@ -24,11 +24,13 @@ const allSections = [
     key: "dashboard",
     labelKey: "admin.sidebar.dashboard",
     to: "/admin",
+    icon: `<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>`,
   },
   {
     key: "products",
     labelKey: "admin.sidebar.products",
     permission: "CanManageProducts",
+    icon: `<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>`,
     children: [
       { labelKey: "admin.sidebar.productList", to: "/admin/products" },
       { labelKey: "admin.sidebar.categories", to: "/admin/products/setcategories" },
@@ -41,6 +43,7 @@ const allSections = [
     key: "orders",
     labelKey: "admin.sidebar.orders",
     permission: "CanManageOrders",
+    icon: `<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>`,
     children: [
       { labelKey: "admin.sidebar.orderList", to: "/admin/orders" },
       { labelKey: "admin.sidebar.status", to: "/admin/orders/setstatus" },
@@ -50,6 +53,7 @@ const allSections = [
     key: "inventory",
     labelKey: "admin.sidebar.inventory",
     permission: "CanManageProducts",
+    icon: `<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>`,
     children: [
       { labelKey: "admin.sidebar.stockOverview", to: "/admin/inventory/overview" },
       { labelKey: "admin.sidebar.stockLogs", to: "/admin/inventory/logs" },
@@ -59,6 +63,7 @@ const allSections = [
     key: "marketing",
     labelKey: "admin.sidebar.marketing",
     permission: "CanManageMarketing",
+    icon: `<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>`,
     children: [
       { labelKey: "admin.sidebar.coupons", to: "/admin/marketing/setcoupons" },
       { labelKey: "admin.sidebar.banners", to: "/admin/marketing/setbanners" },
@@ -68,6 +73,7 @@ const allSections = [
     key: "members",
     labelKey: "admin.sidebar.members",
     permission: "CanManageMembers",
+    icon: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>`,
     children: [
       { labelKey: "admin.sidebar.memberList", to: "/admin/members" },
       { labelKey: "admin.sidebar.memberLevels", to: "/admin/members/levels" },
@@ -77,6 +83,7 @@ const allSections = [
     key: "settings",
     labelKey: "admin.sidebar.settings",
     permission: "CanManageSettings",
+    icon: `<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>`,
     children: [
       { labelKey: "admin.sidebar.payMethods", to: "/admin/settings/setpaymethods" },
       { labelKey: "admin.sidebar.shippingMethods", to: "/admin/settings/setshippingmethods" },
@@ -100,8 +107,6 @@ const sections = computed(() => {
     });
 });
 
-
-/* ===== 展開狀態：一次只開一個（你之前要的） ===== */
 const openKey = ref(null);
 
 const isPathInSection = (section) =>
@@ -127,49 +132,64 @@ const activeSectionKey = computed(() => {
   return hit?.key;
 });
 
-/* ✅ 手機點子選單自動關 sidebar */
 const onNavClick = () => {
   emit("close");
 };
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ open: mobileOpen }">
-    <!-- Brand -->
-    <div class="brand">
-      <div class="logo">A</div>
-      <div class="brand-text">
-        <strong>Aley’s</strong>
-        <span>Admin</span>
-      </div>
+  <aside class="ad-sidebar" :class="{ open: mobileOpen }">
 
-      <!-- 手機上顯示關閉按鈕 -->
-      <button class="btn btn-sm btn-outline-secondary d-lg-none" @click="emit('close')">
-        ✕
+    <!-- Brand -->
+    <div class="ad-brand">
+      <RouterLink to="/" class="ad-brand__link" title="前往前台">
+        <span class="ad-brand__name">Aley's Wardrobe</span>
+        <span class="ad-brand__sub">Admin Panel</span>
+      </RouterLink>
+      <button class="ad-close d-lg-none" @click="emit('close')" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
 
-    <!-- Menu（吃掉中間空間） -->
-    <nav class="menu">
-      <div v-for="s in sections" :key="s.key" class="mb-2">
-        <button v-if="s.children" class="btn w-100 text-start d-flex justify-content-between align-items-center" :class="{
-          'btn-light fw-semibold': activeSectionKey === s.key,
-          'btn-link text-decoration-none text-dark': activeSectionKey !== s.key
-        }" @click="toggle(s.key)">
-          {{ t(s.labelKey) }}
-          <span class="transition" :class="{ rotate: isOpen(s.key) }">▾</span>
+    <!-- Nav -->
+    <nav class="ad-nav">
+      <div v-for="s in sections" :key="s.key" class="ad-nav__group">
+
+        <!-- Section with children -->
+        <button
+          v-if="s.children"
+          class="ad-nav__btn"
+          :class="{ 'ad-nav__btn--active': activeSectionKey === s.key }"
+          @click="toggle(s.key)"
+        >
+          <svg v-if="s.icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" v-html="s.icon" class="ad-nav__icon" />
+          <span>{{ t(s.labelKey) }}</span>
+          <svg class="ad-nav__chevron" :class="{ 'ad-nav__chevron--open': isOpen(s.key) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
 
-        <RouterLink v-else :to="s.to" class="btn w-100 text-start"
-          :class="route.path === s.to ? 'btn-light fw-semibold' : 'btn-link text-dark'" @click="onNavClick">
-          {{ t(s.labelKey) }}
+        <!-- Single link -->
+        <RouterLink
+          v-else
+          :to="s.to"
+          class="ad-nav__btn"
+          :class="{ 'ad-nav__btn--active': route.path === s.to }"
+          @click="onNavClick"
+        >
+          <svg v-if="s.icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" v-html="s.icon" class="ad-nav__icon" />
+          <span>{{ t(s.labelKey) }}</span>
         </RouterLink>
 
-        <Transition name="collapse">
-          <div v-if="s.children && isOpen(s.key)" class="ps-3 mt-1">
-            <RouterLink v-for="c in s.children" :key="c.to" :to="c.to"
-              class="d-block py-1 px-2 rounded text-decoration-none text-secondary"
-              :class="{ 'bg-light fw-semibold text-dark': route.path.startsWith(c.to) }" @click="onNavClick">
+        <!-- Children -->
+        <Transition name="ad-collapse">
+          <div v-if="s.children && isOpen(s.key)" class="ad-nav__children">
+            <RouterLink
+              v-for="c in s.children"
+              :key="c.to"
+              :to="c.to"
+              class="ad-nav__child"
+              :class="{ 'ad-nav__child--active': route.path.startsWith(c.to) }"
+              @click="onNavClick"
+            >
               {{ t(c.labelKey) }}
             </RouterLink>
           </div>
@@ -177,126 +197,232 @@ const onNavClick = () => {
       </div>
     </nav>
 
-    <!-- Bottom（固定在最下面） -->
-    <div class="bottom">
-      <div class="email">{{ auth.user?.email }}</div>
-      <button class="btn btn-outline-secondary w-100" @click="logout">
-        {{ t("common.logout") }}
-      </button>
+    <!-- Bottom -->
+    <div class="ad-bottom">
+      <div class="ad-bottom__email">{{ auth.user?.email }}</div>
+      <button class="ad-logout" @click="logout">登出</button>
     </div>
+
   </aside>
 </template>
 
 <style scoped>
-.sidebar {
-  width: 260px;
-  background: #ffffff;
-  border-right: 1px solid rgba(0, 0, 0, 0.06);
+.ad-sidebar {
+  width: 240px;
   min-height: 100vh;
-
+  background: #1a1714;
   display: flex;
   flex-direction: column;
-
-  transition: transform 0.3s ease;
+  transition: transform 0.28s ease;
+  flex-shrink: 0;
 }
 
-/* 手機 / 平板：側欄抽屜 */
 @media (max-width: 991.98px) {
-  .sidebar {
+  .ad-sidebar {
     position: fixed;
     top: 0;
     left: 0;
     z-index: 1100;
     transform: translateX(-100%);
   }
-
-  .sidebar.open {
+  .ad-sidebar.open {
     transform: translateX(0);
   }
 }
 
-/* 桌機：固定顯示 */
 @media (min-width: 992px) {
-  .sidebar {
-    position: static;
+  .ad-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
     transform: none !important;
   }
 }
 
-.brand {
+/* Brand */
+.ad-brand {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid rgba(200,168,130,0.12);
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  align-items: flex-start;
   justify-content: space-between;
 }
 
-.logo {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  color: #7c2d12;
-  background: linear-gradient(135deg, #fbbf24, #f472b6);
+.ad-brand__link {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-decoration: none;
 }
 
-.brand-text {
+.ad-brand__name {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 17px;
+  font-weight: 600;
+  color: #e8ddd0;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.ad-brand__sub {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #C8A882;
+}
+
+.ad-close {
+  background: none;
+  border: none;
+  color: rgba(232,221,208,0.5);
+  cursor: pointer;
+  padding: 2px;
+  margin-top: 2px;
+  line-height: 1;
+}
+
+.ad-close:hover { color: #e8ddd0; }
+
+/* Nav */
+.ad-nav {
   flex: 1;
+  padding: 16px 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.brand-text strong {
-  display: block;
-  font-size: 14px;
+.ad-nav__group {
+  margin-bottom: 2px;
 }
 
-.brand-text span {
-  font-size: 12px;
-  color: #6b7280;
+.ad-nav__btn {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  background: none;
+  color: rgba(232,221,208,0.65);
+  font-size: 12.5px;
+  font-family: inherit;
+  letter-spacing: 0.02em;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.18s, background 0.18s;
+  text-align: left;
 }
 
-.menu {
-  flex: 1;
-  padding: 12px 8px;
-  overflow: auto;
+.ad-nav__btn:hover {
+  color: #e8ddd0;
+  background: rgba(200,168,130,0.08);
 }
 
-.bottom {
-  padding: 14px 16px 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
+.ad-nav__btn--active {
+  color: #C8A882;
+  background: rgba(200,168,130,0.1);
 }
 
-.email {
-  font-size: 12px;
-  color: #6b7280;
-  word-break: break-all;
-  margin-bottom: 10px;
+.ad-nav__icon {
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 
-.transition {
-  transition: transform 0.35s ease;
+.ad-nav__btn--active .ad-nav__icon {
+  opacity: 1;
 }
 
-.rotate {
+.ad-nav__chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+  opacity: 0.5;
+}
+
+.ad-nav__chevron--open {
   transform: rotate(180deg);
 }
 
-.collapse-enter-active,
-.collapse-leave-active {
-  transition: max-height 0.35s ease, opacity 0.35s ease;
+/* Children */
+.ad-nav__children {
+  padding: 4px 0 6px 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
-.collapse-enter-from,
-.collapse-leave-to {
+.ad-nav__child {
+  display: block;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: rgba(232,221,208,0.5);
+  text-decoration: none;
+  border-radius: 3px;
+  border-left: 1.5px solid transparent;
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+  letter-spacing: 0.01em;
+}
+
+.ad-nav__child:hover {
+  color: rgba(232,221,208,0.85);
+  background: rgba(200,168,130,0.06);
+}
+
+.ad-nav__child--active {
+  color: #C8A882;
+  border-left-color: #C8A882;
+  background: rgba(200,168,130,0.08);
+}
+
+/* Collapse animation */
+.ad-collapse-enter-active,
+.ad-collapse-leave-active {
+  transition: max-height 0.28s ease, opacity 0.28s ease;
+  overflow: hidden;
+}
+.ad-collapse-enter-from,
+.ad-collapse-leave-to {
   max-height: 0;
   opacity: 0;
 }
-
-.collapse-enter-to,
-.collapse-leave-from {
-  max-height: 300px;
+.ad-collapse-enter-to,
+.ad-collapse-leave-from {
+  max-height: 320px;
   opacity: 1;
+}
+
+/* Bottom */
+.ad-bottom {
+  padding: 16px 20px;
+  border-top: 1px solid rgba(200,168,130,0.12);
+}
+
+.ad-bottom__email {
+  font-size: 11px;
+  color: rgba(232,221,208,0.35);
+  margin-bottom: 10px;
+  word-break: break-all;
+  letter-spacing: 0.02em;
+}
+
+.ad-logout {
+  width: 100%;
+  padding: 8px 0;
+  background: none;
+  border: 1px solid rgba(200,168,130,0.25);
+  border-radius: 3px;
+  color: rgba(232,221,208,0.5);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.18s;
+  font-family: inherit;
+}
+
+.ad-logout:hover {
+  border-color: #C8A882;
+  color: #C8A882;
 }
 </style>
