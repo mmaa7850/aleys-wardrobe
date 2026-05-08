@@ -26,6 +26,7 @@ const router = createRouter({
         { path: "order-success/:orderNo", name: "order-success", component: () => import("@/views/frontend/OrderSuccessView.vue"), meta: { requiresAuth: true } },
         { path: "orders/:orderNo", name: "order-detail", component: () => import("@/views/frontend/OrderDetailView.vue"), meta: { requiresAuth: true } },
         { path: "wishlist", name: "wishlist", component: () => import("@/views/frontend/WishlistView.vue"), meta: { requiresAuth: true } },
+        { path: "coupons", name: "coupons", component: () => import("@/views/frontend/CouponsView.vue"), meta: { requiresAuth: true, memberOnly: true } },
 
         // Info pages
         { path: "size-guide", name: "size-guide", component: () => import("@/views/frontend/info/SizeGuideView.vue") },
@@ -200,6 +201,10 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAuth && !auth.isLoggedIn) {
     return { name: "login", query: { redirect: to.fullPath } };
+  }
+
+  if (to.meta.memberOnly && auth.canEnterAdmin) {
+    return { name: "home" };
   }
 
   if (to.meta.requiresAdmin && !auth.canEnterAdmin) {

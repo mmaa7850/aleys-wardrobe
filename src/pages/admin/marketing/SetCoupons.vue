@@ -25,6 +25,8 @@ const form = ref({
   Name: "",
   Description: "",
   DiscountValue: 0,
+  MinOrderAmount: null,
+  IsAutoApply: false,
   StartDate: today,
   EndDate: today,
   IsActive: false,
@@ -40,10 +42,12 @@ const resetForm = () => {
   form.value.Name = "";
   form.value.Description = "";
   form.value.DiscountValue = 0;
+  form.value.MinOrderAmount = null;
+  form.value.IsAutoApply = false;
   form.value.StartDate = today;
   form.value.EndDate = today;
-  form.IsActive = false;
-  form.UsageCount = 1;
+  form.value.IsActive = false;
+  form.value.UsageCount = 1;
   saveError.value = "";
 };
 
@@ -69,10 +73,12 @@ const openEditModal = async (row) => {
   form.value.Name = row.Name ?? "";
   form.value.Description = row.Description ?? "";
   form.value.DiscountValue = row.DiscountValue ?? 0;
+  form.value.MinOrderAmount = row.MinOrderAmount ?? null;
+  form.value.IsAutoApply = row.IsAutoApply ?? false;
   form.value.StartDate = row.StartDate ?? today;
-  form.value.EndDate = row.EndDate ?? EndDate;
+  form.value.EndDate = row.EndDate ?? today;
   form.value.IsActive = row.IsActive ?? false;
-  form.UsageCount = row.UsageCount ?? 0;
+  form.value.UsageCount = row.UsageCount ?? 0;
 
   await ensureModal();
   modalInstance.show();
@@ -89,7 +95,7 @@ const loadCoupons = async () => {
   try {
     const { data, error } = await db
       .from(tableName)
-      .select('ID, "Name", "Description", "DiscountValue", "StartDate", "EndDate", "IsActive", "UsageCount", "UpdatedDate", "CreatedDate"')
+      .select('ID, "Name", "Description", "DiscountValue", "MinOrderAmount", "IsAutoApply", "StartDate", "EndDate", "IsActive", "UsageCount", "UpdatedDate", "CreatedDate"')
       .order("ID", { ascending: false });
 
     if (error) throw error;
@@ -158,6 +164,8 @@ const createCoupon = async () => {
       Name: form.value.Name.trim(),
       Description: form.value.Description?.trim(),
       DiscountValue: form.value.DiscountValue,
+      MinOrderAmount: form.value.MinOrderAmount || null,
+      IsAutoApply: form.value.IsAutoApply,
       StartDate: form.value.StartDate?.trim(),
       EndDate: form.value.EndDate.trim(),
       IsActive: form.value.IsActive,
@@ -197,6 +205,8 @@ const updateCoupon = async () => {
     const payload = {
       Description: form.value.Description?.trim(),
       DiscountValue: form.value.DiscountValue,
+      MinOrderAmount: form.value.MinOrderAmount || null,
+      IsAutoApply: form.value.IsAutoApply,
       StartDate: form.value.StartDate?.trim(),
       EndDate: form.value.EndDate.trim(),
       IsActive: form.value.IsActive,
@@ -272,6 +282,8 @@ onMounted(async () => {
                 <th style="width: 10%">{{ t("market.setcoupon.name") }}</th>
                 <th style="width: 11%">{{ t("market.setcoupon.description") }}</th>
                 <th style="width: 7%">{{ t("market.setcoupon.discountValue") }}</th>
+                <th style="width: 8%">最低消費</th>
+                <th style="width: 7%">自動折抵</th>
                 <th style="width: 10%">{{ t("market.setcoupon.startDate") }}</th>
                 <th style="width: 10%">{{ t("market.setcoupon.endDate") }}</th>
                 <th style="width: 10%">{{ t("market.setcoupon.isActive") }}</th>
@@ -293,6 +305,8 @@ onMounted(async () => {
                 <td class="fw-semibold">{{ r.Name }}</td>
                 <td class="text-muted">{{ r.Description }}</td>
                 <td class="text-muted">{{ r.DiscountValue }}</td>
+                <td class="text-muted">{{ r.MinOrderAmount ? `NT$ ${r.MinOrderAmount}` : '—' }}</td>
+                <td class="text-muted">{{ r.IsAutoApply ? '✅' : '—' }}</td>
                 <td class="text-muted">{{ r.StartDate }}</td>
                 <td class="text-muted">{{ r.EndDate }}</td>
                 <td class="text-muted">{{ r.IsActive }}</td>
@@ -353,6 +367,21 @@ onMounted(async () => {
               <label class="form-label">{{ t("market.setcoupon.discountValue") }}</label>
               <input v-model="form.DiscountValue" type="number" class="form-control" placeholder="e.g. 200"
                 :disabled="saving" />
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">最低消費金額（選填）</label>
+              <input v-model="form.MinOrderAmount" type="number" min="0" class="form-control" placeholder="e.g. 1000（留空表示無限制）"
+                :disabled="saving" />
+              <div class="form-text">訂單商品小計需達此金額才可使用此優惠券</div>
+            </div>
+
+            <div class="mb-3 form-check">
+              <input id="isAutoApply" v-model="form.IsAutoApply" type="checkbox" class="form-check-input"
+                :disabled="saving" />
+              <label class="form-check-label" for="isAutoApply">
+                滿額自動折抵（不需輸入優惠碼，達門檻自動套用）
+              </label>
             </div>
 
             <div class="mb-3">

@@ -390,6 +390,7 @@ WITH CHECK (
 | UsageLimit | integer | YES | — |
 | UsagePerMember | integer | YES | 1 |
 | MinOrderAmount | numeric | YES | — |
+| IsAutoApply | boolean | NO | false |
 | CreatedDate | timestamptz | YES | — |
 | UpdatedDate | timestamptz | YES | — |
 
@@ -578,6 +579,15 @@ WITH CHECK (
 | Policy | Role | CMD | 條件 |
 |--------|------|-----|------|
 | Admin_* | authenticated | ALL | is_admin() |
+
+### S_SHP_ShippingMethodList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| Admin_Select_ShippingMethod | authenticated | SELECT | is_admin()（管理員可讀全部）|
+| Admin_Insert_ShippingMethod | authenticated | INSERT | is_admin() |
+| Admin_Update_ShippingMethod | authenticated | UPDATE | is_admin() |
+| Admin_Delete_ShippingMethod | authenticated | DELETE | is_admin() |
+| Member_Select_ShippingMethod | authenticated | SELECT | IsActive = true（登入會員可查看啟用中的配送方式，結帳頁使用）|
 
 ### S_MBR_MemberLevelList
 | Policy | Role | CMD | 條件 |

@@ -14,7 +14,8 @@
 | 商品列表 | `/products` | 分類 pill 篩選 + 排序下拉、Load More 分頁、商品卡片（售價/原價/sale badge/收藏愛心）|
 | 商品詳情 | `/products/:id` | 圖片/影片 Gallery、顏色→尺寸選擇、**數量選擇器（上限卡庫存）**、規格表、加入購物車（未登入自動導 /login）、收藏 |
 | 購物車 | `/cart` | 商品列表、數量 ± 控制、刪除、訂單摘要（商品小計，運費顯示「結帳時選擇」）|
-| 結帳 | `/checkout` | **配送方式卡片選擇**（從 DB 動態載入，依 MethodCode 驅動流程）：超商取貨僅需訂購人姓名/電話，宅配到府需額外填收件地址；**優惠券輸入欄 + 套用/移除按鈕**（前端預驗、折扣即時顯示）；訂單摘要（商品小計 + 運費 − 折扣 = 實付）；確認後 edge function 驗庫存/驗券/建訂單，導向藍新金流頁；超商門市在藍新頁選擇，宅配直接由填寫的地址處理 |
+| 結帳 | `/checkout` | **配送方式卡片選擇**（從 DB 動態載入，依 MethodCode 驅動流程）：超商取貨僅需訂購人姓名/電話，宅配到府需額外填收件地址；**優惠券輸入欄 + 套用/移除按鈕**（前端預驗、折扣即時顯示，僅限非自動折抵券）；**滿額自動折抵**（頁面載入時自動偵測 IsAutoApply=true 的有效優惠，達門檻自動套用最優惠一張，進度條顯示距下一折扣門檻）；訂單摘要（商品小計 + 運費 − 優惠碼折扣 − 自動折抵 = 實付）；確認後 edge function 驗庫存/驗券/建訂單，導向藍新金流頁；超商門市在藍新頁選擇，宅配直接由填寫的地址處理 |
+| 優惠券專區 | `/coupons` | 僅一般登入會員可見（管理員帳號不顯示此連結）；分兩區塊：**滿額自動折抵**（金色 badge、無需輸入）、**優惠碼**（顯示代碼 + 一鍵複製）；資料從 S_PRM_CouponList 動態載入有效期內且 IsActive=true 的優惠券 |
 | 結帳成功 | `/order-success/:orderNo` | 動畫打勾、訂單編號、回首頁/查訂單連結 |
 | 訂單詳情 | `/orders/:orderNo` | 訂單狀態、付款狀態 badge、收件人資訊、取貨門市、商品明細、ATM 繳費帳號（付款前顯示）、重新付款按鈕 |
 | 會員中心 | `/account` | 個人資料（姓名/電話/性別/生日）、訂單歷史、收藏捷徑、登出 |
@@ -63,7 +64,7 @@
 
 | Function | JWT 驗證 | 說明 |
 |----------|----------|------|
-| `create-payment` | ✅ 需要 | 驗庫存、**後端驗證優惠券**（有效期/使用次數/啟用狀態，防前端繞過）、計算 `finalAmount = 商品小計 + 運費 − 折扣`、建立訂單（寫入 ShippingMethod/ShippingFee/ShippingAddress/DiscountAmount/FinalAmount）、扣除優惠券 UsageCount；依 `shippingMethodCode`：超商取貨加入 `CVSCOM=1, LgsType=C2C`，宅配到府不加 CVSCOM；加密藍新參數，回傳 Gateway URL |
+| `create-payment` | ✅ 需要 | 驗庫存、**後端驗證手動優惠券**（有效期/使用次數/啟用狀態/MinOrderAmount，防前端繞過）、**後端自動偵測滿額折抵**（IsAutoApply=true，挑選金額最高且符合門檻的一張）、計算 `finalAmount = 商品小計 + 運費 − 手動折扣 − 自動折抵`、建立訂單（CouponID/DiscountAmount/FinalAmount/ShippingMethod/ShippingFee/ShippingAddress）、分別扣除手動與自動優惠券 UsageCount；依 `shippingMethodCode`：超商取貨加入 `CVSCOM=1, LgsType=C2C`，宅配到府不加 CVSCOM；加密藍新參數，回傳 Gateway URL |
 | `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態、扣庫存、儲存 CVSCOM 回傳的 StoreCode/LgsNo 等物流資訊 |
 | `payment-return` | ❌ 關閉 | 藍新前台導回：儲存付款方式、ATM 帳號、CVSCOM 門市資訊，導向 /order-success/:orderNo |
 | `retry-payment` | ✅ 需要 | 重新付款：在訂單號加 `_R1/_R2` 後綴、回傳新加密參數 |

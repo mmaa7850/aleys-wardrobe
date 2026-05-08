@@ -93,6 +93,7 @@ onUnmounted(() => {
               <div class="fe-member-menu__email">{{ auth.user?.email }}</div>
               <RouterLink to="/account" class="fe-member-menu__item" @click="memberMenuOpen = false">我的帳號</RouterLink>
               <RouterLink to="/wishlist" class="fe-member-menu__item" @click="memberMenuOpen = false">我的喜好清單</RouterLink>
+              <RouterLink v-if="!auth.canEnterAdmin" to="/coupons" class="fe-member-menu__item" @click="memberMenuOpen = false">優惠券專區</RouterLink>
               <button class="fe-member-menu__item fe-member-menu__item--danger" @click="onSignOut">登出</button>
             </div>
           </div>
@@ -113,6 +114,7 @@ onUnmounted(() => {
         <RouterLink to="/products?category=dress" @click="mobileMenuOpen = false">洋裝</RouterLink>
         <template v-if="auth.isLoggedIn">
           <RouterLink to="/account" @click="mobileMenuOpen = false">我的帳號</RouterLink>
+          <RouterLink v-if="!auth.canEnterAdmin" to="/coupons" @click="mobileMenuOpen = false">優惠券專區</RouterLink>
           <button class="fe-nav__drawer-signout" @click="onSignOut">登出</button>
         </template>
         <RouterLink v-else to="/login" @click="mobileMenuOpen = false">登入 / 註冊</RouterLink>
@@ -142,6 +144,7 @@ onUnmounted(() => {
           <RouterLink to="/returns">退換貨政策</RouterLink>
           <RouterLink to="/shipping">運費說明</RouterLink>
           <RouterLink to="/faq">常見問題</RouterLink>
+          <RouterLink to="/coupons">優惠券專區</RouterLink>
         </div>
         <div>
           <h6>關於我們</h6>

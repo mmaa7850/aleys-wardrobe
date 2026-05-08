@@ -80,16 +80,16 @@ Deno.serve(async (req) => {
     const dbSchema = Deno.env.get('DB_SCHEMA') || 'public'
 
     // 驗證優惠券（後端再次確認，防止前端繞過）
+    const today = new Date().toISOString().slice(0, 10)
     let discountAmount = 0
     let couponId: number | null = null
     let couponUsageCount = 0
 
     if (couponCode) {
-      const today = new Date().toISOString().slice(0, 10)
       const { data: coupon, error: couponErr } = await supabaseAdmin
         .schema(dbSchema)
         .from('S_PRM_CouponList')
-        .select('ID, DiscountValue, UsageCount')
+        .select('ID, DiscountValue, UsageCount, MinOrderAmount')
         .eq('Name', couponCode)
         .eq('IsActive', true)
         .lte('StartDate', today)
@@ -103,12 +103,48 @@ Deno.serve(async (req) => {
         })
       }
 
+      if (coupon.MinOrderAmount && amount < coupon.MinOrderAmount) {
+        return new Response(JSON.stringify({ error: `此優惠券需消費滿 NT$ ${coupon.MinOrderAmount} 才可使用` }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        })
+      }
+
       discountAmount  = coupon.DiscountValue
       couponId        = coupon.ID
       couponUsageCount = coupon.UsageCount
     }
 
-    const finalAmount = Math.max(1, amount + shippingFee - discountAmount)
+    // 滿額自動折抵 — 後端自動偵測最佳適用優惠
+    let autoDiscountAmount = 0
+    let autoDiscountCouponId: number | null = null
+    let autoDiscountUsageCount = 0
+
+    const { data: allAutoCoupons } = await supabaseAdmin
+      .schema(dbSchema)
+      .from('S_PRM_CouponList')
+      .select('ID, DiscountValue, UsageCount, MinOrderAmount')
+      .eq('IsActive', true)
+      .eq('IsAutoApply', true)
+      .lte('StartDate', today)
+      .gte('EndDate', today)
+      .gt('UsageCount', 0)
+
+    if (allAutoCoupons && allAutoCoupons.length > 0) {
+      const applicable = allAutoCoupons.filter((c: { MinOrderAmount: number | null }) =>
+        !c.MinOrderAmount || amount >= c.MinOrderAmount
+      )
+      if (applicable.length > 0) {
+        applicable.sort((a: { MinOrderAmount: number | null }, b: { MinOrderAmount: number | null }) =>
+          (b.MinOrderAmount ?? 0) - (a.MinOrderAmount ?? 0)
+        )
+        const best = applicable[0] as { ID: number; DiscountValue: number; UsageCount: number }
+        autoDiscountAmount = best.DiscountValue
+        autoDiscountCouponId = best.ID
+        autoDiscountUsageCount = best.UsageCount
+      }
+    }
+
+    const finalAmount = Math.max(1, amount + shippingFee - discountAmount - autoDiscountAmount)
 
     // 結帳前檢查庫存
     const variantIds = (items as Array<{ variantId: number; qty: number; productName: string }>).map(i => i.variantId)
@@ -140,8 +176,9 @@ Deno.serve(async (req) => {
         ShippingAddress: '',
         ShippingFee: shippingFee,
         PaymentStatus: 'pending',
+        CouponID: couponId,
         ItemsTotal: amount,
-        DiscountAmount: discountAmount,
+        DiscountAmount: discountAmount + autoDiscountAmount,
         FinalAmount: finalAmount,
         CustomerNote: customerNote || null,
         ShippingMethod: shippingMethodCode,
@@ -176,13 +213,22 @@ Deno.serve(async (req) => {
 
     if (itemsErr) throw new Error(`Items insert failed: ${itemsErr.message}`)
 
-    // 扣除優惠券使用次數
+    // 扣除手動優惠券使用次數
     if (couponId !== null) {
       await supabaseAdmin
         .schema(dbSchema)
         .from('S_PRM_CouponList')
         .update({ UsageCount: couponUsageCount - 1, UpdatedDate: new Date().toISOString() })
         .eq('ID', couponId)
+    }
+
+    // 扣除自動折抵優惠券使用次數
+    if (autoDiscountCouponId !== null) {
+      await supabaseAdmin
+        .schema(dbSchema)
+        .from('S_PRM_CouponList')
+        .update({ UsageCount: autoDiscountUsageCount - 1, UpdatedDate: new Date().toISOString() })
+        .eq('ID', autoDiscountCouponId)
     }
 
     const timeStamp = Math.floor(Date.now() / 1000)

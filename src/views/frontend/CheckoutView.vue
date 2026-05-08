@@ -19,9 +19,28 @@ const errorMsg = ref('')
 
 // ── Coupon ────────────────────────────────────────────
 const couponCode = ref('')
-const couponApplied = ref(null) // { ID, Name, DiscountValue }
+const couponApplied = ref(null) // { ID, Name, DiscountValue, MinOrderAmount }
 const couponError = ref('')
 const couponLoading = ref(false)
+
+// ── Auto-apply discounts ──────────────────────────────
+const autoCoupons = ref([]) // all valid auto-apply coupons loaded on mount
+
+const autoDiscount = computed(() => {
+  const total = cart.total
+  const applicable = autoCoupons.value.filter(c => !c.MinOrderAmount || total >= c.MinOrderAmount)
+  if (applicable.length === 0) return null
+  return [...applicable].sort((a, b) => (b.MinOrderAmount ?? 0) - (a.MinOrderAmount ?? 0))[0]
+})
+
+const nextAutoCoupon = computed(() => {
+  const total = cart.total
+  const unreached = autoCoupons.value.filter(c => c.MinOrderAmount && total < c.MinOrderAmount)
+  if (unreached.length === 0) return null
+  return [...unreached].sort((a, b) => a.MinOrderAmount - b.MinOrderAmount)[0]
+})
+
+const autoDiscountAmount = computed(() => autoDiscount.value?.DiscountValue ?? 0)
 
 // ── Shipping methods ──────────────────────────────────
 const shippingMethods = ref([])
@@ -32,9 +51,9 @@ const selectedMethod = computed(() => shippingMethods.value.find(m => m.ID === s
 const shippingFee = computed(() => selectedMethod.value?.Fee ?? 0)
 const isHome = computed(() => selectedMethod.value?.MethodCode === 'home')
 
-// ── Coupon / totals ───────────────────────────────────
+// ── Totals ────────────────────────────────────────────
 const discountAmount = computed(() => couponApplied.value?.DiscountValue ?? 0)
-const finalTotal = computed(() => Math.max(1, cart.total + shippingFee.value - discountAmount.value))
+const finalTotal = computed(() => Math.max(1, cart.total + shippingFee.value - discountAmount.value - autoDiscountAmount.value))
 
 async function applyCoupon() {
   const code = couponCode.value.trim()
@@ -46,14 +65,19 @@ async function applyCoupon() {
     const today = new Date().toISOString().slice(0, 10)
     const { data, error } = await db
       .from('S_PRM_CouponList')
-      .select('ID, Name, Description, DiscountValue, IsActive, UsageCount')
+      .select('ID, Name, Description, DiscountValue, DiscountType, MinOrderAmount, IsActive, UsageCount')
       .eq('Name', code)
+      .eq('IsAutoApply', false)
       .lte('StartDate', today)
       .gte('EndDate', today)
       .maybeSingle()
     if (error) throw error
     if (!data || !data.IsActive || data.UsageCount <= 0) { couponError.value = '優惠券無效或已過期'; return }
-    couponApplied.value = { ID: data.ID, Name: data.Name, Description: data.Description, DiscountValue: data.DiscountValue }
+    if (data.MinOrderAmount && cart.total < data.MinOrderAmount) {
+      couponError.value = `此優惠券需消費滿 NT$ ${Number(data.MinOrderAmount).toLocaleString()} 才可使用`
+      return
+    }
+    couponApplied.value = { ID: data.ID, Name: data.Name, Description: data.Description, DiscountValue: data.DiscountValue, MinOrderAmount: data.MinOrderAmount }
   } catch {
     couponError.value = '驗證失敗，請稍後再試'
   } finally {
@@ -76,6 +100,7 @@ function validatePhone(val) {
 }
 
 async function prefillFromProfile() {
+  if (!auth.user?.id) return
   const { data } = await db
     .from('C_MBR_MemberList')
     .select('Name, Phone')
@@ -103,8 +128,9 @@ onMounted(async () => {
     sessionStorage.removeItem('checkoutDraft')
   }
 
+  const today = new Date().toISOString().slice(0, 10)
   const [, , methodsResult] = await Promise.all([
-    prefillFromProfile(),
+    prefillFromProfile().catch(() => {}),
     cart.isEmpty && !cart.cartId ? cart.fetchCart() : Promise.resolve(),
     db.from('S_SHP_ShippingMethodList')
       .select('ID, Name, Description, Fee, MethodCode, IsActive')
@@ -116,6 +142,17 @@ onMounted(async () => {
     selectedMethodId.value = methodsResult.data[0].ID
   }
   if (cart.isEmpty) router.push('/cart')
+
+  // 自動折抵獨立載入，不影響配送方式
+  db.from('S_PRM_CouponList')
+    .select('ID, Name, Description, DiscountValue, MinOrderAmount')
+    .eq('IsActive', true)
+    .eq('IsAutoApply', true)
+    .lte('StartDate', today)
+    .gte('EndDate', today)
+    .gt('UsageCount', 0)
+    .then(({ data }) => { autoCoupons.value = data ?? [] })
+    .catch(() => {})
 })
 
 async function submitOrder() {
@@ -407,6 +444,24 @@ async function submitOrder() {
           <span>NT$ {{ shippingFee.toLocaleString() }}</span>
         </div>
 
+        <!-- 自動折抵 -->
+        <div v-if="autoCoupons.length > 0" class="co-autodiscount">
+          <template v-if="autoDiscount">
+            <div class="co-autodiscount__hit">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              消費滿 NT$ {{ Number(autoDiscount.MinOrderAmount).toLocaleString() }}，已自動折抵 NT$ {{ autoDiscountAmount.toLocaleString() }}
+            </div>
+          </template>
+          <template v-else-if="nextAutoCoupon">
+            <div class="co-autodiscount__progress">
+              <div class="co-autodiscount__bar-wrap">
+                <div class="co-autodiscount__bar" :style="{ width: Math.min(100, Math.floor(cart.total / nextAutoCoupon.MinOrderAmount * 100)) + '%' }"></div>
+              </div>
+              <span>再消費 NT$ {{ (nextAutoCoupon.MinOrderAmount - cart.total).toLocaleString() }} 可折抵 NT$ {{ nextAutoCoupon.DiscountValue.toLocaleString() }}</span>
+            </div>
+          </template>
+        </div>
+
         <!-- 優惠券 -->
         <div class="co-coupon">
           <template v-if="!couponApplied">
@@ -431,11 +486,18 @@ async function submitOrder() {
               <span class="co-coupon__tag">{{ couponApplied.Name }}</span>
               <button class="co-coupon__remove" @click="removeCoupon">✕</button>
             </div>
+            <p v-if="couponApplied.MinOrderAmount" class="co-coupon__min">
+              滿 NT$ {{ Number(couponApplied.MinOrderAmount).toLocaleString() }} 可使用
+            </p>
           </template>
         </div>
 
+        <div v-if="autoDiscountAmount > 0" class="co-summary__row co-summary__row--discount">
+          <span>滿額自動折抵</span>
+          <span>－NT$ {{ autoDiscountAmount.toLocaleString() }}</span>
+        </div>
         <div v-if="couponApplied" class="co-summary__row co-summary__row--discount">
-          <span>折扣</span>
+          <span>優惠券折扣</span>
           <span>－NT$ {{ discountAmount.toLocaleString() }}</span>
         </div>
 
@@ -817,6 +879,48 @@ async function submitOrder() {
   color: #15803D;
 }
 
+/* Auto discount */
+.co-autodiscount {
+  margin: 12px 0 4px;
+  font-size: 12px;
+}
+
+.co-autodiscount__hit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(21, 128, 61, 0.07);
+  border: 1px solid rgba(21, 128, 61, 0.2);
+  color: #15803D;
+  border-radius: 3px;
+}
+
+.co-autodiscount__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+  background: rgba(200, 168, 130, 0.1);
+  border: 1px solid var(--fe-border);
+  border-radius: 3px;
+  color: var(--fe-muted);
+}
+
+.co-autodiscount__bar-wrap {
+  height: 3px;
+  background: var(--fe-linen);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.co-autodiscount__bar {
+  height: 100%;
+  background: var(--fe-gold);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
 /* Coupon */
 .co-coupon {
   margin: 12px 0 4px;
@@ -865,6 +969,12 @@ async function submitOrder() {
   margin: 6px 0 0;
   font-size: 11.5px;
   color: #DC2626;
+}
+
+.co-coupon__min {
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: var(--fe-muted);
 }
 
 .co-coupon__applied {
