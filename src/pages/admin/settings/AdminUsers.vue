@@ -17,12 +17,25 @@ const mode = ref("create");
 const saving = ref(false);
 const saveError = ref("");
 
+const PERMISSION_LABELS = [
+  { key: "CanManageProducts",  label: "商品管理（商品/庫存/顏色/尺寸/分類/標籤）" },
+  { key: "CanManageOrders",    label: "訂單管理" },
+  { key: "CanManageMarketing", label: "行銷管理（優惠券/Banner）" },
+  { key: "CanManageSettings",  label: "系統設定" },
+  { key: "CanManageMembers",   label: "會員管理" },
+];
+
 const emptyForm = () => ({
   UserId: "",
   Account: "",
   AdminNo: "",
-  IsAdmin: true,
+  IsAdmin: false,
   IsActive: true,
+  CanManageProducts: false,
+  CanManageOrders: false,
+  CanManageMarketing: false,
+  CanManageSettings: false,
+  CanManageMembers: false,
 });
 
 const form = ref(emptyForm());
@@ -35,7 +48,7 @@ async function load() {
   try {
     const { data, error } = await db
       .from("S_SYS_AdminUserList")
-      .select("UserId, Account, AdminNo, IsAdmin, IsActive, CreatedDate, UpdatedDate")
+      .select("UserId, Account, AdminNo, IsAdmin, IsActive, CanManageProducts, CanManageOrders, CanManageMarketing, CanManageSettings, CanManageMembers, CreatedDate, UpdatedDate")
       .order("CreatedDate", { ascending: true });
     if (error) throw error;
     admins.value = data ?? [];
@@ -75,8 +88,13 @@ const openEdit = async (row) => {
     UserId: row.UserId ?? "",
     Account: row.Account ?? "",
     AdminNo: row.AdminNo ?? "",
-    IsAdmin: row.IsAdmin ?? true,
+    IsAdmin: row.IsAdmin ?? false,
     IsActive: row.IsActive ?? true,
+    CanManageProducts:  row.CanManageProducts  ?? false,
+    CanManageOrders:    row.CanManageOrders    ?? false,
+    CanManageMarketing: row.CanManageMarketing ?? false,
+    CanManageSettings:  row.CanManageSettings  ?? false,
+    CanManageMembers:   row.CanManageMembers   ?? false,
   };
   await ensureModal();
   modalInstance.show();
@@ -92,13 +110,21 @@ const submit = async () => {
   saving.value = true;
   try {
     const now = new Date().toISOString();
+    const permPayload = {
+      CanManageProducts:  form.value.CanManageProducts,
+      CanManageOrders:    form.value.CanManageOrders,
+      CanManageMarketing: form.value.CanManageMarketing,
+      CanManageSettings:  form.value.CanManageSettings,
+      CanManageMembers:   form.value.CanManageMembers,
+    };
     if (mode.value === "create") {
       const { error } = await db.from("S_SYS_AdminUserList").insert({
         UserId: form.value.UserId.trim(),
         Account: form.value.Account.trim(),
-        AdminNo: form.value.AdminNo?.trim() ?? "",
+        AdminNo: Number(form.value.AdminNo) || 0,
         IsAdmin: form.value.IsAdmin,
         IsActive: form.value.IsActive,
+        ...permPayload,
         CreatedDate: now,
         UpdatedDate: now,
       });
@@ -107,9 +133,10 @@ const submit = async () => {
       const { error } = await db.from("S_SYS_AdminUserList")
         .update({
           Account: form.value.Account.trim(),
-          AdminNo: form.value.AdminNo?.trim() ?? "",
+          AdminNo: Number(form.value.AdminNo) || 0,
           IsAdmin: form.value.IsAdmin,
           IsActive: form.value.IsActive,
+          ...permPayload,
           UpdatedDate: now,
         })
         .eq("UserId", form.value.UserId);
@@ -244,16 +271,38 @@ const deleteRow = async (row) => {
               <input v-model.number="form.AdminNo" type="number" min="1" class="form-control" placeholder="e.g. 1" :disabled="saving" />
             </div>
 
-            <div class="d-flex gap-4 mb-1">
+            <div class="d-flex gap-4 mb-3">
               <div class="form-check">
                 <input id="fIsAdmin" v-model="form.IsAdmin" type="checkbox" class="form-check-input" :disabled="saving" />
-                <label class="form-check-label" for="fIsAdmin">IsAdmin</label>
+                <label class="form-check-label fw-semibold" for="fIsAdmin">超級管理員（IsAdmin）</label>
               </div>
               <div class="form-check">
                 <input id="fIsActive" v-model="form.IsActive" type="checkbox" class="form-check-input" :disabled="saving" />
-                <label class="form-check-label" for="fIsActive">IsActive</label>
+                <label class="form-check-label" for="fIsActive">啟用（IsActive）</label>
               </div>
             </div>
+
+            <div v-if="!form.IsAdmin" class="mb-1">
+              <div class="form-label fw-semibold mb-2" style="font-size:13px">
+                可操作功能
+                <span class="text-muted fw-normal">（IsAdmin 開啟時自動擁有全部權限）</span>
+              </div>
+              <div class="d-flex flex-column gap-2">
+                <div v-for="p in PERMISSION_LABELS" :key="p.key" class="form-check">
+                  <input
+                    :id="'perm_' + p.key"
+                    v-model="form[p.key]"
+                    type="checkbox"
+                    class="form-check-input"
+                    :disabled="saving"
+                  />
+                  <label :for="'perm_' + p.key" class="form-check-label" style="font-size:13px">
+                    {{ p.label }}
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div v-else class="text-muted small">超級管理員自動擁有所有功能權限。</div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-primary" @click="submit" :disabled="saving">

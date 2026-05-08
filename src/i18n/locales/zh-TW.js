@@ -24,6 +24,9 @@ export default {
       config: "設定相關",
       systemConfig: "系統設定",
       adminUsers: "管理者帳號",
+      members: "會員管理",
+      memberList: "會員列表",
+      memberLevels: "會員等級",
     },
   },
   common: {

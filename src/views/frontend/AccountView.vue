@@ -14,6 +14,8 @@ const saveMsg     = ref('')
 const saveMsgType = ref('')
 
 const form = ref({ Name: '', Phone: '', Gender: '', Birthday: '' })
+const memberLevelID = ref(null)
+const memberLevelName = ref('')
 
 const orders        = ref([])
 const ordersLoading = ref(false)
@@ -52,17 +54,28 @@ async function fetchProfile() {
   isLoading.value = true
   const { data, error: fetchErr } = await db
     .from('C_MBR_MemberList')
-    .select('Name, Phone, Gender, Birthday, CreatedDate')
+    .select('Name, Phone, Gender, Birthday, CreatedDate, MemberLevelID')
     .eq('UserID', auth.user.id)
     .maybeSingle()
 
   if (fetchErr) console.error('[AccountView] fetch error:', fetchErr)
 
-  profile.value      = data || {}
+  profile.value       = data || {}
   form.value.Name     = data?.Name     || ''
   form.value.Phone    = data?.Phone    || ''
   form.value.Gender   = data?.Gender   || ''
   form.value.Birthday = data?.Birthday || ''
+  memberLevelID.value = data?.MemberLevelID || null
+
+  if (data?.MemberLevelID) {
+    const { data: lvl } = await db
+      .from('S_MBR_MemberLevelList')
+      .select('Name')
+      .eq('ID', data.MemberLevelID)
+      .maybeSingle()
+    memberLevelName.value = lvl?.Name || ''
+  }
+
   isLoading.value = false
 }
 
@@ -117,8 +130,12 @@ onMounted(() => {
     <div class="ac-hero">
       <div class="ac-avatar">{{ userInitial }}</div>
       <div class="ac-hero__info">
-        <h1 class="ac-hero__name">{{ profile?.Name || '會員' }}</h1>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <h1 class="ac-hero__name">{{ profile?.Name || '會員' }}</h1>
+          <span v-if="memberLevelName === 'VIP 會員'" class="ac-vip-badge">VIP</span>
+        </div>
         <p class="ac-hero__email">{{ displayEmail }}</p>
+        <p v-if="memberLevelName" class="ac-hero__level">{{ memberLevelName }}</p>
       </div>
     </div>
 
@@ -274,7 +291,27 @@ onMounted(() => {
 .ac-hero__email {
   font-size: 13px;
   color: var(--fe-muted);
+  margin: 0 0 2px;
+}
+
+.ac-hero__level {
+  font-size: 12px;
+  color: var(--fe-muted);
   margin: 0;
+  letter-spacing: 0.04em;
+}
+
+.ac-vip-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  background: linear-gradient(135deg, #c8a882, #a07850);
+  color: #fff;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  flex-shrink: 0;
 }
 
 /* Body */

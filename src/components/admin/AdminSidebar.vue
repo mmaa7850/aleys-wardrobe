@@ -19,71 +19,86 @@ const logout = async () => {
   router.push("/login");
 };
 
-/* ===== Sidebar 結構（你原本那份照用） ===== */
-const sections = [
-  // Dashboard
+const allSections = [
   {
     key: "dashboard",
     labelKey: "admin.sidebar.dashboard",
     to: "/admin",
   },
-
-  // Products
   {
     key: "products",
     labelKey: "admin.sidebar.products",
+    permission: "CanManageProducts",
     children: [
-      { labelKey: "admin.sidebar.productList", to: "/admin/products"},
+      { labelKey: "admin.sidebar.productList", to: "/admin/products" },
       { labelKey: "admin.sidebar.categories", to: "/admin/products/setcategories" },
       { labelKey: "admin.sidebar.tags", to: "/admin/products/settags" },
       { labelKey: "admin.sidebar.colors", to: "/admin/products/setcolors" },
       { labelKey: "admin.sidebar.sizes", to: "/admin/products/setsizes" },
     ],
   },
-
-  // Orders
   {
     key: "orders",
     labelKey: "admin.sidebar.orders",
+    permission: "CanManageOrders",
     children: [
       { labelKey: "admin.sidebar.orderList", to: "/admin/orders" },
       { labelKey: "admin.sidebar.status", to: "/admin/orders/setstatus" },
     ],
   },
-
-  // Inventory（庫存）
   {
     key: "inventory",
     labelKey: "admin.sidebar.inventory",
+    permission: "CanManageProducts",
     children: [
       { labelKey: "admin.sidebar.stockOverview", to: "/admin/inventory/overview" },
       { labelKey: "admin.sidebar.stockLogs", to: "/admin/inventory/logs" },
     ],
   },
-
-  // Marketing（行銷）
   {
     key: "marketing",
     labelKey: "admin.sidebar.marketing",
+    permission: "CanManageMarketing",
     children: [
       { labelKey: "admin.sidebar.coupons", to: "/admin/marketing/setcoupons" },
       { labelKey: "admin.sidebar.banners", to: "/admin/marketing/setbanners" },
     ],
   },
-
-  // Settings（系統設定）
+  {
+    key: "members",
+    labelKey: "admin.sidebar.members",
+    permission: "CanManageMembers",
+    children: [
+      { labelKey: "admin.sidebar.memberList", to: "/admin/members" },
+      { labelKey: "admin.sidebar.memberLevels", to: "/admin/members/levels" },
+    ],
+  },
   {
     key: "settings",
     labelKey: "admin.sidebar.settings",
+    permission: "CanManageSettings",
     children: [
       { labelKey: "admin.sidebar.payMethods", to: "/admin/settings/setpaymethods" },
       { labelKey: "admin.sidebar.shippingMethods", to: "/admin/settings/setshippingmethods" },
       { labelKey: "admin.sidebar.configCategories", to: "/admin/settings/setconfigcategories" },
       { labelKey: "admin.sidebar.config", to: "/admin/settings/setconfig" },
-      { labelKey: "admin.sidebar.adminUsers", to: "/admin/settings/admin-users" },
     ],
   },
 ];
+
+const sections = computed(() => {
+  const hasAccess = (perm) =>
+    auth.isActive && (auth.isAdmin || auth.permissions[perm] === true);
+
+  return allSections
+    .filter((s) => !s.permission || hasAccess(s.permission))
+    .map((s) => {
+      if (s.key !== "settings") return s;
+      const adminItem = { labelKey: "admin.sidebar.adminUsers", to: "/admin/settings/admin-users" };
+      const base = s.children.filter((c) => c.to !== adminItem.to);
+      return { ...s, children: auth.isAdmin ? [...base, adminItem] : base };
+    });
+});
 
 
 /* ===== 展開狀態：一次只開一個（你之前要的） ===== */
@@ -95,7 +110,7 @@ const isPathInSection = (section) =>
 watch(
   () => route.path,
   () => {
-    const hit = sections.find(isPathInSection);
+    const hit = sections.value.find(isPathInSection);
     if (hit) openKey.value = hit.key;
   },
   { immediate: true }
@@ -108,7 +123,7 @@ const toggle = (key) => {
 const isOpen = (key) => openKey.value === key;
 
 const activeSectionKey = computed(() => {
-  const hit = sections.find((s) => s.to === route.path || isPathInSection(s));
+  const hit = sections.value.find((s) => s.to === route.path || isPathInSection(s));
   return hit?.key;
 });
 

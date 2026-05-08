@@ -24,6 +24,9 @@ export default {
       config: "Config",
       systemConfig: "System Config",
       adminUsers: "Admin Users",
+      members: "Members",
+      memberList: "Member List",
+      memberLevels: "Member Levels",
     },
   },
   common: {

@@ -33,26 +33,29 @@
 
 ## 後台（管理員）
 
-> 進入條件：需登入 + `S_SYS_AdminUserList` 中 `IsAdmin = true` 且 `IsActive = true`
+> 進入條件：需登入 + `S_SYS_AdminUserList` 中 `IsActive = true`（任何啟用的管理員帳號均可進入，Sidebar 依權限過濾）
 
-| 頁面 | 路由 | 說明 |
-|------|------|------|
-| 儀表板 | `/admin` | 後台首頁 |
-| 庫存總覽 | `/admin/inventory/overview` | 所有上架商品各 variant 剩餘庫存、低庫存（≤5）/售完警示、篩選、點擊跳編輯商品 |
-| 商品列表 | `/admin/products` | 商品管理（搜尋/篩選/CRUD）|
-| 商品編輯 | `/admin/products/:id` | 建立/編輯商品（詳情、圖片/影片上傳、顏色尺寸 variant、價格）、**各 variant 庫存數量直接編輯（v-model StockQty，支援批次設定為 0 或 5）**|
-| 顏色設定 | `/admin/products/setcolors` | 管理顏色選項 |
-| 尺寸設定 | `/admin/products/setsizes` | 管理尺寸選項 |
-| 分類設定 | `/admin/products/setcategories` | 管理商品分類 |
-| 標籤設定 | `/admin/products/settags` | 管理商品標籤 |
-| 訂單列表 | `/admin/orders` | 全部訂單、依狀態/日期/顧客篩選 |
-| 訂單狀態管理 | `/admin/orders/setstatus` | 修改訂單狀態 |
-| 優惠券設定 | `/admin/marketing/setcoupons` | 建立/管理折扣優惠券 |
-| Banner 設定 | `/admin/marketing/setbanners` | 首頁促銷 Banner 管理 |
-| 付款方式設定 | `/admin/settings/setpaymethods` | 設定可用付款方式 |
-| 配送方式設定 | `/admin/settings/setshippingmethods` | 新增/編輯配送方式（名稱、MethodCode、運費、說明、啟用/停用）；Name/MethodCode 建立後不可改；表格直接切換 IsActive |
-| 系統設定分類 | `/admin/settings/setconfigcategories` | 設定分類類型 |
-| 系統設定 | `/admin/settings/setconfig` | 全站設定 |
+| 頁面 | 路由 | 權限 | 說明 |
+|------|------|------|------|
+| 儀表板 | `/admin` | 全部 | 後台首頁 |
+| 庫存總覽 | `/admin/inventory/overview` | CanManageProducts | 所有上架商品各 variant 剩餘庫存、低庫存（≤5）/售完警示、篩選、點擊跳編輯商品 |
+| 商品列表 | `/admin/products` | CanManageProducts | 商品管理（搜尋/篩選/CRUD）|
+| 商品編輯 | `/admin/products/:id` | CanManageProducts | 建立/編輯商品（詳情、圖片/影片上傳、顏色尺寸 variant、價格）、**各 variant 庫存數量直接編輯（v-model StockQty，支援批次設定為 0 或 5）**|
+| 顏色設定 | `/admin/products/setcolors` | CanManageProducts | 管理顏色選項 |
+| 尺寸設定 | `/admin/products/setsizes` | CanManageProducts | 管理尺寸選項 |
+| 分類設定 | `/admin/products/setcategories` | CanManageProducts | 管理商品分類 |
+| 標籤設定 | `/admin/products/settags` | CanManageProducts | 管理商品標籤 |
+| 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單、依狀態/日期/顧客篩選 |
+| 訂單狀態管理 | `/admin/orders/setstatus` | CanManageOrders | 修改訂單狀態 |
+| 優惠券設定 | `/admin/marketing/setcoupons` | CanManageMarketing | 建立/管理折扣優惠券 |
+| Banner 設定 | `/admin/marketing/setbanners` | CanManageMarketing | 首頁促銷 Banner 管理 |
+| 會員列表 | `/admin/members` | CanManageMembers | 全部一般會員列表，可直接切換會員等級 |
+| 會員等級設定 | `/admin/members/levels` | CanManageMembers | 建立/編輯會員等級（新增/編輯僅 IsAdmin 可操作）|
+| 付款方式設定 | `/admin/settings/setpaymethods` | CanManageSettings | 設定可用付款方式 |
+| 配送方式設定 | `/admin/settings/setshippingmethods` | CanManageSettings | 新增/編輯配送方式（名稱、MethodCode、運費、說明、啟用/停用）；Name/MethodCode 建立後不可改；表格直接切換 IsActive |
+| 系統設定分類 | `/admin/settings/setconfigcategories` | CanManageSettings | 設定分類類型 |
+| 系統設定 | `/admin/settings/setconfig` | CanManageSettings | 全站設定 |
+| 管理者帳號 | `/admin/settings/admin-users` | IsAdmin（超管）| 新增/編輯管理員帳號與細項權限 |
 
 ---
 
@@ -74,7 +77,7 @@
 
 | Store | 說明 |
 |-------|------|
-| `auth.js` | 使用者 session（登入/登出/LINE OAuth）、admin 權限判斷 |
+| `auth.js` | 使用者 session（登入/登出/LINE OAuth）、admin 權限判斷；state 含 `isAdmin`、`isActive`、`permissions`（5 個 Can* 欄位）；getter `canEnterAdmin`（IsActive=true 即可）、`canAccess(perm)`（IsAdmin 或對應權限） |
 | `cart.js` | 購物車 CRUD、自動建立 MemberList、帶入商品圖片/顏色/尺寸資訊 |
 | `wishlist.js` | 收藏清單 toggle（`C_MBR_WishList`）|
 
@@ -99,10 +102,13 @@
 - `C_ORD_OrderItemList` — 訂單明細
 
 ### 系統設定
-- `S_SYS_AdminUserList` — 管理員名單
+- `S_SYS_AdminUserList` — 管理員名單（含 IsAdmin、IsActive、5 個 Can* 細項權限欄位）
 - `S_SHP_ShippingMethodList` — 配送方式（含 Fee/MethodCode/IsActive）
 - `S_PRM_CouponList` — 優惠券主檔
 - `S_PAY_PayMethodList` — 付款方式
+
+### 會員等級
+- `S_MBR_MemberLevelList` — 會員等級設定（預設：一般會員、VIP 會員）
 
 ---
 

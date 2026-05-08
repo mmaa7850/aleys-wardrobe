@@ -144,6 +144,21 @@ const router = createRouter({
           path: "settings/admin-users",
           name: "admin-settings-admin-users",
           component: () => import("@/pages/admin/settings/AdminUsers.vue"),
+          meta: { superAdminOnly: true },
+        },
+
+        // Members
+        {
+          path: "members",
+          name: "admin-members",
+          component: () => import("@/pages/admin/members/MemberList.vue"),
+          meta: { permission: "CanManageMembers" },
+        },
+        {
+          path: "members/levels",
+          name: "admin-members-levels",
+          component: () => import("@/pages/admin/members/SetMemberLevels.vue"),
+          meta: { permission: "CanManageMembers" },
         },
 
         // 之後要加其他頁面就照這樣加：
@@ -189,6 +204,14 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAdmin && !auth.canEnterAdmin) {
     return { name: "login", query: { redirect: to.fullPath } };
+  }
+
+  if (to.meta.superAdminOnly && !auth.isAdmin) {
+    return { name: "admin-home" };
+  }
+
+  if (to.meta.permission && !auth.canAccess(to.meta.permission)) {
+    return { name: "admin-home" };
   }
 
   return true;

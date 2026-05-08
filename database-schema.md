@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-07
+> 更新時間：2026-05-08
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -112,6 +112,7 @@ WITH CHECK (
 | Birthday | date | YES | — |
 | RegisterSource | text | YES | 'email' |
 | DefaultPayMethodID | bigint | YES | — |
+| MemberLevelID | bigint | YES | — (FK → S_MBR_MemberLevelList.ID) |
 | IsActive | boolean | YES | true |
 | CreatedDate | timestamptz | YES | now() |
 | UpdatedDate | timestamptz | YES | now() |
@@ -405,6 +406,19 @@ WITH CHECK (
 
 > `MethodCode` 決定結帳流程：`cvscom` = 超商取貨（藍新 CVSCOM）、`home` = 宅配到府（需填地址）
 
+### S_MBR_MemberLevelList
+| 欄位 | 型別 | Nullable | Default |
+|------|------|----------|---------|
+| ID | bigint | NO | — |
+| Name | varchar | NO | — |
+| Description | varchar | YES | — |
+| SortOrder | integer | NO | 0 |
+| IsActive | boolean | NO | true |
+| CreatedDate | timestamptz | YES | now() |
+| UpdatedDate | timestamptz | YES | now() |
+
+> 預設資料：`一般會員`（SortOrder=1）、`VIP 會員`（SortOrder=2）
+
 ### S_SYS_AdminUserList
 | 欄位 | 型別 | Nullable | Default |
 |------|------|----------|---------|
@@ -413,8 +427,15 @@ WITH CHECK (
 | AdminNo | bigint | NO | — |
 | IsAdmin | boolean | YES | false |
 | IsActive | boolean | YES | false |
+| CanManageProducts | boolean | NO | false |
+| CanManageOrders | boolean | NO | false |
+| CanManageMarketing | boolean | NO | false |
+| CanManageSettings | boolean | NO | false |
+| CanManageMembers | boolean | NO | false |
 | CreatedDate | timestamptz | YES | — |
 | UpdatedDate | timestamptz | YES | — |
+
+> `IsAdmin = true` 自動擁有所有權限；其他帳號依各 `Can*` 欄位控制。
 
 ### S_SYS_Config
 | 欄位 | 型別 | Nullable |
@@ -477,6 +498,8 @@ WITH CHECK (
 | member_insert | public | INSERT | 同上 |
 | member_update | public | UPDATE | 同上 |
 | member_delete | public | DELETE | 同上 |
+| staff_select_members | authenticated | SELECT | staging.is_staff()（管理員可讀全部會員）|
+| staff_update_members | authenticated | UPDATE | staging.is_staff()（管理員可更新會員，含等級）|
 
 ### C_MBR_MemberSocialList
 | Policy | Role | CMD | 條件 |
@@ -556,11 +579,27 @@ WITH CHECK (
 |--------|------|-----|------|
 | Admin_* | authenticated | ALL | is_admin() |
 
+### S_MBR_MemberLevelList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| level_select | public | SELECT | true（公開讀取，前台會員中心需要）|
+| level_admin_all | authenticated | ALL | staging.is_admin()（僅超管可新增/編輯等級）|
+
+### S_SYS_AdminUserList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| admin_select | authenticated | SELECT | staging.is_admin()（超管可讀全部）|
+| admin_insert | authenticated | INSERT | staging.is_admin() |
+| admin_update | authenticated | UPDATE | staging.is_admin() |
+| admin_delete | authenticated | DELETE | staging.is_admin() |
+| self_select | authenticated | SELECT | UserId = auth.uid()（任何管理員可讀自己那筆，loadAdminProfile 使用）|
+
 ---
 
 ## 常用 Functions
 
 | Function | 說明 |
 |----------|------|
-| `staging.is_admin()` | 檢查目前使用者是否在 S_SYS_AdminUserList 且 IsAdmin=true, IsActive=true |
+| `staging.is_admin()` | 檢查目前使用者是否在 S_SYS_AdminUserList 且 IsAdmin=true, IsActive=true（超管）|
+| `staging.is_staff()` | 檢查目前使用者是否在 S_SYS_AdminUserList 且 IsActive=true（任何啟用的管理員）|
 | `staging.user_owns_order(OrderID)` | 檢查訂單是否屬於目前使用者 |
