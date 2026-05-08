@@ -86,6 +86,10 @@ const isOnSale = computed(() =>
   product.value?.OriginPrice && product.value.OriginPrice > product.value.Price
 )
 
+const isActivePreOrder = computed(() =>
+  !!product.value?.IsPreOrder && stockStatus.value?.cls === 'out'
+)
+
 // ── size spec ─────────────────────────────────────────
 const sizeSpecs = computed(() => product.value?.C_PRD_ProductSizeSpecList || [])
 
@@ -270,8 +274,8 @@ onMounted(async () => {
           </span>
         </div>
 
-        <!-- Pre-order notice -->
-        <div v-if="product.IsPreOrder" class="pd-preorder">
+        <!-- Pre-order notice（庫存售完 + IsPreOrder = true 才顯示）-->
+        <div v-if="isActivePreOrder" class="pd-preorder">
           <span class="pd-preorder__badge">預購中</span>
           <span v-if="product.PreOrderShipDate" class="pd-preorder__date">
             預計 {{ product.PreOrderShipDate }} 出貨
@@ -317,8 +321,8 @@ onMounted(async () => {
           </div>
         </div>
 
-        <!-- Stock status -->
-        <p v-if="stockStatus" :class="['pd-stock', `pd-stock--${stockStatus.cls}`]">
+        <!-- Stock status（預購模式下不顯示「已售完」）-->
+        <p v-if="stockStatus && !isActivePreOrder" :class="['pd-stock', `pd-stock--${stockStatus.cls}`]">
           {{ stockStatus.label }}
         </p>
 
@@ -333,15 +337,15 @@ onMounted(async () => {
         <div class="pd-cart-row">
           <button
             class="pd-cart-btn"
-            :disabled="!selectedColor || !selectedSize || stockStatus?.cls === 'out' || addingToCart"
+            :disabled="!selectedColor || !selectedSize || (stockStatus?.cls === 'out' && !isActivePreOrder) || addingToCart"
             @click="onAddToCart"
           >
             <span v-if="addingToCart">加入中...</span>
             <span v-else-if="cartAdded">已加入 ✓</span>
             <span v-else-if="!selectedColor">請選擇顏色</span>
             <span v-else-if="!selectedSize">請選擇尺寸</span>
+            <span v-else-if="isActivePreOrder">立即預購</span>
             <span v-else-if="stockStatus?.cls === 'out'">已售完</span>
-            <span v-else-if="product.IsPreOrder">立即預購</span>
             <span v-else>加入購物車</span>
           </button>
 
