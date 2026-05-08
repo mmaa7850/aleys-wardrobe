@@ -146,56 +146,60 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Hero right: banner image or decorative fallback -->
-    <div class="hero__right" :class="{ 'hero__right--img': heroBanners.length }">
+    <!-- Hero right: decorative frame always shown, banner fills inside -->
+    <div class="hero__right">
+      <div class="hero__deco">
 
-      <!-- ▸ Banner image mode -->
-      <template v-if="heroBanners.length && currentHero">
-        <transition name="hfade" mode="out-in">
-          <component
-            :is="currentHero.LinkURL ? 'a' : 'div'"
-            :key="heroIdx"
-            :href="resolveLink(currentHero.LinkURL)"
-            :target="bannerTarget(currentHero.LinkURL)"
-            class="hero-img"
-          >
-            <img
-              :src="getBannerUrl(currentHero.ImagePath)"
-              :alt="currentHero.AltText || 'Banner'"
-              class="hero-img__pic"
-            />
-          </component>
-        </transition>
-        <!-- Dots: only if multiple -->
-        <div v-if="heroBanners.length > 1" class="hero-dots">
-          <button
-            v-for="(_, i) in heroBanners"
-            :key="i"
-            class="hero-dot"
-            :class="{ 'hero-dot--active': i === heroIdx }"
-            @click="goHero(i)"
-          ></button>
-        </div>
-      </template>
+        <!-- Frame: banner inside, or placeholder text -->
+        <div class="hero__deco-frame" :class="{ 'hero__deco-frame--filled': heroBanners.length }">
 
-      <!-- ▸ Decorative fallback (no banners) -->
-      <template v-else>
-        <div class="hero__deco">
-          <div class="hero__deco-frame">
+          <!-- ▸ Banner image fills the frame -->
+          <template v-if="heroBanners.length && currentHero">
+            <transition name="hfade" mode="out-in">
+              <component
+                :is="currentHero.LinkURL ? 'a' : 'div'"
+                :key="heroIdx"
+                :href="resolveLink(currentHero.LinkURL)"
+                :target="bannerTarget(currentHero.LinkURL)"
+                class="hero-frame-img"
+              >
+                <img
+                  :src="getBannerUrl(currentHero.ImagePath)"
+                  :alt="currentHero.AltText || 'Banner'"
+                />
+              </component>
+            </transition>
+            <!-- Dots inside frame bottom -->
+            <div v-if="heroBanners.length > 1" class="hero-dots">
+              <button
+                v-for="(_, i) in heroBanners"
+                :key="i"
+                class="hero-dot"
+                :class="{ 'hero-dot--active': i === heroIdx }"
+                @click="goHero(i)"
+              ></button>
+            </div>
+          </template>
+
+          <!-- ▸ Placeholder (no banners) -->
+          <template v-else>
             <span class="hero__deco-label">New Arrivals</span>
             <div class="hero__deco-dots">
               <span></span><span></span><span></span>
               <span></span><span></span><span></span>
               <span></span><span></span><span></span>
             </div>
-          </div>
-          <div class="hero__deco-tag">
-            <p>日韓選品</p>
-            <p>品味生活</p>
-          </div>
-        </div>
-      </template>
+          </template>
 
+        </div>
+
+        <!-- Gold tag always visible -->
+        <div class="hero__deco-tag">
+          <p>日韓選品</p>
+          <p>品味生活</p>
+        </div>
+
+      </div>
     </div>
   </section>
 
@@ -405,14 +409,6 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 120px 60px 80px;
-  position: relative;
-  overflow: hidden;
-}
-
-/* When a banner image is loaded, remove padding so image fills edge-to-edge */
-.hero__right--img {
-  padding: 0;
-  background: #1a1714;
 }
 
 .hero__content { max-width: 420px; }
@@ -532,26 +528,35 @@ onUnmounted(() => {
   font-weight: 500;
 }
 
-/* ── Hero banner image ───────────────────────────────────── */
-.hero-img {
+/* ── Hero frame: filled mode (banner inside) ─────────────── */
+.hero__deco-frame {
+  position: relative;
+  overflow: visible;
+}
+
+.hero__deco-frame--filled {
+  overflow: hidden;
+  padding: 0;
   display: block;
-  width: 100%;
-  height: 100%;
-  text-decoration: none;
+}
+
+.hero-frame-img {
+  display: block;
   position: absolute;
   inset: 0;
+  text-decoration: none;
 }
-.hero-img__pic {
+.hero-frame-img img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-/* Carousel dots */
+/* Carousel dots inside frame */
 .hero-dots {
   position: absolute;
-  bottom: 20px;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -562,7 +567,7 @@ onUnmounted(() => {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.7);
+  border: 1px solid rgba(255,255,255,0.8);
   background: transparent;
   cursor: pointer;
   padding: 0;
