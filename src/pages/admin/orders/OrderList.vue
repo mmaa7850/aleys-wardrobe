@@ -50,6 +50,62 @@ const refundLoading = ref(false);
 const refundError = ref("");
 const refundSuccess = ref(false);
 
+// ── 標記已出貨（宅配）─────────────────────────────────
+const shipForm = ref({ company: 'tcat', no: '' });
+const shipLoading = ref(false);
+const shipError = ref('');
+const shipSuccess = ref(false);
+
+const SHIP_COMPANIES = [
+  { value: 'tcat', label: '黑貓宅急便' },
+  { value: 'hct',  label: '新竹物流' },
+  { value: 'post', label: '台灣郵局' },
+  { value: 'other', label: '其他' },
+];
+
+const isHomeDelivery = computed(() =>
+  detailOrder.value?.ShippingMethod !== 'cvscom'
+);
+
+const canMarkShipped = computed(() =>
+  isHomeDelivery.value &&
+  detailOrder.value?.PaymentStatus === 'paid' &&
+  !detailOrder.value?.HomeDeliveryNo
+);
+
+const markShipped = async () => {
+  if (!shipForm.value.no.trim()) { shipError.value = '請填寫物流單號'; return; }
+  shipLoading.value = true;
+  shipError.value = '';
+  shipSuccess.value = false;
+  try {
+    const { error } = await db
+      .from('C_ORD_OrderList')
+      .update({
+        HomeDeliveryCompany: shipForm.value.company,
+        HomeDeliveryNo: shipForm.value.no.trim(),
+        ShippingStatus: 'shipped',
+        ShippingStatusText: '已出貨',
+        UpdatedDate: new Date().toISOString(),
+      })
+      .eq('ID', detailOrder.value.ID);
+    if (error) throw error;
+
+    detailOrder.value = {
+      ...detailOrder.value,
+      HomeDeliveryCompany: shipForm.value.company,
+      HomeDeliveryNo: shipForm.value.no.trim(),
+      ShippingStatus: 'shipped',
+      ShippingStatusText: '已出貨',
+    };
+    shipSuccess.value = true;
+  } catch (err) {
+    shipError.value = err?.message ?? String(err);
+  } finally {
+    shipLoading.value = false;
+  }
+};
+
 // ── Load lookups ──────────────────────────────────────
 const loadLookups = async () => {
   const [statusRes, payRes, shpRes] = await Promise.all([
@@ -110,6 +166,9 @@ const openDetail = async (id) => {
   saveError.value = "";
   refundSuccess.value = false;
   refundError.value = "";
+  shipForm.value = { company: 'tcat', no: '' };
+  shipError.value = '';
+  shipSuccess.value = false;
   activeTab.value = "info";
   detailLoading.value = true;
 
@@ -544,6 +603,50 @@ onMounted(async () => {
                       <input v-model="editShippingAddress" type="text" class="form-control form-control-sm"
                         :disabled="isShippingLocked" />
                     </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 宅配出貨資訊 -->
+              <div v-if="isHomeDelivery" class="col-12">
+                <div class="card">
+                  <div class="card-header small fw-semibold">宅配出貨資訊</div>
+                  <div class="card-body">
+                    <!-- 已填單號：顯示資訊 -->
+                    <template v-if="detailOrder.HomeDeliveryNo">
+                      <dl class="info-dl mb-0">
+                        <dt>物流公司</dt>
+                        <dd>{{ SHIP_COMPANIES.find(c => c.value === detailOrder.HomeDeliveryCompany)?.label ?? detailOrder.HomeDeliveryCompany ?? '-' }}</dd>
+                        <dt>物流單號</dt>
+                        <dd class="font-monospace">{{ detailOrder.HomeDeliveryNo }}</dd>
+                      </dl>
+                    </template>
+                    <!-- 未出貨且可操作：填單號 -->
+                    <template v-else-if="canMarkShipped">
+                      <div v-if="shipError" class="alert alert-danger py-2 small mb-2">{{ shipError }}</div>
+                      <div v-if="shipSuccess" class="alert alert-success py-2 small mb-2">已標記出貨</div>
+                      <div class="row g-2 align-items-end">
+                        <div class="col-12 col-sm-4">
+                          <label class="form-label small mb-1">物流公司</label>
+                          <select v-model="shipForm.company" class="form-select form-select-sm">
+                            <option v-for="c in SHIP_COMPANIES" :key="c.value" :value="c.value">{{ c.label }}</option>
+                          </select>
+                        </div>
+                        <div class="col-12 col-sm-5">
+                          <label class="form-label small mb-1">物流單號</label>
+                          <input v-model="shipForm.no" type="text" class="form-control form-control-sm"
+                            placeholder="輸入物流單號" :disabled="shipLoading" />
+                        </div>
+                        <div class="col-12 col-sm-3">
+                          <button class="btn btn-success btn-sm w-100" @click="markShipped" :disabled="shipLoading">
+                            <span v-if="shipLoading" class="spinner-border spinner-border-sm me-1"></span>
+                            標記已出貨
+                          </button>
+                        </div>
+                      </div>
+                    </template>
+                    <!-- 未付款或其他狀況 -->
+                    <p v-else class="text-muted small mb-0">訂單付款後才可標記出貨</p>
                   </div>
                 </div>
               </div>

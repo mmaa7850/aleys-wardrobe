@@ -63,6 +63,25 @@ function shippingMethodLabel(m) {
   return m === 'cvscom' ? '超商取貨不付款' : '宅配到府'
 }
 
+const TRACKING_URLS = {
+  tcat:  (no) => `https://www.t-cat.com.tw/Inquiry/Trace.aspx?no=${no}`,
+  hct:   (no) => `https://www.hct.com.tw/search/trackorder_input.aspx?no=${no}`,
+  post:  ()   => `https://postserv.post.gov.tw/pstmail/main_mail.jsp?targetTxn=pst505Menu`,
+  other: ()   => null,
+}
+
+const COMPANY_LABELS = { tcat: '黑貓宅急便', hct: '新竹物流', post: '台灣郵局', other: '其他' }
+
+function trackingUrl(order) {
+  if (!order?.HomeDeliveryNo) return null
+  const fn = TRACKING_URLS[order.HomeDeliveryCompany]
+  return fn ? fn(order.HomeDeliveryNo) : null
+}
+
+function companyLabel(code) {
+  return COMPANY_LABELS[code] ?? code ?? '物流公司'
+}
+
 onMounted(async () => {
   if (!auth.isLoggedIn) { router.push('/login'); return }
 
@@ -185,6 +204,22 @@ onMounted(async () => {
               <span class="od-info-item__label">物流狀態</span>
               <span class="od-ship-badge">{{ order.ShippingStatusText || order.ShippingStatus }}</span>
             </div>
+
+            <!-- 宅配物流單號 -->
+            <template v-if="order.HomeDeliveryNo">
+              <div class="od-info-item">
+                <span class="od-info-item__label">物流公司</span>
+                <span class="od-info-item__val">{{ companyLabel(order.HomeDeliveryCompany) }}</span>
+              </div>
+              <div class="od-info-item">
+                <span class="od-info-item__label">物流單號</span>
+                <span class="od-info-item__val od-tracking">
+                  <span class="od-tracking__no">{{ order.HomeDeliveryNo }}</span>
+                  <a v-if="trackingUrl(order)" :href="trackingUrl(order)" target="_blank" rel="noopener"
+                    class="od-tracking__link">查詢物流狀態 →</a>
+                </span>
+              </div>
+            </template>
 
             <!-- 宅配：顯示地址 -->
             <div v-if="order.ShippingMethod !== 'cvscom'" class="od-info-item od-info-item--full">
@@ -430,6 +465,31 @@ onMounted(async () => {
 .od-pay-badge--paid    { background: rgba(34,197,94,0.12); color: #15803D; }
 .od-pay-badge--pending { background: rgba(180,180,180,0.15); color: var(--fe-muted); }
 .od-pay-badge--failed  { background: rgba(220,38,38,0.08); color: #DC2626; }
+
+/* Tracking */
+.od-tracking {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.od-tracking__no {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--fe-text);
+}
+
+.od-tracking__link {
+  font-size: 12.5px;
+  color: var(--fe-gold-d);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+}
+
+.od-tracking__link:hover { opacity: 0.75; }
 
 /* Shipping status badge */
 .od-ship-badge {

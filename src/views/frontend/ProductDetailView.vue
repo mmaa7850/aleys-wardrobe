@@ -116,6 +116,7 @@ async function fetchData() {
       .select(`
         ID, ProductName, ProductTitle, SubTitle, Description,
         Material, WashingMethod, OriginPrice, Price,
+        IsPreOrder, PreOrderShipDate, PreOrderNote,
         C_PRD_ProductPictureList(ID, StoragePath, AltText, IsMain, SortOrder, Type),
         C_PRD_ProductVariantList(ID, ColorID, SizeID, StockQty, IsActive)
       `)
@@ -269,6 +270,15 @@ onMounted(async () => {
           </span>
         </div>
 
+        <!-- Pre-order notice -->
+        <div v-if="product.IsPreOrder" class="pd-preorder">
+          <span class="pd-preorder__badge">預購中</span>
+          <span v-if="product.PreOrderShipDate" class="pd-preorder__date">
+            預計 {{ product.PreOrderShipDate }} 出貨
+          </span>
+          <p v-if="product.PreOrderNote" class="pd-preorder__note">{{ product.PreOrderNote }}</p>
+        </div>
+
         <div class="pd-divider"></div>
 
         <!-- Color selector -->
@@ -331,6 +341,7 @@ onMounted(async () => {
             <span v-else-if="!selectedColor">請選擇顏色</span>
             <span v-else-if="!selectedSize">請選擇尺寸</span>
             <span v-else-if="stockStatus?.cls === 'out'">已售完</span>
+            <span v-else-if="product.IsPreOrder">立即預購</span>
             <span v-else>加入購物車</span>
           </button>
 
@@ -667,6 +678,41 @@ onMounted(async () => {
   border-color: var(--fe-text);
   background: var(--fe-text);
   color: #fff;
+}
+
+/* Pre-order */
+.pd-preorder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.pd-preorder__badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  background: var(--fe-gold-d);
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+.pd-preorder__date {
+  font-size: 12.5px;
+  color: var(--fe-gold-d);
+}
+
+.pd-preorder__note {
+  width: 100%;
+  font-size: 12px;
+  color: var(--fe-muted);
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* Stock */

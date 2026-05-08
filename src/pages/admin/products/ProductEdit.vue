@@ -74,6 +74,9 @@ const form = ref({
     Price: null,
     OriginPrice: null,
     IsActive: false,
+    IsPreOrder: false,
+    PreOrderShipDate: '',
+    PreOrderNote: '',
     CreatedDate: null,
     UpdatedDate: null,
 
@@ -172,6 +175,9 @@ const createDraftIfNeeded = async () => {
         form.value.Price = payload.Price;
         form.value.OriginPrice = payload.OriginPrice;
         form.value.IsActive = payload.IsActive;
+        form.value.IsPreOrder = payload.IsPreOrder ?? false;
+        form.value.PreOrderShipDate = payload.PreOrderShipDate ?? '';
+        form.value.PreOrderNote = payload.PreOrderNote ?? '';
         form.value.CreatedDate = payload.CreatedDate;
         form.value.UpdatedDate = payload.UpdatedDate;
 
@@ -226,7 +232,7 @@ const loadProduct = async (id) => {
         const { data, error } = await db
             .from(tableName)
             .select(
-                'ID,"ProductName","Category","Price","OriginPrice","IsActive","CreatedDate","UpdatedDate","SubTitle","Description","Material","WashingMethod","SEOTitle","SEODescription"'
+                'ID,"ProductName","Category","Price","OriginPrice","IsActive","IsPreOrder","PreOrderShipDate","PreOrderNote","CreatedDate","UpdatedDate","SubTitle","Description","Material","WashingMethod","SEOTitle","SEODescription"'
             )
             .eq("ID", id)
             .single();
@@ -303,6 +309,9 @@ const saveDraft = async () => {
             Price: toNumberOrNull(form.value.Price) ?? 0,
             OriginPrice: toNumberOrNull(form.value.OriginPrice),
             IsActive: !!form.value.IsActive,
+            IsPreOrder: !!form.value.IsPreOrder,
+            PreOrderShipDate: form.value.IsPreOrder ? (form.value.PreOrderShipDate || null) : null,
+            PreOrderNote: form.value.IsPreOrder ? (form.value.PreOrderNote?.trim() || null) : null,
             UpdatedDate: now,
 
             Description: form.value.Description?.trim() ?? "",
@@ -1123,6 +1132,30 @@ onMounted(async () => {
                                     </label>
                                 </div>
                             </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">預購模式</label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" v-model="form.IsPreOrder"
+                                        :disabled="saving" />
+                                    <label class="form-check-label">
+                                        {{ form.IsPreOrder ? '預購中（前台顯示預購 badge）' : '正常銷售' }}
+                                    </label>
+                                </div>
+                            </div>
+
+                            <template v-if="form.IsPreOrder">
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">預計出貨日（選填）</label>
+                                    <input v-model="form.PreOrderShipDate" type="date" class="form-control"
+                                        :disabled="saving" />
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="form-label">預購說明（選填）</label>
+                                    <input v-model="form.PreOrderNote" type="text" class="form-control"
+                                        placeholder="e.g. 下單後 14 天出貨" :disabled="saving" />
+                                </div>
+                            </template>
 
                             <div class="col-12 col-md-6">
                                 <label class="form-label">{{ t("product.productEdit.price") }} *</label>

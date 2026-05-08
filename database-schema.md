@@ -154,6 +154,7 @@ WITH CHECK (
 |------|------|----------|---------|
 | ID | bigint | NO | — |
 | OrderNo | varchar | NO | — |
+
 | CustomerName | varchar | NO | — |
 | CustomerEmail | varchar | NO | — |
 | CustomerPhone | varchar | YES | — |
@@ -173,6 +174,8 @@ WITH CHECK (
 | ATMBankCode | varchar(10) | YES | — |
 | ATMAccount | varchar(20) | YES | — |
 | CouponID | bigint | YES | — |
+| HomeDeliveryNo | varchar(50) | YES | — |
+| HomeDeliveryCompany | varchar(20) | YES | — |
 | DiscountAmount | bigint | NO | 0 |
 | ItemsTotal | bigint | NO | 0 |
 | FinalAmount | bigint | NO | 0 |
@@ -213,6 +216,9 @@ WITH CHECK (
 | SEOTitle | varchar | YES | — |
 | SEODescription | text | YES | — |
 | IsActive | boolean | NO | false |
+| IsPreOrder | boolean | NO | false |
+| PreOrderShipDate | date | YES | — |
+| PreOrderNote | text | YES | — |
 | CreatedDate | timestamptz | YES | — |
 | UpdatedDate | timestamptz | YES | — |
 
