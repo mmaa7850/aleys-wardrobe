@@ -2,6 +2,13 @@ export default {
   admin: {
     sidebar: {
       dashboard: "Dashboard",
+      reports: "報表",
+      reportSales: "銷售總覽",
+      reportProducts: "商品排行",
+      reportCoupons: "優惠券效益",
+      reportOrders: "訂單狀態分佈",
+      reportMembers: "會員成長趨勢",
+      reportAnalytics: "Google Analytics",
       products: "商品",
       productList: "商品列表",
       categories: "分類",

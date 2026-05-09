@@ -5,6 +5,7 @@ import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
+import { trackBeginCheckout } from '@/lib/gtag'
 
 const router = useRouter()
 const cart = useCartStore()
@@ -142,6 +143,8 @@ onMounted(async () => {
     selectedMethodId.value = methodsResult.data[0].ID
   }
   if (cart.isEmpty) router.push('/cart')
+
+  trackBeginCheckout(cart.items, cart.total)
 
   // 自動折抵獨立載入，不影響配送方式
   db.from('S_PRM_CouponList')

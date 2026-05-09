@@ -24,6 +24,7 @@ const router = createRouter({
         { path: "cart", name: "cart", component: () => import("@/views/frontend/CartView.vue") },
         { path: "checkout", name: "checkout", component: () => import("@/views/frontend/CheckoutView.vue"), meta: { requiresAuth: true } },
         { path: "order-success/:orderNo", name: "order-success", component: () => import("@/views/frontend/OrderSuccessView.vue"), meta: { requiresAuth: true } },
+        { path: "orders", name: "orders", component: () => import("@/views/frontend/OrdersView.vue"), meta: { requiresAuth: true } },
         { path: "orders/:orderNo", name: "order-detail", component: () => import("@/views/frontend/OrderDetailView.vue"), meta: { requiresAuth: true } },
         { path: "wishlist", name: "wishlist", component: () => import("@/views/frontend/WishlistView.vue"), meta: { requiresAuth: true } },
         { path: "coupons", name: "coupons", component: () => import("@/views/frontend/CouponsView.vue"), meta: { requiresAuth: true, memberOnly: true } },
@@ -107,6 +108,14 @@ const router = createRouter({
           name: "admin-orders-setstatus",
           component: () => import("@/pages/admin/orders/SetStatus.vue"),
         },
+
+        // Reports
+        { path: "reports/sales",      name: "admin-reports-sales",      component: () => import("@/pages/admin/reports/SalesDashboard.vue") },
+        { path: "reports/products",   name: "admin-reports-products",   component: () => import("@/pages/admin/reports/ProductRanking.vue") },
+        { path: "reports/coupons",    name: "admin-reports-coupons",    component: () => import("@/pages/admin/reports/CouponStats.vue") },
+        { path: "reports/orders",     name: "admin-reports-orders",     component: () => import("@/pages/admin/reports/OrderStatusReport.vue") },
+        { path: "reports/members",    name: "admin-reports-members",    component: () => import("@/pages/admin/reports/MemberGrowth.vue") },
+        { path: "reports/analytics",  name: "admin-reports-analytics",  component: () => import("@/pages/admin/reports/GAReport.vue") },
 
         // Marketing
         {

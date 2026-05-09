@@ -17,7 +17,7 @@ const form = ref({ Name: '', Phone: '', Gender: '', Birthday: '' })
 const memberLevelID = ref(null)
 const memberLevelName = ref('')
 
-const orders        = ref([])
+const recentOrders  = ref([])
 const ordersLoading = ref(false)
 
 function formatDate(iso) {
@@ -26,7 +26,10 @@ function formatDate(iso) {
 }
 
 function payStatusLabel(s) {
-  return s === 'paid' ? '已付款' : s === 'failed' ? '付款失敗' : '待付款'
+  if (s === 'paid')    return '已付款'
+  if (s === 'failed')  return '付款失敗'
+  if (s === 'refunded') return '已退款'
+  return '待付款'
 }
 
 async function fetchOrders() {
@@ -36,8 +39,8 @@ async function fetchOrders() {
     .select('ID, OrderNo, FinalAmount, PaymentStatus, CreatedDate')
     .eq('CustomerEmail', auth.user.email)
     .order('CreatedDate', { ascending: false })
-    .limit(30)
-  orders.value = data || []
+    .limit(3)
+  recentOrders.value = data || []
   ordersLoading.value = false
 }
 
@@ -188,16 +191,19 @@ onMounted(() => {
         </div>
       </section>
 
-      <!-- Orders -->
+      <!-- Orders shortcut -->
       <section class="ac-section">
-        <h2 class="ac-section__title">訂單紀錄</h2>
+        <div class="ac-section-head">
+          <h2 class="ac-section__title">最近訂單</h2>
+          <RouterLink to="/orders" class="ac-section-link">查看全部 →</RouterLink>
+        </div>
 
         <div v-if="ordersLoading" class="ac-empty">
           <div class="ac-spinner"></div>
         </div>
 
-        <div v-else-if="orders.length === 0" class="ac-empty">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
+        <div v-else-if="recentOrders.length === 0" class="ac-empty">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
             <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
             <rect x="9" y="3" width="6" height="4" rx="1"/>
           </svg>
@@ -206,19 +212,28 @@ onMounted(() => {
 
         <div v-else class="ac-order-list">
           <RouterLink
-            v-for="o in orders"
+            v-for="o in recentOrders"
             :key="o.ID"
             :to="'/orders/' + o.OrderNo"
             class="ac-order-row"
           >
             <div class="ac-order-row__no">{{ o.OrderNo }}</div>
             <div class="ac-order-row__date">{{ formatDate(o.CreatedDate) }}</div>
-            <div class="ac-order-row__amount">NT$ {{ o.FinalAmount.toLocaleString() }}</div>
+            <div class="ac-order-row__amount">NT$ {{ Number(o.FinalAmount).toLocaleString() }}</div>
             <span :class="['ac-pay-badge', `ac-pay-badge--${o.PaymentStatus}`]">
               {{ payStatusLabel(o.PaymentStatus) }}
             </span>
           </RouterLink>
         </div>
+
+        <RouterLink to="/orders" class="ac-orders-btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+            <rect x="9" y="3" width="6" height="4" rx="1"/>
+          </svg>
+          <span>查看全部訂單</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="ac-orders-btn__arrow"><path d="M9 18l6-6-6-6"/></svg>
+        </RouterLink>
       </section>
 
       <!-- Wishlist shortcut -->
@@ -442,6 +457,47 @@ onMounted(() => {
 
 .ac-btn-save:hover   { opacity: 0.82; }
 .ac-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Section head */
+.ac-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.ac-section-head .ac-section__title { margin-bottom: 0; }
+
+.ac-section-link {
+  font-size: 12px;
+  color: var(--fe-gold-d);
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  transition: opacity 0.15s;
+}
+.ac-section-link:hover { opacity: 0.7; }
+
+/* Orders → full list button */
+.ac-orders-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 14px 18px;
+  border: 1px solid var(--fe-border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--fe-text);
+  font-size: 13.5px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.ac-orders-btn:hover {
+  border-color: var(--fe-gold);
+  background: var(--fe-cream);
+}
+.ac-orders-btn svg:first-child { color: var(--fe-gold-d); flex-shrink: 0; }
+.ac-orders-btn span { flex: 1; }
+.ac-orders-btn__arrow { color: var(--fe-muted); flex-shrink: 0; }
 
 /* Empty */
 .ac-empty {

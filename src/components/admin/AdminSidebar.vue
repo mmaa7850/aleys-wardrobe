@@ -60,6 +60,19 @@ const allSections = [
     ],
   },
   {
+    key: "reports",
+    labelKey: "admin.sidebar.reports",
+    icon: `<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,
+    children: [
+      { labelKey: "admin.sidebar.reportSales",     to: "/admin/reports/sales" },
+      { labelKey: "admin.sidebar.reportProducts",  to: "/admin/reports/products" },
+      { labelKey: "admin.sidebar.reportCoupons",   to: "/admin/reports/coupons" },
+      { labelKey: "admin.sidebar.reportOrders",    to: "/admin/reports/orders" },
+      { labelKey: "admin.sidebar.reportMembers",   to: "/admin/reports/members" },
+      { labelKey: "admin.sidebar.reportAnalytics", to: "/admin/reports/analytics" },
+    ],
+  },
+  {
     key: "marketing",
     labelKey: "admin.sidebar.marketing",
     permission: "CanManageMarketing",

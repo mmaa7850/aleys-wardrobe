@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-05-08
+> 更新時間：2026-05-09（訂單紀錄獨立頁 / LINE OA 浮動按鈕 / GA4 追蹤基礎建設）
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -18,8 +18,9 @@
 | 結帳 | `/checkout` | 自動從會員資料填入姓名/電話；**配送方式**從 DB 動態載入，超商取貨（`cvscom`）/ 宅配到府（`home`）驅動不同表單欄位；**手動優惠碼**輸入驗證；**滿額自動折抵**（`IsAutoApply=true`，自動套用最高折扣，距下一門檻進度提示）；金額明細（小計+運費-折扣）；送出後呼叫 `create-payment` Edge Function，自動 submit 藍新付款表單 |
 | 優惠券專區 | `/coupons` | 僅一般會員可見（管理員導首頁）；分兩區：**滿額自動折抵**（金色 badge、無需輸入）、**優惠碼**（顯示代碼 + 一鍵複製）；從 DB 動態載入有效期內且 `IsActive=true` 的優惠券 |
 | 結帳成功 | `/order-success/:orderNo` | 成功訊息、訂單編號、前往訂單詳情 / 繼續購物 |
+| 訂單紀錄 | `/orders` | 完整訂單列表（依建立時間倒序）；四色付款狀態 badge（待付款/已付款/付款失敗/已退款）；桌面版表格 header，行動版簡化雙列；空清單提示「去逛逛」 |
 | 訂單詳情 | `/orders/:orderNo` | 訂單狀態、付款狀態 badge、商品明細、收件人資訊、**宅配物流追蹤**：後台填入單號後顯示物流公司 + 單號 + 可點擊的查詢連結（黑貓、新竹、郵局）；ATM 繳費帳號（付款前）；**重新付款**按鈕（呼叫 `retry-payment`） |
-| 會員中心 | `/account` | 個人資料（姓名/電話/性別/生日）可編輯儲存、會員等級顯示、最近 30 筆訂單歷史、登出 |
+| 會員中心 | `/account` | 個人資料（姓名/電話/性別/生日）可編輯儲存、會員等級顯示、最近 3 筆訂單預覽（附「查看全部訂單」連結跳 `/orders`）、登出 |
 | 收藏清單 | `/wishlist` | 收藏商品格狀顯示、移除收藏 |
 | 尺寸指南 | `/size-guide` | S/M/L/XL 量法說明 + 各尺寸對照表（靜態） |
 | 退換貨政策 | `/returns` | 7 天鑑賞期、退換條件、4 步驟流程（靜態） |
@@ -59,8 +60,13 @@
 | 付款方式設定 | `/admin/settings/setpaymethods` | CanManageSettings | 管理付款方式（`S_PAY_PayMethodList`） |
 | 配送方式設定 | `/admin/settings/setshippingmethods` | CanManageSettings | 管理配送方式（名稱、`MethodCode`、`Fee`、啟用）；`MethodCode` 決定結帳流程（`cvscom` / `home`） |
 | 系統設定分類 | `/admin/settings/setconfigcategories` | CanManageSettings | 管理設定分類（`S_SYS_ConfigCategoryList`） |
-| 系統設定 | `/admin/settings/setconfig` | CanManageSettings | 全站 Key-Value 參數（`S_SYS_ConfigList`）；前台尚未消費這些設定 |
+| 系統設定 | `/admin/settings/setconfig` | CanManageSettings | 全站 Key-Value 參數（`S_SYS_Config`）；前台透過 `useSiteConfigStore` 讀取；已實作：`announcement`（公告欄）、`maintenance_mode`、`payment_disabled` |
 | 管理者帳號 | `/admin/settings/admin-users` | IsAdmin（超管）| 管理後台帳號與細項權限（`S_SYS_AdminUserList`）；僅超管可進入 |
+| **報表 — 銷售總覽** | `/admin/reports/sales` | 全部 | 今日/本週/本月/自訂區間切換；4 張 stat card（已付款營收、訂單數、客單價、退款金額）；低庫存警示卡片；每日已付款營收折線圖（Chart.js） |
+| **報表 — 商品排行** | `/admin/reports/products` | 全部 | 已付款訂單統計；依銷售金額或數量排序；時間區間可選（本週/本月/近3月/自訂）；前3名 🥇🥈🥉 |
+| **報表 — 優惠券效益** | `/admin/reports/coupons` | 全部 | 各券：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃；手動碼 vs 自動折抵分類顯示 |
+| **報表 — 訂單狀態分佈** | `/admin/reports/orders` | 全部 | 全部訂單甜甜圈圖（付款狀態4種：待付款/已付款/付款失敗/已退款）；佔比表格；點擊跳訂單列表 |
+| **報表 — 會員成長趨勢** | `/admin/reports/members` | 全部 | 近12個月月新增柱狀圖；3張 stat card（累積總數/本月活躍/回購會員數） |
 
 ---
 
@@ -86,6 +92,7 @@
 | `auth.js` | 使用者 session、登入（Email / LINE OAuth）/登出/重設密碼；查 `S_SYS_AdminUserList` 取得 `isAdmin`/`isActive`/`permissions`（5 個 Can*）；getter `canEnterAdmin`（IsActive=true）、`canAccess(perm)` |
 | `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊 |
 | `wishlist.js` | 收藏清單 toggle（`C_MBR_WishList`）；`has(id)` 判斷是否收藏 |
+| `siteConfig.js` | 從 `S_SYS_Config` 一次性載入所有 Key-Value 設定（`loaded` 守衛防重複請求）；getter：`get(key)`、`announcement`、`maintenanceMode`、`paymentDisabled`；`FrontendLayout` 掛載時呼叫 `load()` |
 
 ---
 
@@ -122,7 +129,7 @@
 - `S_SYS_AdminUserList` — 管理員帳號（`IsAdmin`/`IsActive`/5 個 Can* 欄位）
 - `S_SHP_ShippingMethodList` — 配送方式（`Fee`/`MethodCode`/`IsActive`）
 - `S_PAY_PayMethodList` — 付款方式
-- `S_SYS_ConfigCategoryList` / `S_SYS_ConfigList` — 全站 Key-Value 設定
+- `S_SYS_ConfigCategoryList` / `S_SYS_Config` — 全站 Key-Value 設定（前台透過 `useSiteConfigStore` 消費）
 - `S_ORD_StatusList` — 訂單狀態選項
 
 ---
@@ -145,6 +152,8 @@
 | 藍新退款 NPA-B032 | 信用卡類訂單退款 API |
 | Supabase Auth | Email 登入/註冊/重設密碼、LINE OAuth |
 | Supabase Storage | 商品圖片/影片、Banner 圖片存放 |
+| Chart.js | 後台報表圖表（折線圖、甜甜圈圖、柱狀圖）；僅後台報表頁使用，lazy load |
+| Google Analytics 4 | `src/lib/gtag.js`；`initGA()` 啟動時注入 gtag.js；追蹤 4 個事件：`view_item`（商品詳情）、`add_to_cart`（加入購物車）、`begin_checkout`（進入結帳）、`purchase`（付款成功，sessionStorage 防重複）；Measurement ID 存 `.env` `VITE_GA_MEASUREMENT_ID`；後台 `/admin/reports/analytics` 頁面顯示追蹤狀態 + Looker Studio 嵌入（`ga_looker_studio_url` 存 S_SYS_Config） |
 
 ---
 
@@ -154,6 +163,7 @@
 - 色系：暖米色（`--fe-cream` / `--fe-linen`）+ 金色（`--fe-gold: #C8A882`）點綴
 - 字型：標題用 Cormorant Garamond 襯線體，內文用系統字
 - RWD 斷點：768px / 1200px
+- **LINE OA 浮動按鈕**：`FrontendLayout` 右下角固定 `position:fixed` 綠色圓形按鈕（`#06C755`）；讀取 `S_SYS_Config` 的 `line_oa_url`，未設定時自動隱藏；hover 有放大動效
 
 ### 後台
 - 側欄：深色 `#1a1714` 背景、Cormorant Garamond 品牌名稱、金色 `#C8A882` 啟用指示

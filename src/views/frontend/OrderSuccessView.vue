@@ -1,13 +1,35 @@
 <script setup>
 import { onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
+import { db } from '@/lib/db'
+import { trackPurchase } from '@/lib/gtag'
 
 const route = useRoute()
 const orderNo = route.params.orderNo
 
-onMounted(() => {
-  // Payment succeeded — clear any saved draft so next checkout starts fresh
+onMounted(async () => {
   sessionStorage.removeItem('checkoutDraft')
+
+  // Fire purchase event once per orderNo (guard against page refresh double-counting)
+  const fireKey = `ga_purchase_${orderNo}`
+  if (sessionStorage.getItem(fireKey)) return
+  sessionStorage.setItem(fireKey, '1')
+
+  try {
+    const { data: order } = await db
+      .from('C_ORD_OrderList')
+      .select('ID, FinalAmount')
+      .eq('OrderNo', orderNo)
+      .maybeSingle()
+    if (!order) return
+    const { data: items } = await db
+      .from('C_ORD_OrderItemList')
+      .select('ProductID, ProductName, UnitPrice, Qty')
+      .eq('OrderID', order.ID)
+    trackPurchase(orderNo, items ?? [], order.FinalAmount)
+  } catch {
+    // Non-critical — analytics failure must never break the page
+  }
 })
 </script>
 

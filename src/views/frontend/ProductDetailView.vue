@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useAuthStore } from '@/stores/auth'
+import { trackViewItem, trackAddToCart } from '@/lib/gtag'
 
 const route = useRoute()
 const router = useRouter()
@@ -137,6 +138,7 @@ async function fetchData() {
   if (prdErr || !prd) { notFound.value = true; isLoading.value = false; return }
 
   product.value  = { ...prd, C_PRD_ProductSizeSpecList: specs || [] }
+  trackViewItem(product.value)
   colors.value   = clrs || []
   sizes.value    = szs  || []
 
@@ -165,6 +167,9 @@ async function onAddToCart() {
     await cart.addItem(product.value.ID, selectedVariant.value.ID, qty.value)
     cartAdded.value = true
     setTimeout(() => { cartAdded.value = false }, 2000)
+    const colorName = colors.value.find(c => c.ID === selectedColor.value)?.Name ?? ''
+    const sizeName  = sizes.value.find(s => s.ID === selectedSize.value)?.Name ?? ''
+    trackAddToCart(product.value, qty.value, colorName, sizeName)
   } catch (err) {
     console.error('[ProductDetail] addItem error:', err)
   } finally {
