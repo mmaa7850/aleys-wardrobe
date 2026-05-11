@@ -50,6 +50,20 @@ const refundLoading = ref(false);
 const refundError = ref("");
 const refundSuccess = ref(false);
 
+// ── 電子發票 ──────────────────────────────────────────
+const invoiceLoading = ref(false);
+const invoiceError = ref("");
+const invoiceSuccess = ref("");
+const allowanceAmtInput = ref("");
+const showAllowanceForm = ref(false);
+
+const INVOICE_STATUS_LABEL = {
+  none:      '未開立',
+  issued:    '已開立',
+  voided:    '已作廢',
+  allowance: '已折讓',
+};
+
 // ── 標記已出貨（宅配）─────────────────────────────────
 const shipForm = ref({ company: 'tcat', no: '' });
 const shipLoading = ref(false);
@@ -169,6 +183,11 @@ const openDetail = async (id) => {
   shipForm.value = { company: 'tcat', no: '' };
   shipError.value = '';
   shipSuccess.value = false;
+  invoiceLoading.value = false;
+  invoiceError.value = '';
+  invoiceSuccess.value = '';
+  allowanceAmtInput.value = '';
+  showAllowanceForm.value = false;
   activeTab.value = "info";
   detailLoading.value = true;
 
@@ -314,6 +333,77 @@ const doRefund = async (manual = false) => {
     refundError.value = err?.message ?? String(err);
   } finally {
     refundLoading.value = false;
+  }
+};
+
+// ── Invoice actions ───────────────────────────────────
+const canIssueInvoice = computed(() =>
+  detailOrder.value?.PaymentStatus === 'paid' &&
+  (!detailOrder.value?.InvoiceStatus || detailOrder.value?.InvoiceStatus === 'none')
+);
+const canVoidInvoice = computed(() => detailOrder.value?.InvoiceStatus === 'issued');
+const canAllowance   = computed(() => detailOrder.value?.InvoiceStatus === 'issued');
+
+const doInvoiceAction = async (action) => {
+  if (!detailOrder.value) return;
+
+  const amt = Number(allowanceAmtInput.value);
+  const confirmMsg = {
+    issue:     `確定開立電子發票？\n訂單：${detailOrder.value.OrderNo}\n金額：NT$ ${detailOrder.value.FinalAmount?.toLocaleString()}`,
+    void:      `確定作廢此發票？\n發票號碼：${detailOrder.value.InvoiceNumber}\n作廢後無法復原。`,
+    allowance: `確定開立折讓 NT$ ${amt.toLocaleString()}？`,
+  }[action];
+
+  if (!window.confirm(confirmMsg)) return;
+
+  invoiceLoading.value = true;
+  invoiceError.value = "";
+  invoiceSuccess.value = "";
+
+  try {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
+    const body = { orderNo: detailOrder.value.OrderNo, action, ...(action === 'allowance' && { allowanceAmt: amt }) };
+
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/issue-invoice`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      }
+    );
+    const data = await res.json();
+    if (!res.ok || !data.success) throw new Error(data.error || '操作失敗');
+
+    if (action === 'issue') {
+      detailOrder.value = {
+        ...detailOrder.value,
+        InvoiceStatus: 'issued',
+        InvoiceNumber: data.invoiceNumber,
+        InvoiceNo: data.invoiceNo,
+        InvoiceRandomNum: data.randomNum,
+        InvoiceIssuedAt: new Date().toISOString(),
+      };
+      invoiceSuccess.value = `發票開立成功：${data.invoiceNumber}`;
+    } else if (action === 'void') {
+      detailOrder.value = { ...detailOrder.value, InvoiceStatus: 'voided' };
+      invoiceSuccess.value = '發票已作廢';
+    } else if (action === 'allowance') {
+      detailOrder.value = {
+        ...detailOrder.value,
+        InvoiceStatus: 'allowance',
+        InvoiceAllowanceNo: data.allowanceNo,
+        InvoiceAllowanceAmt: amt,
+      };
+      invoiceSuccess.value = `折讓開立成功：${data.allowanceNo}`;
+      showAllowanceForm.value = false;
+    }
+  } catch (err) {
+    invoiceError.value = err?.message ?? String(err);
+  } finally {
+    invoiceLoading.value = false;
   }
 };
 
@@ -651,6 +741,62 @@ onMounted(async () => {
                 </div>
               </div>
 
+              <!-- 電子發票 -->
+              <div v-if="detailOrder.PaymentStatus === 'paid' || detailOrder.InvoiceStatus !== 'none'" class="col-12 col-md-6">
+                <div class="card h-100">
+                  <div class="card-header small fw-semibold">電子發票</div>
+                  <div class="card-body">
+                    <dl class="info-dl">
+                      <dt>發票狀態</dt>
+                      <dd>
+                        <span class="badge" :class="{
+                          'bg-secondary': !detailOrder.InvoiceStatus || detailOrder.InvoiceStatus === 'none',
+                          'bg-success':   detailOrder.InvoiceStatus === 'issued',
+                          'bg-danger':    detailOrder.InvoiceStatus === 'voided',
+                          'bg-warning text-dark': detailOrder.InvoiceStatus === 'allowance',
+                        }">
+                          {{ INVOICE_STATUS_LABEL[detailOrder.InvoiceStatus] || '未開立' }}
+                        </span>
+                      </dd>
+                      <template v-if="detailOrder.InvoiceNumber">
+                        <dt>發票號碼</dt>
+                        <dd class="font-monospace">{{ detailOrder.InvoiceNumber }}</dd>
+                        <dt>隨機碼</dt>
+                        <dd class="font-monospace">{{ detailOrder.InvoiceRandomNum }}</dd>
+                        <dt>開立時間</dt>
+                        <dd>{{ formatDate(detailOrder.InvoiceIssuedAt) }}</dd>
+                      </template>
+                      <template v-if="detailOrder.InvoiceAllowanceNo">
+                        <dt>折讓號</dt>
+                        <dd class="font-monospace">{{ detailOrder.InvoiceAllowanceNo }}</dd>
+                        <dt>折讓金額</dt>
+                        <dd>NT$ {{ detailOrder.InvoiceAllowanceAmt?.toLocaleString() }}</dd>
+                      </template>
+                    </dl>
+
+                    <!-- 開立折讓 inline form -->
+                    <div v-if="showAllowanceForm" class="mt-3 border-top pt-3">
+                      <div class="mb-2">
+                        <label class="form-label small mb-1">折讓金額（NT$）</label>
+                        <input v-model="allowanceAmtInput" type="number" class="form-control form-control-sm"
+                          placeholder="輸入折讓金額" min="1" :max="detailOrder.FinalAmount" :disabled="invoiceLoading" />
+                      </div>
+                      <div class="d-flex gap-2">
+                        <button class="btn btn-warning btn-sm" :disabled="invoiceLoading || !allowanceAmtInput"
+                          @click="doInvoiceAction('allowance')">
+                          <span v-if="invoiceLoading" class="spinner-border spinner-border-sm me-1"></span>
+                          確認開立折讓
+                        </button>
+                        <button class="btn btn-outline-secondary btn-sm" @click="showAllowanceForm = false">取消</button>
+                      </div>
+                    </div>
+
+                    <div v-if="invoiceSuccess" class="alert alert-success py-2 small mt-2 mb-0">{{ invoiceSuccess }}</div>
+                    <div v-if="invoiceError" class="alert alert-danger py-2 small mt-2 mb-0">{{ invoiceError }}</div>
+                  </div>
+                </div>
+              </div>
+
               <!-- 訂單狀態 & 備註（可編輯） -->
               <div class="col-12 col-md-6">
                 <div class="card h-100">
@@ -777,6 +923,26 @@ onMounted(async () => {
             >
               <span v-if="refundLoading" class="spinner-border spinner-border-sm me-1"></span>
               {{ refundLoading ? '處理中…' : '標記已退款（ATM / 手動）' }}
+            </button>
+          </template>
+
+          <!-- 發票按鈕 -->
+          <template v-if="detailOrder && canIssueInvoice">
+            <button type="button" class="btn btn-outline-success" :disabled="invoiceLoading"
+              @click="doInvoiceAction('issue')">
+              <span v-if="invoiceLoading" class="spinner-border spinner-border-sm me-1"></span>
+              {{ invoiceLoading ? '開立中…' : '開立發票' }}
+            </button>
+          </template>
+          <template v-if="detailOrder && canVoidInvoice && !invoiceSuccess">
+            <button type="button" class="btn btn-outline-danger" :disabled="invoiceLoading"
+              @click="doInvoiceAction('void')">
+              <span v-if="invoiceLoading" class="spinner-border spinner-border-sm me-1"></span>
+              作廢發票
+            </button>
+            <button type="button" class="btn btn-outline-warning" :disabled="invoiceLoading"
+              @click="showAllowanceForm = !showAllowanceForm">
+              開立折讓
             </button>
           </template>
 

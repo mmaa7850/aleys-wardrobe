@@ -1,7 +1,17 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-08
+> 更新時間：2026-05-10（電子發票欄位 — 待測試）
 > Schema：`staging`（開發）、`public`（正式）
+
+---
+
+## Migration 紀錄
+
+| 檔案 | 說明 | 狀態 |
+|------|------|------|
+| `add_shipping_method_fields.sql` | 新增 ShippingMethod / HomeDelivery* 欄位 | ✅ 已執行 |
+| `add_trade_no.sql` | 新增 TradeNo 欄位（藍新退款用） | ✅ 已執行 |
+| `add_invoice_fields.sql` | 新增 Invoice* 7 個欄位（電子發票） | ⚠️ 待執行 |
 
 ---
 
@@ -189,6 +199,13 @@ WITH CHECK (
 | ShippingStatusText | varchar(50) | YES | — |
 | CreatedDate | timestamptz | NO | now() |
 | UpdatedDate | timestamptz | YES | — |
+| InvoiceStatus ⚠️ 待測試 | varchar(20) | NO | 'none' | `none` / `issued` / `voided` / `allowance` |
+| InvoiceNo ⚠️ 待測試 | varchar(20) | YES | — | ezPay 發票開立序號（InvoiceTransNo） |
+| InvoiceNumber ⚠️ 待測試 | varchar(10) | YES | — | 實際發票號碼（如 AB12345678） |
+| InvoiceRandomNum ⚠️ 待測試 | varchar(4) | YES | — | 4 碼防偽隨機碼 |
+| InvoiceIssuedAt ⚠️ 待測試 | timestamptz | YES | — | 發票開立時間 |
+| InvoiceAllowanceNo ⚠️ 待測試 | varchar(25) | YES | — | 折讓號 |
+| InvoiceAllowanceAmt ⚠️ 待測試 | integer | YES | — | 折讓金額（NT$） |
 
 ### C_ORD_OrderStatusLog
 | 欄位 | 型別 | Nullable | Default |
