@@ -117,20 +117,23 @@
 
 ---
 
-#### FB User ID 對應官網帳號的問題（核心難題）
+#### FB User ID 對應官網帳號的問題 ✅ 已有解法
 
-**問題根源：**
-FB User ID、LINE User ID、Email 是三個完全獨立的系統，沒有共同欄位，**無法自動對應**。
-其他直播商店做法是：第一次客人私訊姓名、電話、地址給 FB / LINE OA，但這份資料是非結構化的文字，系統無法自動解析並與官網帳號綁定。
+**✅ 已確認：官網要加入 FB 登入 / 帳號綁定**
+> 1. 直接用 FB 帳號 Email 在官網註冊/登入（FB OAuth）
+> 2. 已有 Email 帳號的會員，可在會員中心「綁定 FB 帳號」
+>
+> FB User ID 存入現有的 `C_MBR_MemberSocialList`（Platform=`facebook`, SocialUserID=FB_User_ID），與 LINE OAuth 完全相同的模式，**不需改 schema**。
 
-**唯一能當橋梁的是「電話號碼」：**
-客人私訊的資料含電話，官網會員也有電話欄位（`C_MBR_MemberList.Phone`）。
-用電話做 key 是目前唯一可行的半自動比對方式。
+**這解決了什麼：**
+- 客人在官網用 FB 登入或綁定後，`C_MBR_MemberSocialList` 就有他的 FB User ID
+- Phase 2（FB API 自動化）捕捉到直播留言的 FB User ID，可直接查這張表找到官網會員
+- 不再需要靠電話當橋梁（雖然電話比對仍作為 fallback）
 
-**兩階段解法：**
+**兩階段解法（更新版）：**
 
 **階段一：CSV 手動版（現在要做）**
-- FB User ID **完全不需要**，流程如下：
+- 小編手動整理 CSV，沒有 FB User ID，主要靠電話比對：
   ```
   客人留言 → 客人私訊姓名/電話/地址
     → 小編整理 CSV（含電話欄位）
@@ -142,11 +145,15 @@ FB User ID、LINE User ID、Email 是三個完全獨立的系統，沒有共同�
 
 **階段二：FB API 自動化（未來）**
 - 客人留言被 FB API 捕捉（含 FB User ID）
-- 系統查 `C_LIV_CustomerList` 有沒有這個 FB User ID
-  - 有（舊客）→ 直接建單
-  - 沒有（新客）→ Bot 自動私訊請客人留資料
-    → 客人回覆（FB DM 的 sender 就是 FB User ID）
-    → 存入 `C_LIV_CustomerList`，用電話比對官網會員，能綁就綁
+- **優先查詢** `C_MBR_MemberSocialList` WHERE Platform='facebook' AND SocialUserID=`[FB User ID]`
+  - 找到 → 直接綁定到該官網會員，建單
+  - 找不到 → 查 `C_LIV_CustomerList` 有沒有舊紀錄（電話橋接）
+    - 有 → 用該紀錄建單
+    - 沒有（全新客人）→ Bot 自動私訊請客人留電話/地址
+      → 存入 `C_LIV_CustomerList`，再用電話嘗試比對官網會員
+
+**⚠️ 前置作業：需先完成 FB OAuth 功能（見 🟡 第 2 項）**
+FB API 自動化依賴 `C_MBR_MemberSocialList` 有 FB User ID 資料，因此官網的 FB 登入 / 綁定功能需要先上線，讓客人在直播前就綁好帳號。
 
 **需要新增的 DB Table：**
 
@@ -200,7 +207,37 @@ CreatedDate     timestamptz
 
 ---
 
-### 2. Google Analytics 整合
+### 2. FB 帳號登入 / 綁定（FB OAuth）
+
+官網目前支援 Email 登入與 LINE OAuth，需新增 FB OAuth 作為第三種登入方式，同時允許已有 Email 帳號的會員在會員中心綁定 FB。
+
+**需實作的範圍：**
+- 登入頁新增「使用 Facebook 登入」按鈕（與 LINE OAuth 相同模式）
+- 會員中心新增「綁定 Facebook 帳號」選項（已登入 Email 帳號的用戶可操作）
+- FB OAuth 回調處理（`/auth/callback` 已有 LINE 的處理邏輯，擴充即可）
+- FB User ID 存入 `C_MBR_MemberSocialList`（Platform=`facebook`, SocialUserID=FB_User_ID）
+
+**為什麼需要這個功能：**
+- 直播 FB API 自動化（Phase 2）的 FB User ID ↔ 官網帳號比對，依賴這張表有資料
+- 對客人來說，不需要記密碼，直接用 FB 登入更方便
+
+**技術說明：**
+- Supabase Auth 原生支援 FB OAuth Provider（與 LINE 設定方式相同）
+- 需要在 FB Developer Console 建立 App，取得 App ID + App Secret
+- Supabase Dashboard → Auth → Providers → Facebook → 填入 App ID / App Secret
+
+**需使用者確認的問題：**
+
+> ❓ **Q1：FB Developer App 申請了嗎？**
+> 需要有 FB App ID + App Secret 才能啟用 FB OAuth。
+> 若直播自動化同時在申請 `pages_read_engagement` 權限，可用同一個 App。
+
+> ❓ **Q2：登入頁的 FB 按鈕，要在哪個時間點上線？**
+> 建議和直播 CSV 工具一起上線，讓客人在直播前先綁定 FB 帳號，Phase 2 自動化才有資料可用。
+
+---
+
+### 3. Google Analytics 整合
 
 - 申請 GA4 屬性，取得 Measurement ID
 - 在 `.env` 加入 `VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX`（已預留欄位）
@@ -217,7 +254,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 3. 註冊確認信件優化
+### 4. 註冊確認信件優化
 
 現況：Supabase 預設寄件人為 `noreply@mail.supabase.io`，體驗不佳。
 
@@ -235,7 +272,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 4. 大戶會員標記（暫緩決策）
+### 5. 大戶會員標記（暫緩決策）
 
 **決策方向（已討論）：**
 - 優先選擇**方案 A（自動計算）**：不動 DB schema；在會員列表和訂單詳情頁根據累積消費金額顯示「大戶」badge；門檻值存 `S_SYS_Config`（key: `vip_threshold`）
@@ -248,7 +285,7 @@ CreatedDate     timestamptz
 
 ## 🟢 低優先（複雜度高 / 有外部依賴 / 暫緩）
 
-### 5. FB 直播留言自動化
+### 6. FB 直播留言自動化
 
 讓客人直播留言「+1 商品 顏色 尺寸」後，系統自動建訂單、分配庫存、發結帳連結。
 
@@ -261,6 +298,7 @@ CreatedDate     timestamptz
 
 > ❓ **Q1：願意等 FB App Review（5〜14 工作天）嗎？**
 > 建議先把功能 1（手動代建版）跑起來，FB 自動化在申請期間同步開發。
+> 注意：FB OAuth 登入（🟡 第 2 項）和 FB 留言自動化需要的 `pages_read_engagement` 是**同一個 FB App**，可以一起申請。
 
 > ✅ **Q2：通知管道 → 已確認：LINE OA**
 > 得標通知與付款連結統一透過 LINE OA 傳送，不使用 FB Messenger。
@@ -270,7 +308,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 6. 分批出貨
+### 7. 分批出貨
 
 單筆訂單中部分商品先到貨、部分延後，需拆分出貨記錄與通知。
 
@@ -281,7 +319,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 7. 訂單取消流程
+### 8. 訂單取消流程
 
 目前系統沒有「取消訂單」功能，只有「退款」。
 
@@ -296,7 +334,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 8. 訂單通知信
+### 9. 訂單通知信
 
 目前下單、付款成功、出貨，客人都**不會收到任何通知**。
 
@@ -308,7 +346,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 9. 客戶錢包 / 儲值（暫緩，待會計確認）
+### 10. 客戶錢包 / 儲值（暫緩，待會計確認）
 
 **⚠️ 實作前需請會計師確認「儲值不開發票、消費開發票」符合記帳需求。**
 
