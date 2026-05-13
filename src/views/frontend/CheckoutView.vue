@@ -18,6 +18,13 @@ const customerNote = ref('')
 const isSubmitting = ref(false)
 const errorMsg = ref('')
 
+// ── Invoice preference ────────────────────────────────
+const invoiceCarrierType = ref('')   // ''=紙本 / '0'=手機條碼 / '1'=自然人憑證 / 'D'=捐贈 / 'B2B'=公司戶
+const invoiceCarrierNum  = ref('')
+const invoiceLoveCode    = ref('')
+const invoiceBuyerUBN    = ref('')
+const invoiceBuyerName   = ref('')
+
 // ── Coupon ────────────────────────────────────────────
 const couponCode = ref('')
 const couponApplied = ref(null) // { ID, Name, DiscountValue, MinOrderAmount }
@@ -28,14 +35,14 @@ const couponLoading = ref(false)
 const autoCoupons = ref([]) // all valid auto-apply coupons loaded on mount
 
 const autoDiscount = computed(() => {
-  const total = cart.total
+  const total = cart.selectedTotal
   const applicable = autoCoupons.value.filter(c => !c.MinOrderAmount || total >= c.MinOrderAmount)
   if (applicable.length === 0) return null
   return [...applicable].sort((a, b) => (b.MinOrderAmount ?? 0) - (a.MinOrderAmount ?? 0))[0]
 })
 
 const nextAutoCoupon = computed(() => {
-  const total = cart.total
+  const total = cart.selectedTotal
   const unreached = autoCoupons.value.filter(c => c.MinOrderAmount && total < c.MinOrderAmount)
   if (unreached.length === 0) return null
   return [...unreached].sort((a, b) => a.MinOrderAmount - b.MinOrderAmount)[0]
@@ -54,7 +61,7 @@ const isHome = computed(() => selectedMethod.value?.MethodCode === 'home')
 
 // ── Totals ────────────────────────────────────────────
 const discountAmount = computed(() => couponApplied.value?.DiscountValue ?? 0)
-const finalTotal = computed(() => Math.max(1, cart.total + shippingFee.value - discountAmount.value - autoDiscountAmount.value))
+const finalTotal = computed(() => Math.max(1, cart.selectedTotal + shippingFee.value - discountAmount.value - autoDiscountAmount.value))
 
 async function applyCoupon() {
   const code = couponCode.value.trim()
@@ -74,7 +81,7 @@ async function applyCoupon() {
       .maybeSingle()
     if (error) throw error
     if (!data || !data.IsActive || data.UsageCount <= 0) { couponError.value = '優惠券無效或已過期'; return }
-    if (data.MinOrderAmount && cart.total < data.MinOrderAmount) {
+    if (data.MinOrderAmount && cart.selectedTotal < data.MinOrderAmount) {
       couponError.value = `此優惠券需消費滿 NT$ ${Number(data.MinOrderAmount).toLocaleString()} 才可使用`
       return
     }
@@ -144,7 +151,7 @@ onMounted(async () => {
   }
   if (cart.isEmpty) router.push('/cart')
 
-  trackBeginCheckout(cart.items, cart.total)
+  trackBeginCheckout(cart.selectedItems, cart.selectedTotal)
 
   // 自動折抵獨立載入，不影響配送方式
   db.from('S_PRM_CouponList')
@@ -181,6 +188,26 @@ async function submitOrder() {
     errorMsg.value = '請選擇配送方式'
     return
   }
+  if (invoiceCarrierType.value === '0' && !/^\/[A-Z0-9+\-.]{7}$/.test(invoiceCarrierNum.value)) {
+    errorMsg.value = '手機條碼格式錯誤，應為 /XXXXXXX（斜線開頭共 8 碼）'
+    return
+  }
+  if (invoiceCarrierType.value === '1' && !/^[A-Z]{2}\d{14}$/.test(invoiceCarrierNum.value)) {
+    errorMsg.value = '自然人憑證格式錯誤，應為 2 碼大寫英文 + 14 碼數字'
+    return
+  }
+  if (invoiceCarrierType.value === 'D' && !/^\d{3,7}$/.test(invoiceLoveCode.value)) {
+    errorMsg.value = '捐贈碼格式錯誤，應為 3~7 碼數字'
+    return
+  }
+  if (invoiceCarrierType.value === 'B2B' && !/^\d{8}$/.test(invoiceBuyerUBN.value)) {
+    errorMsg.value = '統一編號格式錯誤，應為 8 碼數字'
+    return
+  }
+  if (invoiceCarrierType.value === 'B2B' && !invoiceBuyerName.value.trim()) {
+    errorMsg.value = '請填寫公司名稱'
+    return
+  }
 
   isSubmitting.value = true
 
@@ -194,7 +221,7 @@ async function submitOrder() {
     const orderNo = `AW_${dateStr}_${rand}`
 
     // Build item description (max 50 chars for NewebPay)
-    const itemDesc = cart.items
+    const itemDesc = cart.selectedItems
       .map(i => i.productName)
       .join('、')
       .slice(0, 50)
@@ -211,7 +238,7 @@ async function submitOrder() {
         },
         body: JSON.stringify({
           orderNo,
-          amount: cart.total,
+          amount: cart.selectedTotal,
           shippingFee: shippingFee.value,
           shippingMethodCode: selectedMethod.value?.MethodCode ?? 'cvscom',
           shippingAddress: isHome.value ? shippingAddress.value.trim() : '',
@@ -221,7 +248,12 @@ async function submitOrder() {
           recipientName: recipientName.value.trim(),
           recipientPhone: recipientPhone.value.trim(),
           customerNote: customerNote.value.trim() || null,
-          items: cart.items.map(i => ({
+          invoiceCarrierType: invoiceCarrierType.value || null,
+          invoiceCarrierNum:  ['0','1','2'].includes(invoiceCarrierType.value) ? invoiceCarrierNum.value : null,
+          invoiceLoveCode:    invoiceCarrierType.value === 'D'   ? invoiceLoveCode.value  : null,
+          invoiceBuyerUBN:    invoiceCarrierType.value === 'B2B' ? invoiceBuyerUBN.value  : null,
+          invoiceBuyerName:   invoiceCarrierType.value === 'B2B' ? invoiceBuyerName.value : null,
+          items: cart.selectedItems.map(i => ({
             productId: i.productId,
             productName: i.productName,
             variantId: i.variantId,
@@ -249,8 +281,8 @@ async function submitOrder() {
       customerNote:   customerNote.value,
     }))
 
-    // Clear cart before redirect
-    await cart.clearCart()
+    // Remove only the selected items from cart (pre-order items remain)
+    await Promise.all(cart.selectedItems.map(i => cart.removeItem(i.id)))
 
     // Set hidden form params and submit to NewebPay
     paymentParams.value = data
@@ -374,6 +406,77 @@ async function submitOrder() {
           </div>
         </div>
 
+        <!-- Invoice preference -->
+        <h2 class="co-section-title co-section-title--mt">發票資訊</h2>
+        <div class="co-invoice">
+          <label class="co-invoice-opt" :class="{ 'co-invoice-opt--active': invoiceCarrierType === '' }">
+            <input type="radio" v-model="invoiceCarrierType" value="" class="co-invoice-radio" />
+            <span class="co-invoice-opt__label">紙本電子發票</span>
+          </label>
+
+          <label class="co-invoice-opt" :class="{ 'co-invoice-opt--active': invoiceCarrierType === '0' }">
+            <input type="radio" v-model="invoiceCarrierType" value="0" class="co-invoice-radio" />
+            <span class="co-invoice-opt__label">手機條碼載具</span>
+          </label>
+          <div v-if="invoiceCarrierType === '0'" class="co-invoice-input-wrap">
+            <input
+              v-model="invoiceCarrierNum"
+              type="text"
+              class="co-input co-invoice-input"
+              placeholder="/XXXXXXX（斜線開頭，共 8 碼大寫英數）"
+              maxlength="8"
+            />
+          </div>
+
+          <label class="co-invoice-opt" :class="{ 'co-invoice-opt--active': invoiceCarrierType === '1' }">
+            <input type="radio" v-model="invoiceCarrierType" value="1" class="co-invoice-radio" />
+            <span class="co-invoice-opt__label">自然人憑證載具</span>
+          </label>
+          <div v-if="invoiceCarrierType === '1'" class="co-invoice-input-wrap">
+            <input
+              v-model="invoiceCarrierNum"
+              type="text"
+              class="co-input co-invoice-input"
+              placeholder="2 碼大寫英文 + 14 碼數字，共 16 碼"
+              maxlength="16"
+            />
+          </div>
+
+          <label class="co-invoice-opt" :class="{ 'co-invoice-opt--active': invoiceCarrierType === 'D' }">
+            <input type="radio" v-model="invoiceCarrierType" value="D" class="co-invoice-radio" />
+            <span class="co-invoice-opt__label">捐贈發票</span>
+          </label>
+          <div v-if="invoiceCarrierType === 'D'" class="co-invoice-input-wrap">
+            <input
+              v-model="invoiceLoveCode"
+              type="text"
+              class="co-input co-invoice-input"
+              placeholder="捐贈碼（3~7 碼數字）"
+              maxlength="7"
+            />
+          </div>
+
+          <label class="co-invoice-opt" :class="{ 'co-invoice-opt--active': invoiceCarrierType === 'B2B' }">
+            <input type="radio" v-model="invoiceCarrierType" value="B2B" class="co-invoice-radio" />
+            <span class="co-invoice-opt__label">公司戶（三聯式發票）</span>
+          </label>
+          <div v-if="invoiceCarrierType === 'B2B'" class="co-invoice-input-wrap co-invoice-b2b">
+            <input
+              v-model="invoiceBuyerUBN"
+              type="text"
+              class="co-input co-invoice-input"
+              placeholder="統一編號（8 碼數字）"
+              maxlength="8"
+            />
+            <input
+              v-model="invoiceBuyerName"
+              type="text"
+              class="co-input co-invoice-input"
+              placeholder="公司名稱"
+            />
+          </div>
+        </div>
+
         <!-- Notice -->
         <div class="co-notice">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -402,7 +505,7 @@ async function submitOrder() {
         <h2 class="co-section-title">訂單摘要</h2>
 
         <div class="co-summary-items">
-          <div v-for="item in cart.items" :key="item.id" class="co-summary-item">
+          <div v-for="item in cart.selectedItems" :key="item.id" class="co-summary-item">
             <div class="co-summary-item__img-outer">
               <div class="co-summary-item__img-wrap">
                 <video
@@ -440,7 +543,7 @@ async function submitOrder() {
 
         <div class="co-summary__row">
           <span>商品小計</span>
-          <span>NT$ {{ cart.total.toLocaleString() }}</span>
+          <span>NT$ {{ cart.selectedTotal.toLocaleString() }}</span>
         </div>
         <div class="co-summary__row">
           <span>{{ selectedMethod ? selectedMethod.Name : '運費' }}</span>
@@ -458,9 +561,9 @@ async function submitOrder() {
           <template v-else-if="nextAutoCoupon">
             <div class="co-autodiscount__progress">
               <div class="co-autodiscount__bar-wrap">
-                <div class="co-autodiscount__bar" :style="{ width: Math.min(100, Math.floor(cart.total / nextAutoCoupon.MinOrderAmount * 100)) + '%' }"></div>
+                <div class="co-autodiscount__bar" :style="{ width: Math.min(100, Math.floor(cart.selectedTotal / nextAutoCoupon.MinOrderAmount * 100)) + '%' }"></div>
               </div>
-              <span>再消費 NT$ {{ (nextAutoCoupon.MinOrderAmount - cart.total).toLocaleString() }} 可折抵 NT$ {{ nextAutoCoupon.DiscountValue.toLocaleString() }}</span>
+              <span>再消費 NT$ {{ (nextAutoCoupon.MinOrderAmount - cart.selectedTotal).toLocaleString() }} 可折抵 NT$ {{ nextAutoCoupon.DiscountValue.toLocaleString() }}</span>
             </div>
           </template>
         </div>
@@ -706,6 +809,59 @@ async function submitOrder() {
 }
 
 .co-textarea:focus { border-color: var(--fe-text); }
+
+/* Invoice */
+.co-invoice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.co-invoice-opt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border: 1.5px solid var(--fe-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: var(--fe-white);
+}
+
+.co-invoice-opt--active {
+  border-color: var(--fe-text);
+  background: var(--fe-cream);
+}
+
+.co-invoice-radio {
+  accent-color: var(--fe-text);
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.co-invoice-opt__label {
+  font-size: 13px;
+  color: var(--fe-text);
+}
+
+.co-invoice-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px 14px;
+  background: var(--fe-cream);
+  border: 1px solid var(--fe-border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  margin-top: -4px;
+}
+
+.co-invoice-b2b { gap: 8px; }
+
+.co-invoice-input { height: 40px; font-size: 13px; }
 
 /* NewebPay notice */
 .co-notice {

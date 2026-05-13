@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-05-10（電子發票串接 — 待測試）
+> 更新時間：2026-05-13
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -13,9 +13,9 @@
 |------|------|------|
 | 首頁 | `/` | Hero 區塊（左側文字 + 右側裝飾框）、跑馬燈 Ticker、**動態 Banner 橫幅**（`home-banner`，Ticker 下方全寬，多張輪播）、最新上架 8 件商品卡片、探索風格分類卡、品牌故事；管理員可見 FAB 快速進入後台 |
 | 商品列表 | `/products` | 分類篩選 + 關鍵字搜尋、商品卡片（圖片/影片、售價/原價劃線/SALE badge）、Hover 顯示「查看商品」 |
-| 商品詳情 | `/products/:id` | 圖片/影片 Gallery（主圖 + 縮圖列）、顏色→尺寸選擇（依庫存過濾）、數量選擇器（上限卡庫存）、商品描述/尺寸規格 Tab；**預購模式**：`IsPreOrder=true` 且庫存歸零時顯示預購 badge + 預計出貨日 + 說明，按鈕改「立即預購」；加入購物車、收藏按鈕 |
-| 購物車 | `/cart` | 品項列表（圖、名稱、規格、數量 ± 控制、刪除）、合計金額、前往結帳 |
-| 結帳 | `/checkout` | 自動從會員資料填入姓名/電話；**配送方式**從 DB 動態載入，超商取貨（`cvscom`）/ 宅配到府（`home`）驅動不同表單欄位；**手動優惠碼**輸入驗證；**滿額自動折抵**（`IsAutoApply=true`，自動套用最高折扣，距下一門檻進度提示）；金額明細（小計+運費-折扣）；送出後呼叫 `create-payment` Edge Function，自動 submit 藍新付款表單 |
+| 商品詳情 | `/products/:id` | 圖片/影片 Gallery（主圖 + 縮圖列）、顏色→尺寸選擇（依庫存過濾）、**數量選擇器**（現貨上限卡庫存；預購上限 99）、商品描述/尺寸規格 Tab；**預購模式**：`IsPreOrder=true` 且所選 variant 庫存歸零時顯示預購 badge + 預計出貨日 + 說明，按鈕改「立即預購」，數量選擇器仍顯示；加入購物車、收藏按鈕 |
+| 購物車 | `/cart` | 品項列表（**勾選欄**（僅非預購品項）、圖、名稱、規格、**預購預計出貨日**、數量 ± 控制、刪除）；預購品項不顯示勾選框、不計入合計；**已選取合計金額**；前往結帳按鈕（無勾選時 disabled）；`cart.initSelection()` 在載入後自動勾選所有非預購品項 |
+| 結帳 | `/checkout` | 僅結算購物車中**已勾選品項**（`cart.selectedItems`）；自動從會員資料填入姓名/電話；**配送方式**從 DB 動態載入，超商取貨（`cvscom`）/ 宅配到府（`home`）驅動不同表單欄位；**手動優惠碼**輸入驗證；**滿額自動折抵**（`IsAutoApply=true`，自動套用最高折扣，距下一門檻進度提示）；**電子發票設定**（5 種：紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編，各有格式驗證）；金額明細（小計+運費-折扣）；送出後呼叫 `create-payment` Edge Function，自動 submit 藍新付款表單；成功後僅移除已勾選品項 |
 | 優惠券專區 | `/coupons` | 僅一般會員可見（管理員導首頁）；分兩區：**滿額自動折抵**（金色 badge、無需輸入）、**優惠碼**（顯示代碼 + 一鍵複製）；從 DB 動態載入有效期內且 `IsActive=true` 的優惠券 |
 | 結帳成功 | `/order-success/:orderNo` | 成功訊息、訂單編號、前往訂單詳情 / 繼續購物 |
 | 訂單紀錄 | `/orders` | 完整訂單列表（依建立時間倒序）；四色付款狀態 badge（待付款/已付款/付款失敗/已退款）；桌面版表格 header，行動版簡化雙列；空清單提示「去逛逛」 |
@@ -74,13 +74,13 @@
 
 | Function | JWT 驗證 | 說明 |
 |----------|----------|------|
-| `create-payment` | ✅ 需要 | 後端驗證手動優惠券（有效期/使用次數/`IsActive`/`MinOrderAmount`）；後端自動偵測滿額折抵（`IsAutoApply=true`，挑選符合門檻最高折扣一張）；計算 `FinalAmount = 小計 + 運費 − 手動折扣 − 自動折抵`；建立訂單（`C_ORD_OrderList` / `C_ORD_OrderItemList`）；扣除手動與自動優惠券 `UsageCount`；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；AES 加密藍新參數，回傳 Gateway URL |
+| `create-payment` | ✅ 需要 | 後端驗證手動優惠券（有效期/使用次數/`IsActive`/`MinOrderAmount`）；後端自動偵測滿額折抵（`IsAutoApply=true`，挑選符合門檻最高折扣一張）；計算 `FinalAmount = 小計 + 運費 − 手動折扣 − 自動折抵`；建立訂單（`C_ORD_OrderList` / `C_ORD_OrderItemList`）；**儲存客戶發票偏好**（`InvoiceCarrierType`/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName`）；扣除手動與自動優惠券 `UsageCount`；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；AES 加密藍新參數，回傳 Gateway URL |
 | `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態為 `paid`、扣庫存、儲存 CVSCOM 門市資訊（`StoreCode`/`LgsNo`） |
 | `payment-return` | ❌ 關閉 | 藍新前台導回：儲存付款方式、ATM 帳號、CVSCOM 門市資訊，導向 `/order-success/:orderNo` |
 | `retry-payment` | ✅ 需要 | 對同一訂單重新產生藍新付款參數（訂單號加 `_R1/_R2` 後綴），不重建訂單 |
 | `refund-payment` | ✅ 需要 | 呼叫藍新 NPA-B032 退款 API；僅支援信用卡類付款（CREDIT、ApplePay、GooglePay 等） |
 | `logistics-notify` | ❌ 關閉 | 藍新物流 NPA-B58 webhook：接收貨態推播，更新 `ShippingStatus`/`ShippingStatusText` |
-| `issue-invoice` ⚠️ 待測試 | ✅ 需要 | ezPay 電子發票操作；支援三個 action：`issue`（開立，B2C/含稅 5%/PrintFlag=Y，商品費用+運費拆列）、`void`（作廢，填作廢原因「訂單退款」）、`allowance`（開立折讓，立即確認 Status=1）；AES-256-CBC 加密（block size 32，`node:crypto` 實作）；結果寫回 `C_ORD_OrderList` 的 Invoice* 欄位；環境變數：`EZPAY_MERCHANT_ID` / `EZPAY_HASH_KEY` / `EZPAY_HASH_IV` / `EZPAY_ENV`（test/prod） |
+| `issue-invoice` ⚠️ 待測試 | ✅ 需要 | ezPay 電子發票操作；支援三個 action：`issue`（開立，讀取訂單的發票偏好自動判斷：B2C/B2B Category、PrintFlag、CarrierType/CarrierNum、LoveCode、BuyerUBN；B2B 以未稅金額作為 ItemPrice，B2C 以含稅金額；商品費用+運費拆列）、`void`（作廢，填作廢原因「訂單退款」）、`allowance`（開立折讓，立即確認 Status=1）；AES-256-CBC 加密（block size 32，`node:crypto` 實作）；結果寫回 `C_ORD_OrderList` 的 Invoice* 欄位；環境變數：`EZPAY_MERCHANT_ID` / `EZPAY_HASH_KEY` / `EZPAY_HASH_IV` / `EZPAY_ENV`（test/prod） |
 | `store-map` | ✅ 需要 | （舊流程殘留）產生超商地圖選店參數，現已不在結帳流程使用 |
 | `store-callback` | ❌ 關閉 | （舊流程殘留）接收門市選擇回呼，現已不在結帳流程使用 |
 
@@ -91,7 +91,7 @@
 | Store | 說明 |
 |-------|------|
 | `auth.js` | 使用者 session、登入（Email / LINE OAuth）/登出/重設密碼；查 `S_SYS_AdminUserList` 取得 `isAdmin`/`isActive`/`permissions`（5 個 Can*）；getter `canEnterAdmin`（IsActive=true）、`canAccess(perm)` |
-| `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊 |
+| `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊；**品項預購判斷**：`IsPreOrder=true && variant.StockQty <= 0` 雙重條件，同一商品不同 variant 可各自獨立判斷現貨/預購；**選取狀態**：state `selectedItemIds`；getter `selectedItems`（已選品項）/ `selectedTotal`（已選合計）；action `initSelection()`（預設勾選所有非預購品項）/ `toggleSelection(id)` |
 | `wishlist.js` | 收藏清單 toggle（`C_MBR_WishList`）；`has(id)` 判斷是否收藏 |
 | `siteConfig.js` | 從 `S_SYS_Config` 一次性載入所有 Key-Value 設定（`loaded` 守衛防重複請求）；getter：`get(key)`、`announcement`、`maintenanceMode`、`paymentDisabled`；`FrontendLayout` 掛載時呼叫 `load()` |
 
@@ -112,7 +112,7 @@
 - `C_CART_CartList` / `C_CART_CartItemList` — 購物車
 
 ### 訂單
-- `C_ORD_OrderList` — 訂單主檔（付款狀態、配送方式/運費/地址、`DiscountAmount`/`FinalAmount`、`HomeDeliveryNo`/`HomeDeliveryCompany`、`ShippingStatus`/`ShippingStatusText`、ATM 帳號、超商門市資訊；**⚠️ 待測試** — 電子發票欄位：`InvoiceStatus`/`InvoiceNo`/`InvoiceNumber`/`InvoiceRandomNum`/`InvoiceIssuedAt`/`InvoiceAllowanceNo`/`InvoiceAllowanceAmt`）
+- `C_ORD_OrderList` — 訂單主檔（付款狀態、配送方式/運費/地址、`DiscountAmount`/`FinalAmount`、`HomeDeliveryNo`/`HomeDeliveryCompany`、`ShippingStatus`/`ShippingStatusText`、ATM 帳號、超商門市資訊；**⚠️ 待測試** — 電子發票欄位：`InvoiceStatus`/`InvoiceNo`/`InvoiceNumber`/`InvoiceRandomNum`/`InvoiceIssuedAt`/`InvoiceAllowanceNo`/`InvoiceAllowanceAmt`；**客戶發票偏好**：`InvoiceCarrierType`（null=紙本/`0`=手機條碼/`1`=自然人憑證/`2`=ezPay 載具/`D`=捐贈/`B2B`=公司戶）/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName`；migration：`add_invoice_preference_fields.sql`）
 - `C_ORD_OrderItemList` — 訂單明細
 - `C_ORD_OrderLogList` — 訂單狀態異動紀錄
 

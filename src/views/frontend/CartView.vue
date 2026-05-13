@@ -16,6 +16,7 @@ onMounted(async () => {
   if (cart.isEmpty && !cart.cartId) {
     await cart.fetchCart()
   }
+  cart.initSelection()
 })
 </script>
 
@@ -55,7 +56,23 @@ onMounted(async () => {
           <span></span>
         </div>
 
-        <div v-for="item in cart.items" :key="item.id" class="cart-item">
+        <div
+          v-for="item in cart.items"
+          :key="item.id"
+          class="cart-item"
+          :class="{ 'cart-item--unchecked': !item.isPreOrder && !cart.selectedItemIds.includes(item.id) }"
+        >
+          <!-- Checkbox (現貨才有) -->
+          <div class="cart-item__check">
+            <input
+              v-if="!item.isPreOrder"
+              type="checkbox"
+              class="cart-item__checkbox"
+              :checked="cart.selectedItemIds.includes(item.id)"
+              @change="cart.toggleSelection(item.id)"
+            />
+          </div>
+
           <!-- Image -->
           <div class="cart-item__img-wrap">
             <RouterLink :to="`/products/${item.productId}`">
@@ -92,6 +109,10 @@ onMounted(async () => {
               <span v-if="item.colorName && item.sizeName"> / </span>
               <span v-if="item.sizeName">{{ item.sizeName }}</span>
             </p>
+            <p v-if="item.isPreOrder" class="cart-item__preorder">
+              預購
+              <span v-if="item.preOrderShipDate">· 預計 {{ item.preOrderShipDate }} 出貨</span>
+            </p>
             <!-- Mobile price -->
             <p class="cart-item__price-mobile">NT$ {{ item.unitPrice.toLocaleString() }}</p>
           </div>
@@ -111,7 +132,7 @@ onMounted(async () => {
             <span class="qty-num">{{ item.qty }}</span>
             <button
               class="qty-btn"
-              :disabled="item.qty >= item.stockQty"
+              :disabled="item.isPreOrder ? item.qty >= 99 : item.qty >= item.stockQty"
               @click="cart.updateQty(item.id, item.qty + 1)"
             >+</button>
           </div>
@@ -136,8 +157,8 @@ onMounted(async () => {
         <h2 class="cart-summary__title">訂單摘要</h2>
 
         <div class="cart-summary__row">
-          <span>商品小計</span>
-          <span>NT$ {{ cart.total.toLocaleString() }}</span>
+          <span>已選商品</span>
+          <span>NT$ {{ cart.selectedTotal.toLocaleString() }}</span>
         </div>
         <div class="cart-summary__row">
           <span>運費</span>
@@ -147,13 +168,17 @@ onMounted(async () => {
         <div class="cart-summary__divider"></div>
 
         <div class="cart-summary__row cart-summary__row--total">
-          <span>商品小計</span>
-          <span>NT$ {{ cart.total.toLocaleString() }}</span>
+          <span>小計</span>
+          <span>NT$ {{ cart.selectedTotal.toLocaleString() }}</span>
         </div>
 
-        <RouterLink to="/checkout" class="cart-summary__checkout-btn">
+        <button
+          class="cart-summary__checkout-btn"
+          :disabled="cart.selectedItemIds.length === 0"
+          @click="router.push('/checkout')"
+        >
           前往結帳
-        </RouterLink>
+        </button>
 
         <RouterLink to="/products" class="cart-summary__continue">
           ← 繼續購物
@@ -257,7 +282,7 @@ onMounted(async () => {
 /* Items section */
 .cart-items__header {
   display: grid;
-  grid-template-columns: 88px 1fr 120px 100px 80px 36px;
+  grid-template-columns: 24px 88px 1fr 120px 100px 80px 36px;
   gap: 16px;
   padding: 0 0 12px;
   border-bottom: 1px solid var(--fe-border);
@@ -270,11 +295,27 @@ onMounted(async () => {
 
 .cart-item {
   display: grid;
-  grid-template-columns: 88px 1fr 120px 100px 80px 36px;
+  grid-template-columns: 24px 88px 1fr 120px 100px 80px 36px;
   gap: 16px;
   padding: 20px 0;
   border-bottom: 1px solid var(--fe-linen);
   align-items: center;
+  transition: opacity 0.2s;
+}
+
+.cart-item--unchecked { opacity: 0.4; }
+
+.cart-item__check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cart-item__checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--fe-text);
+  cursor: pointer;
 }
 
 /* Item image */
@@ -324,6 +365,13 @@ onMounted(async () => {
   font-size: 11.5px;
   color: var(--fe-muted);
   margin: 0;
+  letter-spacing: 0.04em;
+}
+
+.cart-item__preorder {
+  font-size: 11px;
+  color: var(--fe-gold-d);
+  margin: 4px 0 0;
   letter-spacing: 0.04em;
 }
 
@@ -464,9 +512,16 @@ onMounted(async () => {
   margin-bottom: 14px;
 }
 
-.cart-summary__checkout-btn:hover {
+.cart-summary__checkout-btn:hover:not(:disabled) {
   background: transparent;
   color: var(--fe-text);
+}
+
+.cart-summary__checkout-btn:disabled {
+  background: var(--fe-linen);
+  border-color: var(--fe-border);
+  color: var(--fe-muted);
+  cursor: not-allowed;
 }
 
 .cart-summary__continue {
@@ -504,8 +559,12 @@ onMounted(async () => {
   }
 
   .cart-item {
-    grid-template-columns: 88px 1fr 36px;
+    grid-template-columns: 24px 88px 1fr 36px;
     grid-template-rows: auto auto;
+  }
+
+  .cart-item__check {
+    grid-row: 1 / 3;
   }
 
   .cart-item__img-wrap {
@@ -513,17 +572,17 @@ onMounted(async () => {
   }
 
   .cart-item__info {
-    grid-column: 2;
+    grid-column: 3;
     grid-row: 1;
   }
 
   .cart-item__qty {
-    grid-column: 2;
+    grid-column: 3;
     grid-row: 2;
   }
 
   .cart-item__remove {
-    grid-column: 3;
+    grid-column: 4;
     grid-row: 1;
     align-self: start;
   }

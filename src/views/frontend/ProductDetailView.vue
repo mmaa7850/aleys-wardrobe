@@ -68,7 +68,10 @@ const selectedVariant = computed(() =>
   ) || null
 )
 
-const maxQty = computed(() => selectedVariant.value?.StockQty ?? 1)
+const maxQty = computed(() => {
+  if (isActivePreOrder.value) return 99
+  return selectedVariant.value?.StockQty ?? 1
+})
 
 watch(selectedVariant, () => { qty.value = 1 })
 
@@ -332,7 +335,7 @@ onMounted(async () => {
         </p>
 
         <!-- Quantity selector -->
-        <div v-if="selectedVariant && stockStatus?.cls !== 'out'" class="pd-qty-row">
+        <div v-if="selectedVariant && (stockStatus?.cls !== 'out' || isActivePreOrder)" class="pd-qty-row">
           <button class="pd-qty-btn" @click="decQty" :disabled="qty <= 1">−</button>
           <span class="pd-qty-val">{{ qty }}</span>
           <button class="pd-qty-btn" @click="incQty" :disabled="qty >= maxQty">+</button>

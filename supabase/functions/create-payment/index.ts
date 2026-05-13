@@ -55,7 +55,12 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json()
-    const { orderNo, amount, shippingFee = 0, shippingMethodCode = 'cvscom', shippingAddress = '', couponCode, email, itemDesc, recipientName, recipientPhone, customerNote, items } = body
+    const {
+      orderNo, amount, shippingFee = 0, shippingMethodCode = 'cvscom', shippingAddress = '',
+      couponCode, email, itemDesc, recipientName, recipientPhone, customerNote, items,
+      invoiceCarrierType = null, invoiceCarrierNum = null,
+      invoiceLoveCode = null, invoiceBuyerUBN = null, invoiceBuyerName = null,
+    } = body
 
     if (!orderNo || !amount || !email) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -185,6 +190,11 @@ Deno.serve(async (req) => {
         ShippingAddress: shippingAddress || '',
         StoreID: null,
         StoreName: null,
+        InvoiceCarrierType: invoiceCarrierType,
+        InvoiceCarrierNum:  invoiceCarrierNum,
+        InvoiceLoveCode:    invoiceLoveCode,
+        InvoiceBuyerUBN:    invoiceBuyerUBN,
+        InvoiceBuyerName:   invoiceBuyerName,
       })
       .select('ID')
       .single()

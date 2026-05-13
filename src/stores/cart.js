@@ -9,12 +9,17 @@ export const useCartStore = defineStore('cart', {
     memberDbId: null,
     items: [],
     isLoading: false,
+    selectedItemIds: [],
   }),
 
   getters: {
     itemCount: (state) => state.items.reduce((sum, item) => sum + item.qty, 0),
     total: (state) => state.items.reduce((sum, item) => sum + item.unitPrice * item.qty, 0),
     isEmpty: (state) => state.items.length === 0,
+    selectedItems: (state) => state.items.filter(i => state.selectedItemIds.includes(i.id)),
+    selectedTotal: (state) => state.items
+      .filter(i => state.selectedItemIds.includes(i.id))
+      .reduce((sum, i) => sum + i.unitPrice * i.qty, 0),
   },
 
   actions: {
@@ -113,7 +118,7 @@ export const useCartStore = defineStore('cart', {
         { data: variants },
       ] = await Promise.all([
         db.from('C_PRD_ProductList')
-          .select('ID, ProductName, Price, C_PRD_ProductPictureList(StoragePath, IsMain, Type)')
+          .select('ID, ProductName, Price, IsPreOrder, PreOrderShipDate, C_PRD_ProductPictureList(StoragePath, IsMain, Type)')
           .in('ID', productIds),
         db.from('C_PRD_ProductVariantList')
           .select('ID, ColorID, SizeID, StockQty')
@@ -168,6 +173,8 @@ export const useCartStore = defineStore('cart', {
           colorName: colorMap[variant.ColorID] || '',
           sizeName: sizeMap[variant.SizeID] || '',
           stockQty: variant.StockQty ?? 0,
+          isPreOrder: !!(product.IsPreOrder) && (variant.StockQty ?? 0) <= 0,
+          preOrderShipDate: product.PreOrderShipDate || null,
           imgUrl: media?.url || null,
           imgType: media?.type || 'image',
         }
@@ -237,11 +244,22 @@ export const useCartStore = defineStore('cart', {
       this.items = []
     },
 
+    initSelection() {
+      this.selectedItemIds = this.items.filter(i => !i.isPreOrder).map(i => i.id)
+    },
+
+    toggleSelection(id) {
+      const idx = this.selectedItemIds.indexOf(id)
+      if (idx >= 0) this.selectedItemIds.splice(idx, 1)
+      else this.selectedItemIds.push(id)
+    },
+
     reset() {
       this.cartId = null
       this.memberDbId = null
       this.items = []
       this.isLoading = false
+      this.selectedItemIds = []
     },
   },
 })

@@ -70,14 +70,17 @@
 **已實作範圍：**
 - 後台訂單詳情新增「電子發票」卡片：顯示狀態 badge、發票號碼、隨機碼、折讓資訊
 - Footer 按鈕：開立發票 / 作廢發票 / 開立折讓（含折讓金額 inline 輸入）
-- Edge Function `issue-invoice`：支援 `issue` / `void` / `allowance` 三個 action
+- Edge Function `issue-invoice`：支援 `issue` / `void` / `allowance` 三個 action；依儲存的發票偏好自動判斷 B2B/B2C、載具、捐贈等參數
 - Migration `add_invoice_fields.sql`：新增 7 個 Invoice* 欄位至 `C_ORD_OrderList`
+- **結帳頁發票偏好選擇**：顧客可在結帳時選擇發票方式（紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編），各有格式驗證，存入訂單後供後台開立發票時使用
+- Migration `add_invoice_preference_fields.sql`：新增 5 個 `InvoiceCarrierType`/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName` 欄位至 `C_ORD_OrderList`（public + staging schema）
 
 **上線前需完成的步驟：**
 
-1. **執行 migration**（Supabase Dashboard → SQL Editor）
+1. **執行 migration**（Supabase Dashboard → SQL Editor，兩個 migration 都要執行）
    ```
    supabase/migrations/add_invoice_fields.sql
+   supabase/migrations/add_invoice_preference_fields.sql
    ```
 
 2. **設定環境變數**（Supabase Dashboard → Edge Functions → Secrets）
@@ -99,10 +102,8 @@
 > 需要先去 https://www.ezpay.com.tw 申請，開通「電子發票加值服務」後才能取得商店代號 + Hash Key + Hash IV。
 > 申請後把這三個值填入 Supabase Edge Function Secrets 即可（詳見上方「上線前帳號切換清單」）。
 
-> ❓ **Q2：發票格式確認**
-> 目前實作預設為 B2C、應稅（5%）、PrintFlag=Y（客人索取紙本）。
-> 結帳流程**沒有**讓客人選載具（手機條碼/自然人憑證/ezPay 載具）或捐贈碼。
-> → 這樣可以嗎？還是要在結帳頁加入載具選擇欄位？
+> ✅ **Q2：發票格式確認 — 已實作**
+> 結帳頁已加入發票偏好選擇（紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編），存入訂單後供後台開立發票時自動帶入正確 ezPay 參數。
 
 > ❓ **Q3：退款 + 發票的操作流程**
 > 目前設計是「退款」和「發票作廢/折讓」**分開兩個操作**（分別按各自的按鈕）。

@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     const { data: order, error: orderErr } = await supabaseAdmin
       .schema(dbSchema)
       .from('C_ORD_OrderList')
-      .select('ID, OrderNo, FinalAmount, ShippingFee, PaymentStatus, CustomerName, CustomerEmail, InvoiceStatus, InvoiceNo, InvoiceNumber, InvoiceRandomNum')
+      .select('ID, OrderNo, FinalAmount, ShippingFee, PaymentStatus, CustomerName, CustomerEmail, InvoiceStatus, InvoiceNo, InvoiceNumber, InvoiceRandomNum, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN, InvoiceBuyerName')
       .eq('OrderNo', orderNo)
       .single()
 
@@ -117,15 +117,27 @@ Deno.serve(async (req) => {
         itemAmts.push(String(shippingFee))
       }
 
+      const isB2B      = order.InvoiceCarrierType === 'B2B'
+      const isDonate   = order.InvoiceCarrierType === 'D'
+      const hasCarrier = ['0', '1', '2'].includes(order.InvoiceCarrierType ?? '')
+
+      // B2B 發票用未稅金額當 ItemPrice
+      const b2bItemPrices = [String(Math.round(goodsAmt / 1.05))]
+      const b2bItemAmts   = [String(Math.round(goodsAmt / 1.05))]
+      if (shippingFee > 0) {
+        b2bItemPrices.push(String(Math.round(shippingFee / 1.05)))
+        b2bItemAmts.push(String(Math.round(shippingFee / 1.05)))
+      }
+
       const params: Record<string, string> = {
         RespondType:     'JSON',
         Version:         '1.5',
         TimeStamp:       String(Math.floor(Date.now() / 1000)),
         MerchantOrderNo: order.OrderNo,
         Status:          '1',
-        Category:        'B2C',
-        BuyerName:       order.CustomerName || '消費者',
-        PrintFlag:       'Y',
+        Category:        isB2B ? 'B2B' : 'B2C',
+        BuyerName:       isB2B ? (order.InvoiceBuyerName || order.CustomerName || '公司') : (order.CustomerName || '消費者'),
+        PrintFlag:       (hasCarrier || isDonate) ? 'N' : 'Y',
         TaxType:         '1',
         TaxRate:         '5',
         Amt:             String(amt),
@@ -134,9 +146,13 @@ Deno.serve(async (req) => {
         ItemName:        itemNames.join('|'),
         ItemCount:       itemCounts.join('|'),
         ItemUnit:        itemUnits.join('|'),
-        ItemPrice:       itemPrices.join('|'),
-        ItemAmt:         itemAmts.join('|'),
+        ItemPrice:       isB2B ? b2bItemPrices.join('|') : itemPrices.join('|'),
+        ItemAmt:         isB2B ? b2bItemAmts.join('|')   : itemAmts.join('|'),
       }
+
+      if (isB2B && order.InvoiceBuyerUBN)         params.BuyerUBN     = order.InvoiceBuyerUBN
+      if (hasCarrier && order.InvoiceCarrierNum)   { params.CarrierType = order.InvoiceCarrierType!; params.CarrierNum = encodeURIComponent(order.InvoiceCarrierNum) }
+      if (isDonate && order.InvoiceLoveCode)        params.LoveCode     = order.InvoiceLoveCode
       if (order.CustomerEmail) params.BuyerEmail = order.CustomerEmail
 
       const apiData = await callEzpay('invoice_issue', params)
