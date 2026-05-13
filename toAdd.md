@@ -1,6 +1,43 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-10
+> 更新時間：2026-05-13
+
+---
+
+## 🚀 正式上線前：帳號 & 憑證切換清單
+
+> 目前所有第三方服務均使用**開發測試帳號**，正式上線前必須換成使用者自己的帳號。
+
+### 需要切換的服務
+
+| 服務 | 設定位置 | 狀態 | 需要什麼 |
+|------|----------|------|----------|
+| **藍新金流 MPG** | Vercel 環境變數 | ⚠️ 待切換 | 商店代號、Hash Key、Hash IV、`RespondURL`/`NotifyURL` 改正式網址 |
+| **藍新物流** | Vercel 環境變數 | ⚠️ 待切換 | 物流商店代號、Hash Key、Hash IV |
+| **Supabase 專案** | Vercel 環境變數 + Edge Function Secrets | ⚠️ 待確認 | 是否要開新的正式 Supabase 專案，或沿用現在這個 |
+| **LINE OAuth** | Supabase Dashboard → Auth → Providers → LINE | ⚠️ 待切換 | 使用者自己的 LINE Login Channel ID / Secret（目前用開發測試 Channel） |
+| **LINE OA 浮動按鈕** | 後台系統設定 → `line_oa_url` | ⚠️ 待設定 | 使用者 LINE 官方帳號的連結網址 |
+| **Google Analytics 4** | Vercel 環境變數 `VITE_GA_MEASUREMENT_ID` | ⚠️ 待切換 | 使用者申請自己的 GA4 屬性，取得 `G-XXXXXXXXXX` |
+| **ezPay 電子發票** | Supabase Edge Function Secrets | ❌ 帳號未申請 | 需先申請 ezPay 帳號 → 取得商店代號、Hash Key、Hash IV |
+| **FB Developer App** | Supabase Dashboard → Auth → Providers → Facebook | ❌ 帳號未申請 | 需先建立 FB App → 取得 App ID、App Secret |
+| **Vercel 部署** | Vercel 專案設定 | ⚠️ 待確認 | 正式網域綁定（目前用 vercel.app 預設網址） |
+
+### 額外要在後台設定的（不是環境變數）
+
+| 設定 | 位置 | 說明 |
+|------|------|------|
+| 公告文字 | 後台 → 系統設定 → `announcement` | 上線時可設定開幕公告 |
+| LINE OA 網址 | 後台 → 系統設定 → `line_oa_url` | 右下角浮動按鈕 |
+| GA Looker Studio | 後台 → 系統設定 → `ga_looker_studio_url` | 報表頁嵌入連結（選填） |
+| 付款方式名稱 | 後台 → 付款方式設定 | 確認顯示名稱符合正式環境 |
+| 配送方式與運費 | 後台 → 配送方式設定 | 確認費用正確 |
+| 管理員帳號 | 後台 → 管理者帳號 | 確認正式帳號都有設定權限 |
+
+### 未來可能需要
+| 服務 | 狀態 | 說明 |
+|------|------|------|
+| **Resend / SendGrid（SMTP）** | ❌ 尚未決定 | 訂單通知信、發票通知信用；需先決定是否要做 Email 通知 |
+| **FB Developer App 留言權限** | ❌ 尚未申請 | `pages_read_engagement` App Review，直播自動化才需要 |
 
 ---
 
@@ -58,9 +95,9 @@
 
 **需使用者確認的問題：**
 
-> ❓ **Q1：ezPay 帳號申請了嗎？**
-> 需要有商店代號 + Hash Key + Hash IV 才能測試。
-> 申請連結：https://www.ezpay.com.tw
+> ❌ **Q1：ezPay 帳號尚未申請**
+> 需要先去 https://www.ezpay.com.tw 申請，開通「電子發票加值服務」後才能取得商店代號 + Hash Key + Hash IV。
+> 申請後把這三個值填入 Supabase Edge Function Secrets 即可（詳見上方「上線前帳號切換清單」）。
 
 > ❓ **Q2：發票格式確認**
 > 目前實作預設為 B2C、應稅（5%）、PrintFlag=Y（客人索取紙本）。
