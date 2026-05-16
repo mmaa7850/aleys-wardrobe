@@ -18,7 +18,7 @@
 | **Facebook OAuth** | Supabase Dashboard → Auth → Providers → Facebook | ⚠️ 程式碼已完成，等客戶提供 FB App ID/Secret | 客戶需建立 FB Developer App，取得 App ID + App Secret，填入 Supabase |
 | **LINE OA 浮動按鈕** | 後台系統設定 → `line_oa_url` | ⚠️ 待設定 | 使用者 LINE 官方帳號的連結網址 |
 | **Google Analytics 4** | Vercel 環境變數 `VITE_GA_MEASUREMENT_ID` | ⚠️ 待切換 | 使用者申請自己的 GA4 屬性，取得 `G-XXXXXXXXXX` |
-| **ezPay 電子發票** | Supabase Edge Function Secrets | ✅ 已設定 | 商店代號、Hash Key、Hash IV 已填入 Supabase Edge Function Secrets |
+| **ezPay 電子發票** | Supabase Edge Function Secrets + ezPay 商家後台 | ⚠️ Secrets 已填入，但開票失敗（INV90005） | 需在 ezPay 商家後台確認「電子發票加值服務」是否已開通、合約是否生效 |
 | **FB Developer App** | Supabase Dashboard → Auth → Providers → Facebook | ⚠️ 程式碼已完成，等客戶提供 FB App ID/Secret | 客戶需建立 FB Developer App，取得 App ID + App Secret，填入 Supabase |
 | **Vercel 部署** | Vercel 專案設定 | ⚠️ 待確認 | 正式網域綁定（目前用 vercel.app 預設網址） |
 
@@ -58,7 +58,7 @@
   - **優惠券效益** `/admin/reports/coupons`：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃
   - **訂單狀態分佈** `/admin/reports/orders`：甜甜圈圖 + 付款狀態明細表
   - **會員成長趨勢** `/admin/reports/members`：近12月柱狀圖；累積會員/本月活躍/回購會員 stat card
-- **錢包系統**：儲值（走藍新 MPG）、自動開立 ezPay 發票、錢包餘額折抵結帳（全額/部分）、混合付款（錢包+藍新）、全錢包免走藍新、退款退回錢包、手動調整餘額（後台）、RLS 政策；新增 DB 表：C_MBR_WalletList / C_MBR_WalletTxList / C_MBR_WalletTopupList；C_ORD_OrderList 新增 WalletDeductAmt / NewebpayAmt 欄位；新增 4 個 Edge Functions：wallet-topup / wallet-topup-notify / wallet-topup-return / wallet-adjust；前台 /wallet 頁面；後台 /admin/wallet 頁面；會員中心快捷入口
+- **錢包系統**：儲值（走藍新 MPG）、自動開立 ezPay 發票（⚠️ 待 ezPay 電子發票加值服務開通後完整測試）、錢包餘額折抵結帳（全額/部分）、混合付款（錢包+藍新）、全錢包免走藍新、退款退回錢包、手動調整餘額（後台）、RLS 政策；新增 DB 表：C_MBR_WalletList / C_MBR_WalletTxList / C_MBR_WalletTopupList；C_ORD_OrderList 新增 WalletDeductAmt / NewebpayAmt 欄位；新增 4 個 Edge Functions：wallet-topup / wallet-topup-notify / wallet-topup-return / wallet-adjust；前台 /wallet 頁面；後台 /admin/wallet 頁面；會員中心快捷入口
 
 ---
 
