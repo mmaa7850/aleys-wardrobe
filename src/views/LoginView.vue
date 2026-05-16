@@ -16,7 +16,7 @@ const confirmPw   = ref("");
 const errorMsg    = ref("");
 const successMsg  = ref("");
 const isSubmitting = ref(false);
-const lineLoading  = ref(false);
+const fbLoading    = ref(false);
 
 function switchMode(m) {
   mode.value = m;
@@ -93,14 +93,14 @@ const onRegister = async () => {
   }
 };
 
-const onLineLogin = async () => {
+const onFbLogin = async () => {
   errorMsg.value = "";
-  lineLoading.value = true;
+  fbLoading.value = true;
   try {
-    await auth.signInWithLine();
+    await auth.signInWithFacebook();
   } catch (e) {
-    errorMsg.value = e?.message || "LINE 登入失敗";
-    lineLoading.value = false;
+    errorMsg.value = e?.message || "Facebook 登入失敗";
+    fbLoading.value = false;
   }
 };
 
@@ -155,21 +155,21 @@ const onForgotPassword = async () => {
 
         <p v-if="errorMsg" class="msg msg--error">{{ errorMsg }}</p>
 
-        <button class="btn" type="submit" :disabled="isSubmitting || lineLoading">
+        <button class="btn" type="submit" :disabled="isSubmitting || fbLoading">
           {{ isSubmitting ? '登入中...' : '登入' }}
         </button>
 
-        <button class="link-btn" type="button" @click="onForgotPassword" :disabled="isSubmitting || lineLoading">
+        <button class="link-btn" type="button" @click="onForgotPassword" :disabled="isSubmitting || fbLoading">
           忘記密碼？
         </button>
 
         <div class="divider"><span>或</span></div>
 
-        <button class="btn-line" type="button" @click="onLineLogin" :disabled="isSubmitting || lineLoading">
+        <button class="btn-fb" type="button" @click="onFbLogin" :disabled="isSubmitting || fbLoading">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+            <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
           </svg>
-          <span>{{ lineLoading ? '連線中...' : '使用 LINE 登入' }}</span>
+          <span>{{ fbLoading ? '連線中...' : '使用 Facebook 登入' }}</span>
         </button>
       </form>
 
@@ -197,11 +197,11 @@ const onForgotPassword = async () => {
 
         <div class="divider"><span>或</span></div>
 
-        <button class="btn-line" type="button" @click="onLineLogin" :disabled="isSubmitting || lineLoading">
+        <button class="btn-fb" type="button" @click="onFbLogin" :disabled="isSubmitting || fbLoading">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.348 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/>
+            <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
           </svg>
-          <span>{{ lineLoading ? '連線中...' : '使用 LINE 快速註冊' }}</span>
+          <span>{{ fbLoading ? '連線中...' : '使用 Facebook 快速註冊' }}</span>
         </button>
       </form>
 
@@ -315,8 +315,8 @@ const onForgotPassword = async () => {
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.65; cursor: not-allowed; }
 
-/* LINE 按鈕 */
-.btn-line {
+/* Facebook 按鈕 */
+.btn-fb {
   width: 100%;
   padding: 12px 14px;
   border-radius: 14px;
@@ -325,7 +325,7 @@ const onForgotPassword = async () => {
   font-weight: 600;
   font-size: 14px;
   color: #fff;
-  background: #06C755;
+  background: #1877F2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -333,9 +333,9 @@ const onForgotPassword = async () => {
   transition: background 0.15s, transform 0.06s, opacity 0.15s;
 }
 
-.btn-line:hover { background: #05b34c; }
-.btn-line:active { transform: translateY(1px); }
-.btn-line:disabled { opacity: 0.65; cursor: not-allowed; }
+.btn-fb:hover { background: #166FE5; }
+.btn-fb:active { transform: translateY(1px); }
+.btn-fb:disabled { opacity: 0.65; cursor: not-allowed; }
 
 /* 分隔線 */
 .divider {

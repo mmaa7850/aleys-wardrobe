@@ -97,9 +97,9 @@ export const useAuthStore = defineStore("auth", {
       return data
     },
 
-    async signInWithLine() {
+    async signInWithFacebook() {
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "custom:line",
+        provider: "facebook",
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
         },
