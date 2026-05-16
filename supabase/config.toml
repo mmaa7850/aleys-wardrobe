@@ -1,0 +1,20 @@
+# Supabase 專案設定
+# 文件：https://supabase.com/docs/guides/cli/config
+
+[functions.payment-notify]
+verify_jwt = false   # 藍新 server-to-server callback，無 JWT
+
+[functions.payment-return]
+verify_jwt = false   # 藍新付款後瀏覽器 redirect，無 JWT
+
+[functions.logistics-notify]
+verify_jwt = false   # 物流 server-to-server callback，無 JWT
+
+[functions.store-callback]
+verify_jwt = false   # 超商門市選擇 callback，無 JWT
+
+[functions.wallet-topup-notify]
+verify_jwt = false   # 藍新儲值 server-to-server callback，無 JWT
+
+[functions.wallet-topup-return]
+verify_jwt = false   # 藍新儲值付款後瀏覽器 redirect，無 JWT
