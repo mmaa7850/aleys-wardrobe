@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-10（電子發票欄位 — 待測試）
+> 更新時間：2026-05-16
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -12,6 +12,7 @@
 | `add_shipping_method_fields.sql` | 新增 ShippingMethod / HomeDelivery* 欄位 | ✅ 已執行 |
 | `add_trade_no.sql` | 新增 TradeNo 欄位（藍新退款用） | ✅ 已執行 |
 | `add_invoice_fields.sql` | 新增 Invoice* 7 個欄位（電子發票） | ⚠️ 待執行 |
+| `add_wallet_tables.sql` | 新增錢包系統三張表 + C_ORD_OrderList 兩個欄位 | ✅ 已執行 |
 
 ---
 
@@ -145,6 +146,53 @@ WITH CHECK (
 | ProductID | bigint | NO | — |
 | CreatedDate | timestamptz | YES | now() |
 
+### C_MBR_WalletList
+| 欄位 | 型別 | Nullable | Default |
+|------|------|----------|---------|
+| ID | SERIAL | NO | — |
+| MemberID | uuid | NO | UNIQUE, REFERENCES auth.users(id) |
+| Balance | integer | NO | 0, CHECK >= 0 |
+| CreatedDate | timestamptz | NO | now() |
+| UpdatedDate | timestamptz | NO | now() |
+
+### C_MBR_WalletTxList
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| ID | SERIAL | NO | — | |
+| MemberID | uuid | NO | — | |
+| TxType | varchar(20) | NO | — | 'topup' / 'order_deduct' / 'refund' / 'adjust' |
+| Amount | integer | NO | — | 正數=入帳, 負數=扣款 |
+| BalanceBefore | integer | NO | — | |
+| BalanceAfter | integer | NO | — | |
+| RelatedOrderNo | varchar(50) | YES | — | |
+| RelatedTopupNo | varchar(50) | YES | — | |
+| Note | text | YES | — | |
+| CreatedBy | uuid | YES | — | 管理員手動調整時填入 |
+| CreatedDate | timestamptz | NO | now() | |
+
+### C_MBR_WalletTopupList
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| ID | SERIAL | NO | — | |
+| TopupNo | varchar(50) | NO | UNIQUE | |
+| MemberID | uuid | NO | — | |
+| Amount | integer | NO | — | CHECK > 0 |
+| PaymentStatus | varchar(20) | NO | 'pending' | 'pending' / 'paid' / 'failed' |
+| InvoiceStatus | varchar(20) | NO | 'none' | 'none' / 'issued' |
+| InvoiceNo | varchar(20) | YES | — | |
+| InvoiceNumber | varchar(10) | YES | — | |
+| InvoiceRandomNum | varchar(4) | YES | — | |
+| InvoiceIssuedAt | timestamptz | YES | — | |
+| InvoiceCarrierType | varchar(10) | YES | — | |
+| InvoiceCarrierNum | varchar(50) | YES | — | |
+| InvoiceLoveCode | varchar(10) | YES | — | |
+| InvoiceBuyerUBN | varchar(8) | YES | — | |
+| TradeNo | varchar(50) | YES | — | |
+| PaymentMethod | varchar(20) | YES | — | |
+| PaidAt | timestamptz | YES | — | |
+| CreatedDate | timestamptz | NO | now() | |
+| UpdatedDate | timestamptz | NO | now() | |
+
 ### C_ORD_OrderItemList
 | 欄位 | 型別 | Nullable | Default |
 |------|------|----------|---------|
@@ -206,6 +254,8 @@ WITH CHECK (
 | InvoiceIssuedAt ⚠️ 待測試 | timestamptz | YES | — | 發票開立時間 |
 | InvoiceAllowanceNo ⚠️ 待測試 | varchar(25) | YES | — | 折讓號 |
 | InvoiceAllowanceAmt ⚠️ 待測試 | integer | YES | — | 折讓金額（NT$） |
+| WalletDeductAmt | integer | NO | 0 | 錢包折抵金額 |
+| NewebpayAmt | integer | NO | 0 | 藍新實付金額（0 = 全錢包支付）|
 
 ### C_ORD_OrderStatusLog
 | 欄位 | 型別 | Nullable | Default |
@@ -626,6 +676,27 @@ WITH CHECK (
 | admin_update | authenticated | UPDATE | staging.is_admin() |
 | admin_delete | authenticated | DELETE | staging.is_admin() |
 | self_select | authenticated | SELECT | UserId = auth.uid()（任何管理員可讀自己那筆，loadAdminProfile 使用）|
+
+### C_MBR_WalletList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| members can read own wallet | authenticated | SELECT | MemberID = auth.uid() |
+
+> INSERT/UPDATE/DELETE 僅由 Edge Functions 使用 service_role 執行（繞過 RLS），無公開寫入政策。
+
+### C_MBR_WalletTxList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| members can read own wallet tx | authenticated | SELECT | MemberID = auth.uid() |
+
+> INSERT/UPDATE/DELETE 僅由 Edge Functions 使用 service_role 執行（繞過 RLS），無公開寫入政策。
+
+### C_MBR_WalletTopupList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| members can read own topup | authenticated | SELECT | MemberID = auth.uid() |
+
+> INSERT/UPDATE/DELETE 僅由 Edge Functions 使用 service_role 執行（繞過 RLS），無公開寫入政策。
 
 ---
 

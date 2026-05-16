@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-13
+> 更新時間：2026-05-16
 
 ---
 
@@ -15,11 +15,11 @@
 | **藍新金流 MPG** | Vercel 環境變數 | ⚠️ 待切換 | 商店代號、Hash Key、Hash IV、`RespondURL`/`NotifyURL` 改正式網址 |
 | **藍新物流** | Vercel 環境變數 | ⚠️ 待切換 | 物流商店代號、Hash Key、Hash IV |
 | **Supabase 專案** | Vercel 環境變數 + Edge Function Secrets | ⚠️ 待確認 | 是否要開新的正式 Supabase 專案，或沿用現在這個 |
-| **LINE OAuth** | Supabase Dashboard → Auth → Providers → LINE | ⚠️ 待切換 | 使用者自己的 LINE Login Channel ID / Secret（目前用開發測試 Channel） |
+| **Facebook OAuth** | Supabase Dashboard → Auth → Providers → Facebook | ⚠️ 程式碼已完成，等客戶提供 FB App ID/Secret | 客戶需建立 FB Developer App，取得 App ID + App Secret，填入 Supabase |
 | **LINE OA 浮動按鈕** | 後台系統設定 → `line_oa_url` | ⚠️ 待設定 | 使用者 LINE 官方帳號的連結網址 |
 | **Google Analytics 4** | Vercel 環境變數 `VITE_GA_MEASUREMENT_ID` | ⚠️ 待切換 | 使用者申請自己的 GA4 屬性，取得 `G-XXXXXXXXXX` |
-| **ezPay 電子發票** | Supabase Edge Function Secrets | ❌ 帳號未申請 | 需先申請 ezPay 帳號 → 取得商店代號、Hash Key、Hash IV |
-| **FB Developer App** | Supabase Dashboard → Auth → Providers → Facebook | ❌ 帳號未申請 | 需先建立 FB App → 取得 App ID、App Secret |
+| **ezPay 電子發票** | Supabase Edge Function Secrets | ✅ 已設定 | 商店代號、Hash Key、Hash IV 已填入 Supabase Edge Function Secrets |
+| **FB Developer App** | Supabase Dashboard → Auth → Providers → Facebook | ⚠️ 程式碼已完成，等客戶提供 FB App ID/Secret | 客戶需建立 FB Developer App，取得 App ID + App Secret，填入 Supabase |
 | **Vercel 部署** | Vercel 專案設定 | ⚠️ 待確認 | 正式網域綁定（目前用 vercel.app 預設網址） |
 
 ### 額外要在後台設定的（不是環境變數）
@@ -58,6 +58,7 @@
   - **優惠券效益** `/admin/reports/coupons`：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃
   - **訂單狀態分佈** `/admin/reports/orders`：甜甜圈圖 + 付款狀態明細表
   - **會員成長趨勢** `/admin/reports/members`：近12月柱狀圖；累積會員/本月活躍/回購會員 stat card
+- **錢包系統**：儲值（走藍新 MPG）、自動開立 ezPay 發票、錢包餘額折抵結帳（全額/部分）、混合付款（錢包+藍新）、全錢包免走藍新、退款退回錢包、手動調整餘額（後台）、RLS 政策；新增 DB 表：C_MBR_WalletList / C_MBR_WalletTxList / C_MBR_WalletTopupList；C_ORD_OrderList 新增 WalletDeductAmt / NewebpayAmt 欄位；新增 4 個 Edge Functions：wallet-topup / wallet-topup-notify / wallet-topup-return / wallet-adjust；前台 /wallet 頁面；後台 /admin/wallet 頁面；會員中心快捷入口
 
 ---
 
@@ -266,12 +267,14 @@ CreatedDate     timestamptz
 
 ### 2. FB 帳號登入 / 綁定（FB OAuth）
 
-官網目前支援 Email 登入與 LINE OAuth，需新增 FB OAuth 作為第三種登入方式，同時允許已有 Email 帳號的會員在會員中心綁定 FB。
+**程式碼已完成，等待客戶提供 FB App ID/Secret。**
 
-**需實作的範圍：**
-- 登入頁新增「使用 Facebook 登入」按鈕（與 LINE OAuth 相同模式）
-- 會員中心新增「綁定 Facebook 帳號」選項（已登入 Email 帳號的用戶可操作）
-- FB OAuth 回調處理（`/auth/callback` 已有 LINE 的處理邏輯，擴充即可）
+官網已實作 FB OAuth 登入（Facebook 藍色按鈕，`#1877F2`），並允許已有 Email 帳號的會員在會員中心綁定 FB。
+
+**已完成的範圍：**
+- 登入頁新增「使用 Facebook 登入」按鈕（FB f logo，藍色 #1877F2）
+- 會員中心「綁定 Facebook 帳號」選項（已登入 Email 帳號的用戶可操作）
+- FB OAuth 回調處理（`/auth/callback` 已整合）
 - FB User ID 存入 `C_MBR_MemberSocialList`（Platform=`facebook`, SocialUserID=FB_User_ID）
 
 **為什麼需要這個功能：**
@@ -279,18 +282,16 @@ CreatedDate     timestamptz
 - 對客人來說，不需要記密碼，直接用 FB 登入更方便
 
 **技術說明：**
-- Supabase Auth 原生支援 FB OAuth Provider（與 LINE 設定方式相同）
+- Supabase Auth 原生支援 FB OAuth Provider
 - 需要在 FB Developer Console 建立 App，取得 App ID + App Secret
 - Supabase Dashboard → Auth → Providers → Facebook → 填入 App ID / App Secret
 
 **需使用者確認的問題：**
 
-> ❓ **Q1：FB Developer App 申請了嗎？**
-> 需要有 FB App ID + App Secret 才能啟用 FB OAuth。
+> ⚠️ **Q1：客戶需建立 FB Developer App**
+> 程式碼已完成，只差 FB App ID + App Secret。
+> 客戶需至 https://developers.facebook.com 建立 App，取得 App ID + App Secret，填入 Supabase Dashboard → Auth → Providers → Facebook。
 > 若直播自動化同時在申請 `pages_read_engagement` 權限，可用同一個 App。
-
-> ❓ **Q2：登入頁的 FB 按鈕，要在哪個時間點上線？**
-> 建議和直播 CSV 工具一起上線，讓客人在直播前先綁定 FB 帳號，Phase 2 自動化才有資料可用。
 
 ---
 
@@ -416,52 +417,3 @@ CreatedDate     timestamptz
 
 ---
 
-### 10. 客戶錢包 / 儲值（暫緩，待會計確認）
-
-**⚠️ 實作前需請會計師確認「儲值不開發票、消費開發票」符合記帳需求。**
-
-**功能範圍：**
-- 會員錢包餘額，可折抵消費（部分折抵，差額走一般金流）
-- 儲值走藍新 MPG，消費發票改用藍新獨立電子發票 API 開立完整金額
-- 滿額贈贈點（與實付金額分開記錄）
-
-**✅ 已確認：混合付款設計**
-> 客人錢包餘額不足以支付整筆訂單時，**不需先儲值補足**，直接折抵現有餘額，差額走正常付款流程（藍新）。
->
-> **範例：** 訂單 NT$1,000，錢包餘額 NT$300
-> → 系統自動折抵 NT$300，客人只需透過藍新支付 NT$700
-> → 結帳頁顯示：小計 + 運費 − 折扣 − 錢包折抵 = 實付金額
-
-**混合付款流程設計（結帳頁）：**
-1. 登入後顯示「使用錢包折抵」選項 + 目前餘額
-2. 勾選後計算：`實付金額 = FinalAmount − min(錢包餘額, FinalAmount)`
-3. 若實付金額 > 0 → 走藍新 MPG，金額改為實付金額
-4. 若實付金額 = 0 → 不走藍新，直接建立訂單並標記 `paid`
-5. 付款成功後：呼叫 edge function 扣除錢包餘額，寫入 `WalletTransactionList`
-
-**發票金額：**
-- 發票開立金額 = 整筆訂單金額（含錢包折抵部分，以完整消費金額開立）
-
-**DB 設計方向：**
-- `C_MBR_WalletList`：錢包餘額（`Balance` bigint）
-- `C_MBR_WalletTransactionList`：每筆異動 log
-  - `Type`：`topup`（儲值）/ `consume`（消費折抵）/ `refund`（退款退回）/ `bonus`（贈點）
-  - `Amount`：異動金額（正數 = 增加，負數 = 減少）
-  - `OrderID`：關聯訂單（消費/退款時填入）
-  - `Note`：備注
-- 餘額只能透過 edge function 異動（RLS 擋前端直接 UPDATE）
-
-**需使用者確認的問題：**
-
-> ❓ **Q1：會計師確認了嗎？**
-> 這是硬性前提，確認前不開發。
-
-> ❓ **Q2：退款時錢包折抵的部分要怎麼退？**
-> 客人用錢包折抵 NT$300 + 藍新付 NT$700，全額退款時：
-> 選項 A：NT$700 退刷信用卡 + NT$300 退回錢包
-> 選項 B：NT$1,000 全部退回錢包（最簡單，但客人可能不接受）
-> 選項 C：NT$1,000 全部退刷信用卡（藍新 API 只能退原付款金額 NT$700，無法做）
-> → **建議選項 A**（分開退回各自來源），需確認。
-
-> ❓ **Q3：錢包餘額上限？**
-> 是否設定單一帳號最高可儲值金額（防止異常儲值 / 洗錢風險）？
