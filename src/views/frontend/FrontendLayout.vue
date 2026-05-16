@@ -102,6 +102,7 @@ onUnmounted(() => {
             <div v-if="memberMenuOpen" class="fe-member-menu">
               <div class="fe-member-menu__email">{{ auth.user?.email }}</div>
               <RouterLink to="/account" class="fe-member-menu__item" @click="memberMenuOpen = false">我的帳號</RouterLink>
+              <RouterLink to="/wallet" class="fe-member-menu__item" @click="memberMenuOpen = false">我的錢包</RouterLink>
               <RouterLink to="/wishlist" class="fe-member-menu__item" @click="memberMenuOpen = false">我的喜好清單</RouterLink>
               <RouterLink v-if="!auth.canEnterAdmin" to="/coupons" class="fe-member-menu__item" @click="memberMenuOpen = false">優惠券專區</RouterLink>
               <button class="fe-member-menu__item fe-member-menu__item--danger" @click="onSignOut">登出</button>
