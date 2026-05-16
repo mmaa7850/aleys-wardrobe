@@ -34,6 +34,7 @@ export default {
       members: "Members",
       memberList: "Member List",
       memberLevels: "Member Levels",
+      wallet: "Wallet",
     },
   },
   common: {

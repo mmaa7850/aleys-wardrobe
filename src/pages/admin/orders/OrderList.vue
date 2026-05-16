@@ -337,9 +337,15 @@ const doRefund = async (manual = false) => {
 };
 
 // ── Invoice actions ───────────────────────────────────
+// 全額錢包付款（NewebpayAmt=0, WalletDeductAmt>0）→ 不需開發票
+const isFullWalletOrder = computed(() =>
+  (detailOrder.value?.NewebpayAmt ?? 0) === 0 &&
+  (detailOrder.value?.WalletDeductAmt ?? 0) > 0
+);
 const canIssueInvoice = computed(() =>
   detailOrder.value?.PaymentStatus === 'paid' &&
-  (!detailOrder.value?.InvoiceStatus || detailOrder.value?.InvoiceStatus === 'none')
+  (!detailOrder.value?.InvoiceStatus || detailOrder.value?.InvoiceStatus === 'none') &&
+  !isFullWalletOrder.value
 );
 const canVoidInvoice = computed(() => detailOrder.value?.InvoiceStatus === 'issued');
 const canAllowance   = computed(() => detailOrder.value?.InvoiceStatus === 'issued');
@@ -652,6 +658,14 @@ onMounted(async () => {
                       <dt class="fw-semibold text-dark">{{ t("order.orders.labelFinalAmount") }}</dt>
                       <dd class="fw-bold text-primary">NT$ {{ detailOrder.FinalAmount?.toLocaleString() }}</dd>
 
+                      <!-- 錢包付款明細 -->
+                      <template v-if="(detailOrder.WalletDeductAmt ?? 0) > 0">
+                        <dt>錢包扣款</dt>
+                        <dd class="text-purple">－ NT$ {{ detailOrder.WalletDeductAmt?.toLocaleString() }}</dd>
+                        <dt class="fw-semibold">藍新付款</dt>
+                        <dd class="fw-semibold">NT$ {{ detailOrder.NewebpayAmt?.toLocaleString() }}</dd>
+                      </template>
+
                       <dt>{{ t("order.orders.labelPaymentFee") }}</dt>
                       <dd>{{ detailOrder.PaymentFee != null ? `NT$ ${detailOrder.PaymentFee.toLocaleString()}` : "-" }}</dd>
                     </dl>
@@ -927,7 +941,14 @@ onMounted(async () => {
           </template>
 
           <!-- 發票按鈕 -->
-          <template v-if="detailOrder && canIssueInvoice">
+          <!-- 全額錢包付款：顯示說明，不顯示開立按鈕 -->
+          <template v-if="detailOrder && isFullWalletOrder &&
+            (!detailOrder.InvoiceStatus || detailOrder.InvoiceStatus === 'none')">
+            <span class="badge bg-secondary" style="font-size:12px;padding:6px 10px;font-weight:500;">
+              儲值時已開立，本筆無需開立
+            </span>
+          </template>
+          <template v-else-if="detailOrder && canIssueInvoice">
             <button type="button" class="btn btn-outline-success" :disabled="invoiceLoading"
               @click="doInvoiceAction('issue')">
               <span v-if="invoiceLoading" class="spinner-border spinner-border-sm me-1"></span>
@@ -961,6 +982,8 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.text-purple { color: #7c3aed; }
+
 .info-dl {
   display: grid;
   grid-template-columns: auto 1fr;

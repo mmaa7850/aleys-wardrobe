@@ -5,11 +5,22 @@ import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 import { useCartStore } from '@/stores/cart'
 import { useAuthStore } from '@/stores/auth'
+import { useWalletStore } from '@/stores/wallet'
 import { trackBeginCheckout } from '@/lib/gtag'
 
 const router = useRouter()
-const cart = useCartStore()
-const auth = useAuthStore()
+const cart   = useCartStore()
+const auth   = useAuthStore()
+const wallet = useWalletStore()
+
+// ── 錢包付款 ────────────────────────────────────────────────
+const useWallet   = ref(false)  // 是否使用錢包餘額
+const walletDeductAmt = computed(() => {
+  if (!useWallet.value || wallet.balance <= 0) return 0
+  return Math.min(wallet.balance, finalTotal.value)
+})
+const newebpayAmt = computed(() => finalTotal.value - walletDeductAmt.value)
+const isFullWallet = computed(() => newebpayAmt.value === 0)
 
 const recipientName = ref('')
 const recipientPhone = ref('')
@@ -120,6 +131,7 @@ async function prefillFromProfile() {
 
 onMounted(async () => {
   if (!auth.isLoggedIn) { router.push('/login'); return }
+  wallet.fetchBalance().catch(() => {})
 
   // Restore form data if user navigated back from NewebPay within 30 minutes
   const savedForm = sessionStorage.getItem('checkoutDraft')
@@ -253,6 +265,7 @@ async function submitOrder() {
           invoiceLoveCode:    invoiceCarrierType.value === 'D'   ? invoiceLoveCode.value  : null,
           invoiceBuyerUBN:    invoiceCarrierType.value === 'B2B' ? invoiceBuyerUBN.value  : null,
           invoiceBuyerName:   invoiceCarrierType.value === 'B2B' ? invoiceBuyerName.value : null,
+          walletDeductAmt:    walletDeductAmt.value,
           items: cart.selectedItems.map(i => ({
             productId: i.productId,
             productName: i.productName,
@@ -272,6 +285,18 @@ async function submitOrder() {
     }
 
     const data = await res.json()
+
+    // 更新本地錢包餘額顯示
+    if (walletDeductAmt.value > 0) {
+      wallet.balance = Math.max(0, wallet.balance - walletDeductAmt.value)
+    }
+
+    // 全額錢包付款：不需要跳到藍新，直接導到成功頁
+    if (data.walletOnly) {
+      await Promise.all(cart.selectedItems.map(i => cart.removeItem(i.id)))
+      router.push(`/order-success/${orderNo}`)
+      return
+    }
 
     // Save form data so it can be restored if user navigates back from NewebPay
     sessionStorage.setItem('checkoutDraft', JSON.stringify({
@@ -477,6 +502,32 @@ async function submitOrder() {
           </div>
         </div>
 
+        <!-- 錢包付款 -->
+        <h2 class="co-section-title co-section-title--mt">錢包餘額</h2>
+        <div class="co-wallet">
+          <div class="co-wallet__info">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="5" width="22" height="14" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            <span>錢包餘額：<strong>NT$ {{ wallet.balance.toLocaleString() }}</strong></span>
+          </div>
+          <label v-if="wallet.balance > 0" class="co-wallet__toggle">
+            <input type="checkbox" v-model="useWallet" />
+            <span>使用錢包餘額付款</span>
+          </label>
+          <div v-if="useWallet && wallet.balance > 0" class="co-wallet__breakdown">
+            <div class="co-wallet__row">
+              <span>錢包扣款</span>
+              <span class="co-wallet__deduct">－NT$ {{ walletDeductAmt.toLocaleString() }}</span>
+            </div>
+            <div class="co-wallet__row" v-if="!isFullWallet">
+              <span>藍新付款</span>
+              <span>NT$ {{ newebpayAmt.toLocaleString() }}</span>
+            </div>
+            <div v-if="isFullWallet" class="co-wallet__full-badge">
+              ✓ 全額由錢包支付，無需進入藍新付款
+            </div>
+          </div>
+        </div>
+
         <!-- Notice -->
         <div class="co-notice">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -496,6 +547,7 @@ async function submitOrder() {
           @click="submitOrder"
         >
           <span v-if="isSubmitting">處理中...</span>
+          <span v-else-if="isFullWallet">確認送出訂單（全額錢包）</span>
           <span v-else>確認送出訂單</span>
         </button>
       </div>
@@ -613,6 +665,16 @@ async function submitOrder() {
           <span>訂單總計</span>
           <span>NT$ {{ finalTotal.toLocaleString() }}</span>
         </div>
+        <template v-if="useWallet && walletDeductAmt > 0">
+          <div class="co-summary__row co-summary__row--discount">
+            <span>錢包扣款</span>
+            <span>－NT$ {{ walletDeductAmt.toLocaleString() }}</span>
+          </div>
+          <div class="co-summary__row co-summary__row--total">
+            <span>{{ isFullWallet ? '實際付款' : '藍新付款' }}</span>
+            <span>NT$ {{ newebpayAmt.toLocaleString() }}</span>
+          </div>
+        </template>
 
         <!-- Submit (desktop) -->
         <button
@@ -621,6 +683,7 @@ async function submitOrder() {
           @click="submitOrder"
         >
           <span v-if="isSubmitting">處理中...</span>
+          <span v-else-if="isFullWallet">確認送出訂單（全額錢包）</span>
           <span v-else>確認送出訂單</span>
         </button>
       </div>
@@ -862,6 +925,53 @@ async function submitOrder() {
 .co-invoice-b2b { gap: 8px; }
 
 .co-invoice-input { height: 40px; font-size: 13px; }
+
+/* 錢包付款 */
+.co-wallet { display: flex; flex-direction: column; gap: 10px; }
+.co-wallet__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: #f5f3ff;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #4c1d95;
+}
+.co-wallet__info strong { font-weight: 700; }
+.co-wallet__toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+.co-wallet__toggle input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: #7c3aed; }
+.co-wallet__breakdown {
+  background: #fafafa;
+  border: 1px solid rgba(124,58,237,.15);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.co-wallet__row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: rgba(31,41,55,.7);
+}
+.co-wallet__deduct { color: #7c3aed; font-weight: 600; }
+.co-wallet__full-badge {
+  background: #d1fae5;
+  color: #065f46;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
 
 /* NewebPay notice */
 .co-notice {

@@ -27,6 +27,7 @@ const router = createRouter({
         { path: "orders", name: "orders", component: () => import("@/views/frontend/OrdersView.vue"), meta: { requiresAuth: true } },
         { path: "orders/:orderNo", name: "order-detail", component: () => import("@/views/frontend/OrderDetailView.vue"), meta: { requiresAuth: true } },
         { path: "wishlist", name: "wishlist", component: () => import("@/views/frontend/WishlistView.vue"), meta: { requiresAuth: true } },
+        { path: "wallet", name: "wallet", component: () => import("@/views/frontend/WalletView.vue"), meta: { requiresAuth: true } },
         { path: "coupons", name: "coupons", component: () => import("@/views/frontend/CouponsView.vue"), meta: { requiresAuth: true, memberOnly: true } },
 
         // Info pages
@@ -155,6 +156,14 @@ const router = createRouter({
           name: "admin-settings-admin-users",
           component: () => import("@/pages/admin/settings/AdminUsers.vue"),
           meta: { superAdminOnly: true },
+        },
+
+        // Wallet
+        {
+          path: "wallet",
+          name: "admin-wallet",
+          component: () => import("@/pages/admin/wallet/WalletList.vue"),
+          meta: { permission: "CanManageMembers" },
         },
 
         // Members

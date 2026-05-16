@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     const { data: order, error: orderErr } = await supabaseAdmin
       .schema(dbSchema)
       .from('C_ORD_OrderList')
-      .select('ID, OrderNo, FinalAmount, ShippingFee, PaymentStatus, CustomerName, CustomerEmail, InvoiceStatus, InvoiceNo, InvoiceNumber, InvoiceRandomNum, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN, InvoiceBuyerName')
+      .select('ID, OrderNo, FinalAmount, ShippingFee, NewebpayAmt, WalletDeductAmt, PaymentStatus, CustomerName, CustomerEmail, InvoiceStatus, InvoiceNo, InvoiceNumber, InvoiceRandomNum, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN, InvoiceBuyerName')
       .eq('OrderNo', orderNo)
       .single()
 
@@ -95,9 +95,19 @@ Deno.serve(async (req) => {
       if (order.PaymentStatus !== 'paid') return json({ error: '訂單非付款狀態，無法開立發票' }, 400)
       if (order.InvoiceStatus && order.InvoiceStatus !== 'none') return json({ error: '此訂單已有發票記錄' }, 400)
 
-      const totalAmt   = order.FinalAmount
+      // 全額錢包付款：儲值時已開發票，本筆無需開立
+      if ((order.NewebpayAmt ?? 0) === 0 && (order.WalletDeductAmt ?? 0) > 0) {
+        return json({ error: '此訂單全額由錢包支付，儲值時已開立發票，本筆無需再開立' }, 400)
+      }
+
+      // 發票金額：若有錢包扣款，只針對藍新付款部分開立
+      const totalAmt    = (order.NewebpayAmt ?? 0) > 0 ? order.NewebpayAmt : order.FinalAmount
       const shippingFee = order.ShippingFee || 0
-      const goodsAmt   = totalAmt - shippingFee
+      // 運費佔比（按藍新金額等比例分配）
+      const shippingInNewebpay = (order.NewebpayAmt ?? 0) > 0 && order.WalletDeductAmt > 0
+        ? Math.round(shippingFee * (order.NewebpayAmt / order.FinalAmount))
+        : shippingFee
+      const goodsAmt = totalAmt - shippingInNewebpay
 
       // B2C 含稅單價，以 5% 計算銷售額與稅額
       const amt    = Math.round(totalAmt / 1.05)
@@ -109,12 +119,12 @@ Deno.serve(async (req) => {
       const itemPrices: string[] = [String(goodsAmt)]
       const itemAmts:   string[] = [String(goodsAmt)]
 
-      if (shippingFee > 0) {
+      if (shippingInNewebpay > 0) {
         itemNames.push('運費')
         itemCounts.push('1')
         itemUnits.push('式')
-        itemPrices.push(String(shippingFee))
-        itemAmts.push(String(shippingFee))
+        itemPrices.push(String(shippingInNewebpay))
+        itemAmts.push(String(shippingInNewebpay))
       }
 
       const isB2B      = order.InvoiceCarrierType === 'B2B'
@@ -124,9 +134,9 @@ Deno.serve(async (req) => {
       // B2B 發票用未稅金額當 ItemPrice
       const b2bItemPrices = [String(Math.round(goodsAmt / 1.05))]
       const b2bItemAmts   = [String(Math.round(goodsAmt / 1.05))]
-      if (shippingFee > 0) {
-        b2bItemPrices.push(String(Math.round(shippingFee / 1.05)))
-        b2bItemAmts.push(String(Math.round(shippingFee / 1.05)))
+      if (shippingInNewebpay > 0) {
+        b2bItemPrices.push(String(Math.round(shippingInNewebpay / 1.05)))
+        b2bItemAmts.push(String(Math.round(shippingInNewebpay / 1.05)))
       }
 
       const params: Record<string, string> = {

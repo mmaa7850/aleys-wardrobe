@@ -90,6 +90,7 @@ const allSections = [
     children: [
       { labelKey: "admin.sidebar.memberList", to: "/admin/members" },
       { labelKey: "admin.sidebar.memberLevels", to: "/admin/members/levels" },
+      { labelKey: "admin.sidebar.wallet", to: "/admin/wallet" },
     ],
   },
   {

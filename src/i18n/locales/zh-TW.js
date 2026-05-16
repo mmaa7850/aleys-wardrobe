@@ -34,6 +34,7 @@ export default {
       members: "會員管理",
       memberList: "會員列表",
       memberLevels: "會員等級",
+      wallet: "錢包管理",
     },
   },
   common: {
