@@ -26,14 +26,27 @@ const payParams = ref(null)
 onMounted(async () => {
   if (!auth.isLoggedIn) return
 
+  await Promise.all([wallet.fetchBalance(), wallet.fetchTransactions()])
+
   if (route.query.topup === 'success') {
     topupResult.value = 'success'
-    setTimeout(() => wallet.fetchBalance(), 2000)
+    // 輪詢直到餘額有變動（最多 20 秒，每 2 秒一次）
+    const balanceBefore = wallet.balance
+    let attempts = 0
+    const poll = setInterval(async () => {
+      attempts++
+      await wallet.fetchBalance()
+      if (wallet.balance !== balanceBefore || attempts >= 10) {
+        clearInterval(poll)
+        if (wallet.balance !== balanceBefore) {
+          // 餘額已更新，也順便刷新交易紀錄
+          wallet.fetchTransactions()
+        }
+      }
+    }, 2000)
   } else if (route.query.topup === 'fail') {
     topupResult.value = 'fail'
   }
-
-  await Promise.all([wallet.fetchBalance(), wallet.fetchTransactions()])
 
   const { data } = await db
     .from('C_MBR_MemberList')
