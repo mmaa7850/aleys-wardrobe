@@ -20,10 +20,16 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          supabase functions deploy create-payment   --project-ref xyqznatwbfuscocycqtb
-          supabase functions deploy payment-notify   --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
-          supabase functions deploy payment-return   --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
-          supabase functions deploy store-map        --project-ref xyqznatwbfuscocycqtb
-          supabase functions deploy store-callback   --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
-          supabase functions deploy retry-payment    --project-ref xyqznatwbfuscocycqtb
-          supabase functions deploy logistics-notify --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
+          supabase functions deploy create-payment        --project-ref xyqznatwbfuscocycqtb
+          supabase functions deploy payment-notify        --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
+          supabase functions deploy payment-return        --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
+          supabase functions deploy store-map             --project-ref xyqznatwbfuscocycqtb
+          supabase functions deploy store-callback        --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
+          supabase functions deploy retry-payment         --project-ref xyqznatwbfuscocycqtb
+          supabase functions deploy refund-payment        --project-ref xyqznatwbfuscocycqtb
+          supabase functions deploy issue-invoice         --project-ref xyqznatwbfuscocycqtb
+          supabase functions deploy logistics-notify      --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
+          supabase functions deploy wallet-topup          --project-ref xyqznatwbfuscocycqtb
+          supabase functions deploy wallet-topup-notify   --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
+          supabase functions deploy wallet-topup-return   --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
+          supabase functions deploy wallet-adjust         --project-ref xyqznatwbfuscocycqtb
