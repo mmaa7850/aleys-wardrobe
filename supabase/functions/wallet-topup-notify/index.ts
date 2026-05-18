@@ -199,7 +199,8 @@ Deno.serve(async (req) => {
       try { apiData = JSON.parse(text) } catch { apiData = Object.fromEntries(new URLSearchParams(text)) }
 
       if (apiData.Status === 'SUCCESS') {
-        const r = apiData.Result as Record<string, string>
+        const raw = apiData.Result
+        const r: Record<string, string> = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, string>
         await supabase.schema(dbSchema).from('C_MBR_WalletTopupList').update({
           InvoiceStatus:    'issued',
           InvoiceNo:        r.InvoiceTransNo,
