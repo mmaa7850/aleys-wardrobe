@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-16
+> 更新時間：2026-05-18
 
 ---
 
@@ -59,71 +59,65 @@
   - **訂單狀態分佈** `/admin/reports/orders`：甜甜圈圖 + 付款狀態明細表
   - **會員成長趨勢** `/admin/reports/members`：近12月柱狀圖；累積會員/本月活躍/回購會員 stat card
 - **錢包系統**：儲值（走藍新 MPG）、自動開立 ezPay 發票（⚠️ 待 ezPay 電子發票加值服務開通後完整測試）、錢包餘額折抵結帳（全額/部分）、混合付款（錢包+藍新）、全錢包免走藍新、退款退回錢包、手動調整餘額（後台）、RLS 政策；新增 DB 表：C_MBR_WalletList / C_MBR_WalletTxList / C_MBR_WalletTopupList；C_ORD_OrderList 新增 WalletDeductAmt / NewebpayAmt 欄位；新增 4 個 Edge Functions：wallet-topup / wallet-topup-notify / wallet-topup-return / wallet-adjust；前台 /wallet 頁面；後台 /admin/wallet 頁面；會員中心快捷入口
+- **購物車刪除限制**：非預購商品（IsPreOrder=false）不顯示刪除按鈕，包含現貨、直播自動入單、小編手動入單；只有預購商品可刪除
+- **買衣服付款後自動開發票**：`payment-notify` 付款成功後自動呼叫 ezPay 開立發票；支援所有載具類型；NewebpayAmt=0（全錢包）跳過 ⚠️ 待測試
+- **退款入錢包**：新增 `wallet-refund` Edge Function；後台訂單 Modal 新增「退款入錢包」操作區塊；全額退款（FinalAmount − ShippingFee）或部分退款（指定金額）；退款後入會員錢包，不走藍新退款 API，不作廢發票 ⚠️ 待測試
 
 ---
 
 ## ⚠️ 已開發，待測試 / 待上線
 
-### 電子發票（ezPay）
+### 電子發票（ezPay）+ 退款入錢包 + 購物車限制
 
-**程式已完成，尚未在正式環境測試。**
+**程式已完成，需要測試驗證。**
 
 **已實作範圍：**
-- 後台訂單詳情新增「電子發票」卡片：顯示狀態 badge、發票號碼、隨機碼、折讓資訊
-- Footer 按鈕：開立發票 / 作廢發票 / 開立折讓（含折讓金額 inline 輸入）
-- Edge Function `issue-invoice`：支援 `issue` / `void` / `allowance` 三個 action；依儲存的發票偏好自動判斷 B2B/B2C、載具、捐贈等參數
-- Migration `add_invoice_fields.sql`：新增 7 個 Invoice* 欄位至 `C_ORD_OrderList`
-- **結帳頁發票偏好選擇**：顧客可在結帳時選擇發票方式（紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編），各有格式驗證，存入訂單後供後台開立發票時使用
-- Migration `add_invoice_preference_fields.sql`：新增 5 個 `InvoiceCarrierType`/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName` 欄位至 `C_ORD_OrderList`（public + staging schema）
+- 結帳頁發票偏好選擇（5 種：紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編），存入訂單
+- `payment-notify`：買衣服付款成功後**自動開立 ezPay 發票**（NewebpayAmt > 0 時）；全錢包付款自動跳過
+- `wallet-topup-notify`：儲值付款成功後**自動開立 ezPay 發票** ✅ 已測試（AA00000002）
+- 後台訂單 Modal「電子發票」卡片：顯示狀態/號碼/隨機碼；可手動補開 / 作廢 / 折讓（`issue-invoice`）
+- 後台訂單 Modal「退款入錢包」卡片：全額退款（FinalAmount − ShippingFee）或部分退款，退款入會員錢包（`wallet-refund`）
+- 購物車刪除按鈕：僅 IsPreOrder=true 顯示，現貨 / 直播入單 / 小編手動入單不顯示
 
 **上線前需完成的步驟：**
 
-1. **執行 migration**（Supabase Dashboard → SQL Editor，兩個 migration 都要執行）
+1. **執行 migration**（如尚未執行）
    ```
    supabase/migrations/add_invoice_fields.sql
    supabase/migrations/add_invoice_preference_fields.sql
    ```
 
-2. **設定環境變數**（Supabase Dashboard → Edge Functions → Secrets）
-   ```
-   EZPAY_MERCHANT_ID=  你的商店代號
-   EZPAY_HASH_KEY=     你的 Hash Key
-   EZPAY_HASH_IV=      你的 Hash IV
-   EZPAY_ENV=test      （測試完成後改為 prod）
-   ```
+2. **ezPay Secrets 已設定**（EZPAY_MERCHANT_ID / EZPAY_HASH_KEY / EZPAY_HASH_IV / EZPAY_ENV）
 
-3. **用測試環境跑幾筆訂單**，確認：
-   - 開立發票回傳正確發票號碼
-   - 作廢發票成功（注意：奇數月 14 日前才可作廢）
-   - 開立折讓金額正確
+3. **切換正式環境前**：將 `EZPAY_ENV` 從 `test` 改為 `prod`
 
-**需使用者確認的問題：**
+**待測試項目（⚠️ 請依序確認）：**
 
-> ❌ **Q1：ezPay 帳號尚未申請**
-> 需要先去 https://www.ezpay.com.tw 申請，開通「電子發票加值服務」後才能取得商店代號 + Hash Key + Hash IV。
-> 申請後把這三個值填入 Supabase Edge Function Secrets 即可（詳見上方「上線前帳號切換清單」）。
+| # | 測試項目 | 如何測試 | 預期結果 |
+|---|---------|---------|---------|
+| 1 | **買衣服付款後自動開發票** | 下一筆刷卡訂單付款成功後，查 `C_ORD_OrderList.InvoiceStatus` | `issued`，InvoiceNumber 有值 |
+| 2 | **消費者收到發票 email** | 同上，看會員信箱 | ezPay 寄出發票通知信 |
+| 3 | **手機條碼載具** | 結帳填手機條碼（格式 `/XXXXXXX`），付款後查訂單 | InvoiceNumber 有值，發票綁到手機條碼 |
+| 4 | **公司戶三聯式** | 結帳填統編+公司名，付款後查 | Category=B2B，InvoiceNumber 有值 |
+| 5 | **全錢包付款不開訂單發票** | 全額使用錢包付款，查 `C_ORD_OrderList.InvoiceStatus` | 仍為 `none`（發票在儲值時已開） |
+| 6 | **後台手動補開發票** | 後台訂單 Modal → 開立發票按鈕 | InvoiceNumber 正確顯示 |
+| 7 | **後台作廢發票** | 後台訂單 Modal → 作廢發票 | InvoiceStatus → `voided` |
+| 8 | **後台開立折讓** | 後台訂單 Modal → 開立折讓，填金額 | InvoiceStatus → `allowance`，AllowanceNo 有值 |
+| 9 | **全額退款入錢包** | 後台訂單 Modal → 全額退款入錢包 | 會員錢包增加 FinalAmount−ShippingFee；TxType=refund 紀錄寫入 |
+| 10 | **部分退款入錢包** | 後台訂單 Modal → 部分退款，填金額 | 會員錢包增加指定金額；訂單 AdminNote 更新 |
+| 11 | **購物車刪除按鈕** | 前台購物車，確認現貨商品無刪除按鈕，預購商品有 | 符合預期 |
 
-> ✅ **Q2：發票格式確認 — 已實作**
-> 結帳頁已加入發票偏好選擇（紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編），存入訂單後供後台開立發票時自動帶入正確 ezPay 參數。
+**已解決的問題：**
 
-> ❓ **Q3：退款 + 發票的操作流程**
-> 目前設計是「退款」和「發票作廢/折讓」**分開兩個操作**（分別按各自的按鈕）。
-> → 你希望合併成一個「退款」按鈕，同時自動處理發票？還是維持現在的分開操作？
+> ✅ **Q3：退款 + 發票操作流程** — 已決定：退款入錢包（不作廢發票），發票與退款分開處理
+> ✅ **Q4：退款金流** — 已決定：退款存入會員錢包，不走藍新退款 API
+> ✅ **Q2：發票格式** — 已實作，結帳頁有完整偏好選擇
 
-> ❓ **Q4：部分退款（折讓）的錢要怎麼還給客人？**
-> 現在「開立折讓」只處理發票面的折讓，不處理實際退款金流。
-> 選項 A：退回原付款方式（信用卡退刷走藍新退款 API，金額改為折讓金額）
-> 選項 B：存入客戶錢包（需先做錢包功能，目前尚未開發）
-> 選項 C：純手動匯款給客人，系統只記錄折讓發票，不動金流
-> → **目前預設是選項 C**（系統只開折讓，退款另外人工處理）。若要做 A 或 B 需額外開發。
+**待確認的問題：**
 
 > ❓ **Q5：退款後庫存要不要回補？**
-> 目前退款成功後，已扣的庫存**不會自動加回來**。
-> → 退回的商品是要重新上架販售嗎？還是直接報損？（影響是否需要自動回補庫存）
-
-> ❓ **Q6：發票開立後要不要通知客人？**
-> 目前開立發票後，客人不會收到任何通知（不知道自己的發票號碼）。
-> → 需要系統自動寄 Email 告知發票號碼嗎？（需串接 SMTP 才能做）
+> 目前退款入錢包後，已扣的庫存**不會自動加回來**。
+> → 退回的商品是否要重新上架？還是直接報損？（影響是否需要自動回補庫存）
 
 ---
 

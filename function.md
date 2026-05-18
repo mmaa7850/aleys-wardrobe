@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-05-16
+> 更新時間：2026-05-18
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -14,7 +14,7 @@
 | 首頁 | `/` | Hero 區塊（左側文字 + 右側裝飾框）、跑馬燈 Ticker、**動態 Banner 橫幅**（`home-banner`，Ticker 下方全寬，多張輪播）、最新上架 8 件商品卡片、探索風格分類卡、品牌故事；管理員可見 FAB 快速進入後台 |
 | 商品列表 | `/products` | 分類篩選 + 關鍵字搜尋、商品卡片（圖片/影片、售價/原價劃線/SALE badge）、Hover 顯示「查看商品」 |
 | 商品詳情 | `/products/:id` | 圖片/影片 Gallery（主圖 + 縮圖列）、顏色→尺寸選擇（依庫存過濾）、**數量選擇器**（現貨上限卡庫存；預購上限 99）、商品描述/尺寸規格 Tab；**預購模式**：`IsPreOrder=true` 且所選 variant 庫存歸零時顯示預購 badge + 預計出貨日 + 說明，按鈕改「立即預購」，數量選擇器仍顯示；加入購物車、收藏按鈕 |
-| 購物車 | `/cart` | 品項列表（**勾選欄**（僅非預購品項）、圖、名稱、規格、**預購預計出貨日**、數量 ± 控制、刪除）；預購品項不顯示勾選框、不計入合計；**已選取合計金額**；前往結帳按鈕（無勾選時 disabled）；`cart.initSelection()` 在載入後自動勾選所有非預購品項 |
+| 購物車 | `/cart` | 品項列表（**勾選欄**（僅非預購品項）、圖、名稱、規格、**預購預計出貨日**、數量 ± 控制、**刪除**（**僅預購品項顯示刪除按鈕**，現貨/直播入單/小編手動入單不顯示））；預購品項不顯示勾選框、不計入合計；**已選取合計金額**；前往結帳按鈕（無勾選時 disabled）；`cart.initSelection()` 在載入後自動勾選所有非預購品項 |
 | 結帳 | `/checkout` | 僅結算購物車中**已勾選品項**（`cart.selectedItems`）；自動從會員資料填入姓名/電話；**配送方式**從 DB 動態載入，超商取貨（`cvscom`）/ 宅配到府（`home`）驅動不同表單欄位；**手動優惠碼**輸入驗證；**滿額自動折抵**（`IsAutoApply=true`，自動套用最高折扣，距下一門檻進度提示）；**錢包折抵**：「使用錢包折抵」選項（顯示餘額、折抵金額、實付金額）；全錢包支付不走藍新直接建立已付款訂單；**電子發票設定**（5 種：紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編，各有格式驗證）；金額明細（小計+運費-折扣-錢包折抵）；送出後呼叫 `create-payment` Edge Function，自動 submit 藍新付款表單（或全錢包直接完成）；成功後僅移除已勾選品項 |
 | 優惠券專區 | `/coupons` | 僅一般會員可見（管理員導首頁）；分兩區：**滿額自動折抵**（金色 badge、無需輸入）、**優惠碼**（顯示代碼 + 一鍵複製）；從 DB 動態載入有效期內且 `IsActive=true` 的優惠券 |
 | 結帳成功 | `/order-success/:orderNo` | 成功訊息、訂單編號、前往訂單詳情 / 繼續購物 |
@@ -52,7 +52,7 @@
 | 標籤設定 | `/admin/products/settags` | CanManageProducts | 管理商品標籤（`S_PRD_TagList`） |
 | 庫存總覽 | `/admin/inventory/overview` | CanManageProducts | 所有上架商品各 variant 庫存、低庫存（≤5）/售完警示、可直接修改數量並建立異動紀錄 |
 | 庫存紀錄 | `/admin/inventory/logs` | CanManageProducts | 庫存異動歷史（異動量、前後庫存、原因、時間） |
-| 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單；依訂單號/Email 搜尋、付款狀態/訂單狀態篩選；點開 Modal 分三 Tab：**訂單資訊**（可修改收件資訊、備注、訂單狀態）、**品項**、**狀態紀錄**；**宅配出貨**：填物流公司 + 單號 → 標記已出貨（更新 `HomeDeliveryNo`/`HomeDeliveryCompany`/`ShippingStatus`）；**退款**：信用卡訂單可發起退款（呼叫 `refund-payment`）；**⚠️ 待測試 — 電子發票**：已付款訂單可手動開立發票（呼叫 `issue-invoice`，B2C/含稅 5%/PrintFlag=Y）、作廢發票（全額退款用）、開立折讓（部分退款用）；發票狀態 badge 顯示於訂單資訊卡；**全錢包訂單**：顯示灰色「儲值時已開立，本筆無需開立」badge 替代開立發票按鈕；訂單詳情顯示錢包折抵/藍新實付金額分開 |
+| 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單；依訂單號/Email 搜尋、付款狀態/訂單狀態篩選；點開 Modal 分三 Tab：**訂單資訊**（可修改收件資訊、備注、訂單狀態）、**品項**、**狀態紀錄**；**宅配出貨**：填物流公司 + 單號 → 標記已出貨（更新 `HomeDeliveryNo`/`HomeDeliveryCompany`/`ShippingStatus`）；**退款**：信用卡訂單可發起退款（呼叫 `refund-payment`）；**退款入錢包** ⚠️ 待測試：已付款訂單可全額退款（FinalAmount − ShippingFee 入錢包，訂單標記已退款）或部分退款（指定金額入錢包），呼叫 `wallet-refund`；**⚠️ 待測試 — 電子發票**：已付款訂單可手動補開發票（呼叫 `issue-invoice`）、作廢發票、開立折讓；發票狀態 badge 顯示於訂單資訊卡；付款成功後 `payment-notify` 已自動開立發票，後台手動開立僅供補發/例外情況；**全錢包訂單**：顯示灰色「儲值時已開立，本筆無需開立」badge 替代開立發票按鈕；訂單詳情顯示錢包折抵/藍新實付金額分開 |
 | 訂單狀態管理 | `/admin/orders/setstatus` | CanManageOrders | 管理訂單狀態選項（`S_ORD_StatusList`） |
 | 優惠券設定 | `/admin/marketing/setcoupons` | CanManageMarketing | 建立/管理優惠券（優惠碼、折扣金額、最低消費門檻、`IsAutoApply`、有效期、使用次數） |
 | Banner 設定 | `/admin/marketing/setbanners` | CanManageMarketing | 建立/管理 Banner（`S_MKT_BannerList`）；**圖片直接上傳** Supabase Storage（`banners` bucket）或貼外部 URL；**顯示位置**：`home-hero`（首頁 Hero 裝飾框內，建議 3:4）/ `home-banner`（Ticker 下方全寬，建議 16:5）；日期排程；列表快速開關顯示/隱藏；刪除同步移除 Storage 檔案 |
@@ -77,7 +77,7 @@
 | Function | JWT 驗證 | 說明 |
 |----------|----------|------|
 | `create-payment` | ✅ 需要 | 後端驗證手動優惠券（有效期/使用次數/`IsActive`/`MinOrderAmount`）；後端自動偵測滿額折抵（`IsAutoApply=true`，挑選符合門檻最高折扣一張）；計算 `FinalAmount = 小計 + 運費 − 手動折扣 − 自動折抵`；建立訂單（`C_ORD_OrderList` / `C_ORD_OrderItemList`）；**儲存客戶發票偏好**（`InvoiceCarrierType`/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName`）；扣除手動與自動優惠券 `UsageCount`；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；AES 加密藍新參數，回傳 Gateway URL；**錢包折抵**：接受 `walletDeductAmt` 參數；計算 `walletDeduct = min(walletBalance, finalAmount)`，`newebpayAmt = finalAmount - walletDeduct`；若 walletDeduct > 0 則先扣錢包（若後續失敗自動回補）；若 newebpayAmt = 0 → 全錢包支付，直接建立已付款訂單並扣庫存，return `{ walletOnly: true, orderNo }`，不走藍新；藍新付款金額改為 newebpayAmt；訂單新增 WalletDeductAmt / NewebpayAmt 欄位 |
-| `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態為 `paid`、扣庫存、儲存 CVSCOM 門市資訊（`StoreCode`/`LgsNo`） |
+| `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態為 `paid`、扣庫存、儲存 CVSCOM 門市資訊（`StoreCode`/`LgsNo`）；**付款成功後自動開立 ezPay 電子發票**：`NewebpayAmt > 0` 時自動呼叫 ezPay（支援手機條碼/自然人憑證/捐贈/公司戶/紙本）；`NewebpayAmt = 0`（全錢包付款）跳過（儲值時已開立）；發票結果寫回 `C_ORD_OrderList` Invoice* 欄位 ⚠️ 待測試 |
 | `payment-return` | ❌ 關閉 | 藍新前台導回：儲存付款方式、ATM 帳號、CVSCOM 門市資訊，導向 `/order-success/:orderNo` |
 | `retry-payment` | ✅ 需要 | 對同一訂單重新產生藍新付款參數（訂單號加 `_R1/_R2` 後綴），不重建訂單 |
 | `refund-payment` | ✅ 需要 | 呼叫藍新 NPA-B032 退款 API；僅支援信用卡類付款（CREDIT、ApplePay、GooglePay 等） |
@@ -89,6 +89,7 @@
 | `wallet-topup-notify` | ❌ 關閉 | 藍新儲值 server-to-server webhook；驗簽解密；冪等檢查（已處理就跳過）；更新 PaymentStatus；入帳 C_MBR_WalletList（upsert）；寫入 C_MBR_WalletTxList；自動呼叫 ezPay 開立發票 |
 | `wallet-topup-return` | ❌ 關閉 | 藍新儲值付款後瀏覽器 redirect；解密結果；導向 /wallet?topup=success 或 /wallet?topup=fail |
 | `wallet-adjust` | ✅ 需要 | 管理員手動調整錢包餘額；GET：取得餘額+交易紀錄；POST：驗證金額（非零整數）與備注、確認餘額不低於0、upsert C_MBR_WalletList、寫入 C_MBR_WalletTxList (TxType='adjust') |
+| `wallet-refund` | ✅ 需要 | 管理員將退款金額入會員錢包；POST `{ orderNo, type: 'full'|'partial', refundAmt? }`；管理員身份驗證（IsActive）；全額退款 = FinalAmount − ShippingFee；部分退款 = 指定金額；透過 CustomerEmail → MemberList 查 UserID；upsert C_MBR_WalletList；寫入 C_MBR_WalletTxList (TxType='refund', RelatedOrderNo, Note, CreatedBy)；全額退款更新 PaymentStatus → 'refunded'；部分退款追加 AdminNote 記錄 ⚠️ 待測試 |
 
 ---
 
