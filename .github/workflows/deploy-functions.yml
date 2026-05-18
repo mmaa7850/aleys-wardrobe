@@ -16,6 +16,20 @@ jobs:
         with:
           version: 2.33.9
 
+      - name: Verify Supabase token & project access
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          echo "=== Check token (GET /v1/projects) ==="
+          curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects" | tail -1
+
+          echo "=== Check project ref ==="
+          curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/xyqznatwbfuscocycqtb" | tail -1
+
       - name: Deploy Edge Functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
