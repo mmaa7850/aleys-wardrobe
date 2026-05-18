@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createCipheriv } from 'node:crypto'
 import { Buffer } from 'node:buffer'
+// deployed: 2026-05-18
 
 // ── AES 解密（藍新）──────────────────────────────────────────
 async function aesDecrypt(hexStr: string, key: string, iv: string): Promise<string> {
