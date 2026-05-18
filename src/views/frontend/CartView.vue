@@ -142,8 +142,8 @@ onMounted(async () => {
             NT$ {{ (item.unitPrice * item.qty).toLocaleString() }}
           </div>
 
-          <!-- Remove -->
-          <button class="cart-item__remove" @click="cart.removeItem(item.id)" aria-label="移除">
+          <!-- Remove（只有預購商品才能刪除） -->
+          <button v-if="item.isPreOrder" class="cart-item__remove" @click="cart.removeItem(item.id)" aria-label="移除">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>

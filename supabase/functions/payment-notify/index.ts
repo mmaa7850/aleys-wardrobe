@@ -1,4 +1,22 @@
 import { createClient } from '@supabase/supabase-js'
+import { createCipheriv } from 'node:crypto'
+import { Buffer } from 'node:buffer'
+
+// ── ezPay AES-256-CBC 加密（block=32, no auto-padding）────────────
+function ezpayEncrypt(plaintext: string, key: string, iv: string): string {
+  const blockSize = 32
+  const pad = blockSize - (plaintext.length % blockSize)
+  const padded = plaintext + String.fromCharCode(pad).repeat(pad)
+  const keyBuf = Buffer.alloc(32); Buffer.from(key, 'utf8').copy(keyBuf, 0, 0, 32)
+  const ivBuf  = Buffer.alloc(16); Buffer.from(iv,  'utf8').copy(ivBuf,  0, 0, 16)
+  const cipher = createCipheriv('aes-256-cbc', keyBuf, ivBuf)
+  cipher.setAutoPadding(false)
+  return Buffer.concat([cipher.update(Buffer.from(padded, 'utf8')), cipher.final()]).toString('hex')
+}
+
+function buildPostData(params: Record<string, string>): string {
+  return Object.entries(params).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')
+}
 
 async function aesDecrypt(hexStr: string, key: string, iv: string): Promise<string> {
   const k = new Uint8Array(32); k.set(new TextEncoder().encode(key).slice(0, 32))
@@ -94,7 +112,7 @@ Deno.serve(async (req) => {
     if (payStatus === 'paid') {
       // 查詢完整訂單資料
       const { data: orderData, error: orderFetchErr } = await supabase.schema(dbSchema).from('C_ORD_OrderList')
-        .select('ID, ShippingName, CustomerPhone, CustomerEmail, FinalAmount, StoreID, ShippingMethod')
+        .select('ID, ShippingName, CustomerPhone, CustomerEmail, CustomerName, FinalAmount, ShippingFee, StoreID, ShippingMethod, WalletDeductAmt, NewebpayAmt, InvoiceStatus, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN, InvoiceBuyerName')
         .eq('OrderNo', orderNo)
         .single()
 
@@ -145,6 +163,102 @@ Deno.serve(async (req) => {
             .eq('OrderNo', orderNo)
           if (lgsErr) console.error('[payment-notify] CVSCOM update error:', lgsErr.message)
           else console.log('[payment-notify] CVSCOM store info saved:', storeCode, lgsNo)
+        }
+
+        // ── 自動開立 ezPay 電子發票 ─────────────────────────────────
+        // 全額錢包付款（NewebpayAmt=0）不開立，儲值時已開過
+        const newebpayAmt = orderData.NewebpayAmt ?? 0
+        const invoiceAlreadyIssued = orderData.InvoiceStatus && orderData.InvoiceStatus !== 'none'
+        if (newebpayAmt > 0 && !invoiceAlreadyIssued) {
+          try {
+            const merchantId = Deno.env.get('EZPAY_MERCHANT_ID')!
+            const ezKey      = Deno.env.get('EZPAY_HASH_KEY')!.trim()
+            const ezIV       = Deno.env.get('EZPAY_HASH_IV')!.trim()
+            const ezEnv      = Deno.env.get('EZPAY_ENV') || 'test'
+            const baseUrl    = ezEnv === 'prod' ? 'https://inv.ezpay.com.tw' : 'https://cinv.ezpay.com.tw'
+
+            const isB2B      = orderData.InvoiceCarrierType === 'B2B'
+            const isDonate   = orderData.InvoiceCarrierType === 'D'
+            const hasCarrier = ['0', '1', '2'].includes(orderData.InvoiceCarrierType ?? '')
+
+            const totalAmt     = newebpayAmt
+            const shippingFee  = orderData.ShippingFee || 0
+            // 若混合付款，運費按比例分配到藍新部分
+            const walletDeduct = orderData.WalletDeductAmt ?? 0
+            const finalAmount  = orderData.FinalAmount ?? totalAmt
+            const shippingInNewebpay = walletDeduct > 0
+              ? Math.round(shippingFee * (newebpayAmt / finalAmount))
+              : shippingFee
+            const goodsAmt  = totalAmt - shippingInNewebpay
+            const taxAmt    = totalAmt - Math.round(totalAmt / 1.05)
+            const saleAmt   = totalAmt - taxAmt
+
+            const itemNames:  string[] = ['商品費用']
+            const itemCounts: string[] = ['1']
+            const itemUnits:  string[] = ['式']
+            const itemPrices: string[] = [String(goodsAmt)]
+            const itemAmts:   string[] = [String(goodsAmt)]
+            if (shippingInNewebpay > 0) {
+              itemNames.push('運費'); itemCounts.push('1'); itemUnits.push('式')
+              itemPrices.push(String(shippingInNewebpay)); itemAmts.push(String(shippingInNewebpay))
+            }
+
+            const invoiceParams: Record<string, string> = {
+              RespondType:     'JSON',
+              Version:         '1.5',
+              TimeStamp:       String(Math.floor(Date.now() / 1000)),
+              MerchantOrderNo: orderNo,
+              Status:          '1',
+              Category:        isB2B ? 'B2B' : 'B2C',
+              BuyerName:       isB2B ? (orderData.InvoiceBuyerName || orderData.CustomerName || '公司') : (orderData.CustomerName || '消費者'),
+              PrintFlag:       (hasCarrier || isDonate) ? 'N' : 'Y',
+              TaxType:         '1',
+              TaxRate:         '5',
+              Amt:             String(saleAmt),
+              TaxAmt:          String(taxAmt),
+              TotalAmt:        String(totalAmt),
+              ItemName:        itemNames.join('|'),
+              ItemCount:       itemCounts.join('|'),
+              ItemUnit:        itemUnits.join('|'),
+              ItemPrice:       isB2B ? itemPrices.map(p => String(Math.round(Number(p) / 1.05))).join('|') : itemPrices.join('|'),
+              ItemAmt:         isB2B ? itemAmts.map(a => String(Math.round(Number(a) / 1.05))).join('|')   : itemAmts.join('|'),
+            }
+            if (orderData.CustomerEmail)                        invoiceParams.BuyerEmail  = orderData.CustomerEmail
+            if (isB2B && orderData.InvoiceBuyerUBN)            invoiceParams.BuyerUBN    = orderData.InvoiceBuyerUBN
+            if (hasCarrier && orderData.InvoiceCarrierNum)      { invoiceParams.CarrierType = orderData.InvoiceCarrierType!; invoiceParams.CarrierNum = encodeURIComponent(orderData.InvoiceCarrierNum) }
+            if (isDonate && orderData.InvoiceLoveCode)          invoiceParams.LoveCode    = orderData.InvoiceLoveCode
+
+            const postData = ezpayEncrypt(buildPostData(invoiceParams), ezKey, ezIV)
+            const res = await fetch(`${baseUrl}/Api/invoice_issue`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({ MerchantID_: merchantId, PostData_: postData }).toString(),
+            })
+            const text = await res.text()
+            console.log('[payment-notify] ezPay invoice raw:', text.slice(0, 300))
+            let apiData: Record<string, unknown> = {}
+            try { apiData = JSON.parse(text) } catch { apiData = Object.fromEntries(new URLSearchParams(text)) }
+
+            if (apiData.Status === 'SUCCESS') {
+              const raw = apiData.Result
+              const r: Record<string, string> = typeof raw === 'string' ? JSON.parse(raw) : raw as Record<string, string>
+              await supabase.schema(dbSchema).from('C_ORD_OrderList').update({
+                InvoiceStatus:    'issued',
+                InvoiceNo:        r.InvoiceTransNo,
+                InvoiceNumber:    r.InvoiceNumber,
+                InvoiceRandomNum: r.RandomNum,
+                InvoiceIssuedAt:  new Date().toISOString(),
+                UpdatedDate:      new Date().toISOString(),
+              }).eq('OrderNo', orderNo)
+              console.log('[payment-notify] Invoice issued:', r.InvoiceNumber)
+            } else {
+              console.warn('[payment-notify] Invoice failed:', apiData.Message || apiData.Status)
+            }
+          } catch (invErr) {
+            console.warn('[payment-notify] Invoice error (non-fatal):', invErr instanceof Error ? invErr.message : invErr)
+          }
+        } else if (newebpayAmt === 0) {
+          console.log('[payment-notify] Full wallet order, skipping invoice:', orderNo)
         }
       }
     }
