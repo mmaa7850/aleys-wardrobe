@@ -154,22 +154,7 @@ Deno.serve(async (req) => {
     const walletDeduct   = Math.max(0, Math.min(Number(walletDeductAmt), finalAmount))
     const newebpayAmount = finalAmount - walletDeduct  // 藍新實際收款金額（0 = 全額錢包）
 
-    // 結帳前檢查庫存
-    const variantIds = (items as Array<{ variantId: number; qty: number; productName: string }>).map(i => i.variantId)
-    const { data: variants } = await supabaseAdmin
-      .schema(dbSchema)
-      .from('C_PRD_ProductVariantList')
-      .select('ID, StockQty')
-      .in('ID', variantIds)
-
-    for (const item of items as Array<{ variantId: number; qty: number; productName: string }>) {
-      const v = variants?.find((x: { ID: number; StockQty: number }) => x.ID === item.variantId)
-      if (!v || v.StockQty < item.qty) {
-        return new Response(JSON.stringify({
-          error: `「${item.productName}」庫存不足，請調整數量後再試`
-        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      }
-    }
+    // 庫存已於加入購物車時扣除（decrement_stock RPC），此處不再重複檢查
 
     // ── 錢包扣款（walletDeduct > 0 時）────────────────────────────
     let walletBalanceBefore = 0

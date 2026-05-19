@@ -121,26 +121,7 @@ Deno.serve(async (req) => {
       } else {
         console.log('[payment-notify] Order found, ID:', orderData.ID)
 
-        // 扣除庫存
-        const { data: orderItems, error: itemsErr } = await supabase.schema(dbSchema).from('C_ORD_OrderItemList')
-          .select('VariantID, Qty').eq('OrderID', orderData.ID)
-        if (itemsErr) console.error('[payment-notify] OrderItems fetch error:', itemsErr.message)
-        console.log('[payment-notify] Items to deduct:', orderItems?.length ?? 0)
-
-        for (const item of orderItems || []) {
-          const { data: variant, error: variantErr } = await supabase.schema(dbSchema).from('C_PRD_ProductVariantList')
-            .select('StockQty').eq('ID', item.VariantID).single()
-          if (variantErr || !variant) {
-            console.error('[payment-notify] Variant not found:', item.VariantID, variantErr?.message)
-            continue
-          }
-          const newQty = Math.max(0, variant.StockQty - item.Qty)
-          const { error: stockErr } = await supabase.schema(dbSchema).from('C_PRD_ProductVariantList')
-            .update({ StockQty: newQty })
-            .eq('ID', item.VariantID)
-          if (stockErr) console.error('[payment-notify] Stock update error variant', item.VariantID, stockErr.message)
-          else console.log(`[payment-notify] Stock deducted: variant ${item.VariantID} ${variant.StockQty} → ${newQty}`)
-        }
+        // 庫存已於加入購物車時扣除（decrement_stock RPC），此處不再重複扣除
 
         // 儲存藍新 CVSCOM 回傳的物流資訊
         const storeCode = result.StoreCode || ''

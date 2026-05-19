@@ -185,21 +185,39 @@ export const useCartStore = defineStore('cart', {
       if (!this.cartId) await this.fetchCart()
 
       const existing = this.items.find(i => i.variantId === variantId)
-
       if (existing) {
         await this.updateQty(existing.id, existing.qty + qty)
         return
       }
 
-      const { data, error } = await db
+      // 判斷是否為預購商品（StockQty <= 0 = 預購，不需扣庫存）
+      const { data: variantData } = await db
+        .from('C_PRD_ProductVariantList')
+        .select('StockQty')
+        .eq('ID', variantId)
+        .single()
+
+      const isPreOrder = (variantData?.StockQty ?? 0) <= 0
+
+      // 非預購：原子性扣庫存
+      if (!isPreOrder) {
+        const { data: ok, error: rpcErr } = await db.rpc('decrement_stock', { p_variant_id: variantId, p_qty: qty })
+        if (rpcErr) throw rpcErr
+        if (!ok) throw new Error('庫存不足，無法加入購物車')
+      }
+
+      const { error } = await db
         .from('C_CART_CartItemList')
         .insert({ CartID: this.cartId, ProductID: productId, VariantID: variantId, Qty: qty })
         .select('ID')
         .single()
 
-      if (error) throw error
+      if (error) {
+        // DB 寫入失敗，回補庫存
+        if (!isPreOrder) await db.rpc('restore_stock', { p_variant_id: variantId, p_qty: qty })
+        throw error
+      }
 
-      // Reload to get enriched item
       await this._loadItems()
     },
 
@@ -209,6 +227,22 @@ export const useCartStore = defineStore('cart', {
         return
       }
 
+      const item = this.items.find(i => i.id === itemId)
+
+      // 非預購：處理庫存差量
+      if (item && !item.isPreOrder) {
+        const delta = qty - item.qty
+        if (delta > 0) {
+          // 增加數量：再扣庫存
+          const { data: ok, error: rpcErr } = await db.rpc('decrement_stock', { p_variant_id: item.variantId, p_qty: delta })
+          if (rpcErr) throw rpcErr
+          if (!ok) throw new Error('庫存不足')
+        } else if (delta < 0) {
+          // 減少數量：回補庫存
+          await db.rpc('restore_stock', { p_variant_id: item.variantId, p_qty: -delta })
+        }
+      }
+
       const { error } = await db
         .from('C_CART_CartItemList')
         .update({ Qty: qty })
@@ -216,7 +250,6 @@ export const useCartStore = defineStore('cart', {
 
       if (error) throw error
 
-      const item = this.items.find(i => i.id === itemId)
       if (item) item.qty = qty
     },
 
