@@ -122,17 +122,17 @@ onMounted(async () => {
             NT$ {{ item.unitPrice.toLocaleString() }}
           </div>
 
-          <!-- Qty controls -->
+          <!-- Qty controls（只有預購商品可以改數量） -->
           <div class="cart-item__qty">
             <button
               class="qty-btn"
-              :disabled="item.qty <= 1"
+              :disabled="!item.isPreOrder || item.qty <= 1"
               @click="cart.updateQty(item.id, item.qty - 1)"
             >−</button>
             <span class="qty-num">{{ item.qty }}</span>
             <button
               class="qty-btn"
-              :disabled="item.isPreOrder ? item.qty >= 99 : item.qty >= item.stockQty"
+              :disabled="!item.isPreOrder || item.qty >= 99"
               @click="cart.updateQty(item.id, item.qty + 1)"
             >+</button>
           </div>

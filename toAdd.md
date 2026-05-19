@@ -59,7 +59,7 @@
   - **訂單狀態分佈** `/admin/reports/orders`：甜甜圈圖 + 付款狀態明細表
   - **會員成長趨勢** `/admin/reports/members`：近12月柱狀圖；累積會員/本月活躍/回購會員 stat card
 - **錢包系統**：儲值（走藍新 MPG）、自動開立 ezPay 發票（⚠️ 待 ezPay 電子發票加值服務開通後完整測試）、錢包餘額折抵結帳（全額/部分）、混合付款（錢包+藍新）、全錢包免走藍新、退款退回錢包、手動調整餘額（後台）、RLS 政策；新增 DB 表：C_MBR_WalletList / C_MBR_WalletTxList / C_MBR_WalletTopupList；C_ORD_OrderList 新增 WalletDeductAmt / NewebpayAmt 欄位；新增 4 個 Edge Functions：wallet-topup / wallet-topup-notify / wallet-topup-return / wallet-adjust；前台 /wallet 頁面；後台 /admin/wallet 頁面；會員中心快捷入口
-- **購物車刪除限制**：非預購商品（IsPreOrder=false）不顯示刪除按鈕，包含現貨、直播自動入單、小編手動入單；只有預購商品可刪除
+- **購物車操作限制**：非預購商品（IsPreOrder=false）不顯示刪除按鈕，且數量 ± 控制鍵鎖定（disabled），包含現貨、直播自動入單、小編手動入單；只有預購商品可刪除與調整數量
 - **買衣服付款後自動開發票**：`payment-notify` 付款成功後自動呼叫 ezPay 開立發票；支援所有載具類型；NewebpayAmt=0（全錢包）跳過 ⚠️ 待測試
 - **退款入錢包**：新增 `wallet-refund` Edge Function；後台訂單 Modal 新增「退款入錢包」操作區塊；全額退款（FinalAmount − ShippingFee）或部分退款（指定金額）；退款後入會員錢包，不走藍新退款 API，不作廢發票 ⚠️ 待測試
 - **庫存扣除時機調整**：改為加入購物車時立即扣庫存（`decrement_stock` RPC，FOR UPDATE 原子性）；增加數量扣差量、減少數量還差量；DB 寫入失敗自動回補；`create-payment` 移除結帳前庫存檢查；`payment-notify` 移除付款後庫存扣除；migration：`cart_stock_functions.sql`（`public` + `staging` schema）
@@ -78,7 +78,7 @@
 - `wallet-topup-notify`：儲值付款成功後**自動開立 ezPay 發票** ✅ 已測試（AA00000002）
 - 後台訂單 Modal「電子發票」卡片：顯示狀態/號碼/隨機碼；可手動補開 / 作廢 / 折讓（`issue-invoice`）
 - 後台訂單 Modal「退款入錢包」卡片：全額退款（FinalAmount − ShippingFee）或部分退款，退款入會員錢包（`wallet-refund`）
-- 購物車刪除按鈕：僅 IsPreOrder=true 顯示，現貨 / 直播入單 / 小編手動入單不顯示
+- 購物車操作：僅 IsPreOrder=true 可刪除 / 調整數量，現貨 / 直播入單 / 小編手動入單兩者皆不顯示 / 鎖定
 
 **上線前需完成的步驟：**
 
@@ -107,7 +107,7 @@
 | 8 | **後台開立折讓** | 後台訂單 Modal → 開立折讓，填金額 | InvoiceStatus → `allowance`，AllowanceNo 有值 |
 | 9 | **全額退款入錢包** | 後台訂單 Modal → 全額退款入錢包 | 會員錢包增加 FinalAmount−ShippingFee；TxType=refund 紀錄寫入 |
 | 10 | **部分退款入錢包** | 後台訂單 Modal → 部分退款，填金額 | 會員錢包增加指定金額；訂單 AdminNote 更新 |
-| 11 | **購物車刪除按鈕** | 前台購物車，確認現貨商品無刪除按鈕，預購商品有 | 符合預期 |
+| 11 | **購物車操作限制** | 前台購物車：現貨商品無刪除按鈕、± 按鈕 disabled；預購商品兩者皆可操作 | 符合預期 |
 
 **已解決的問題：**
 
