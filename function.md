@@ -76,8 +76,8 @@
 
 | Function | JWT 驗證 | 說明 |
 |----------|----------|------|
-| `create-payment` | ✅ 需要 | 後端驗證手動優惠券（有效期/使用次數/`IsActive`/`MinOrderAmount`）；後端自動偵測滿額折抵（`IsAutoApply=true`，挑選符合門檻最高折扣一張）；計算 `FinalAmount = 小計 + 運費 − 手動折扣 − 自動折抵`；建立訂單（`C_ORD_OrderList` / `C_ORD_OrderItemList`）；**儲存客戶發票偏好**（`InvoiceCarrierType`/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName`）；扣除手動與自動優惠券 `UsageCount`；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；AES 加密藍新參數，回傳 Gateway URL；**錢包折抵**：接受 `walletDeductAmt` 參數；計算 `walletDeduct = min(walletBalance, finalAmount)`，`newebpayAmt = finalAmount - walletDeduct`；若 walletDeduct > 0 則先扣錢包（若後續失敗自動回補）；若 newebpayAmt = 0 → 全錢包支付，直接建立已付款訂單並扣庫存，return `{ walletOnly: true, orderNo }`，不走藍新；藍新付款金額改為 newebpayAmt；訂單新增 WalletDeductAmt / NewebpayAmt 欄位 |
-| `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態為 `paid`、扣庫存、儲存 CVSCOM 門市資訊（`StoreCode`/`LgsNo`）；**付款成功後自動開立 ezPay 電子發票**：`NewebpayAmt > 0` 時自動呼叫 ezPay（支援手機條碼/自然人憑證/捐贈/公司戶/紙本）；`NewebpayAmt = 0`（全錢包付款）跳過（儲值時已開立）；發票結果寫回 `C_ORD_OrderList` Invoice* 欄位 ⚠️ 待測試 |
+| `create-payment` | ✅ 需要 | 後端驗證手動優惠券（有效期/使用次數/`IsActive`/`MinOrderAmount`）；後端自動偵測滿額折抵（`IsAutoApply=true`，挑選符合門檻最高折扣一張）；計算 `FinalAmount = 小計 + 運費 − 手動折扣 − 自動折抵`；建立訂單（`C_ORD_OrderList` / `C_ORD_OrderItemList`）；**儲存客戶發票偏好**（`InvoiceCarrierType`/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName`）；扣除手動與自動優惠券 `UsageCount`；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；AES 加密藍新參數，回傳 Gateway URL；**錢包折抵**：接受 `walletDeductAmt` 參數；計算 `walletDeduct = min(walletBalance, finalAmount)`，`newebpayAmt = finalAmount - walletDeduct`；若 walletDeduct > 0 則先扣錢包（若後續失敗自動回補）；若 newebpayAmt = 0 → 全錢包支付，直接建立已付款訂單，return `{ walletOnly: true, orderNo }`，不走藍新；藍新付款金額改為 newebpayAmt；訂單新增 WalletDeductAmt / NewebpayAmt 欄位；**庫存檢查已移除**（改在購物車加入時扣除） |
+| `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態為 `paid`、儲存 CVSCOM 門市資訊（`StoreCode`/`LgsNo`）；**付款成功後自動開立 ezPay 電子發票**：`NewebpayAmt > 0` 時自動呼叫 ezPay（支援手機條碼/自然人憑證/捐贈/公司戶/紙本）；`NewebpayAmt = 0`（全錢包付款）跳過（儲值時已開立）；發票結果寫回 `C_ORD_OrderList` Invoice* 欄位 ⚠️ 待測試；**庫存扣除已移除**（改在購物車加入時扣除） |
 | `payment-return` | ❌ 關閉 | 藍新前台導回：儲存付款方式、ATM 帳號、CVSCOM 門市資訊，導向 `/order-success/:orderNo` |
 | `retry-payment` | ✅ 需要 | 對同一訂單重新產生藍新付款參數（訂單號加 `_R1/_R2` 後綴），不重建訂單 |
 | `refund-payment` | ✅ 需要 | 呼叫藍新 NPA-B032 退款 API；僅支援信用卡類付款（CREDIT、ApplePay、GooglePay 等） |
@@ -98,7 +98,7 @@
 | Store | 說明 |
 |-------|------|
 | `auth.js` | 使用者 session、登入（Email / Facebook OAuth，`signInWithFacebook`，provider: "facebook"）/登出/重設密碼；查 `S_SYS_AdminUserList` 取得 `isAdmin`/`isActive`/`permissions`（5 個 Can*）；getter `canEnterAdmin`（IsActive=true）、`canAccess(perm)` |
-| `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊；**品項預購判斷**：`IsPreOrder=true && variant.StockQty <= 0` 雙重條件，同一商品不同 variant 可各自獨立判斷現貨/預購；**選取狀態**：state `selectedItemIds`；getter `selectedItems`（已選品項）/ `selectedTotal`（已選合計）；action `initSelection()`（預設勾選所有非預購品項）/ `toggleSelection(id)` |
+| `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊；**品項預購判斷**：`IsPreOrder=true && variant.StockQty <= 0` 雙重條件，同一商品不同 variant 可各自獨立判斷現貨/預購；**庫存扣除時機**：`addItem` 時呼叫 `decrement_stock` RPC 原子性扣庫存（預購品不扣）；`updateQty` 增量時扣差量、減量時還差量；DB insert 失敗自動回補；`removeItem` 不還庫存（庫存已消費）；**選取狀態**：state `selectedItemIds`；getter `selectedItems`（已選品項）/ `selectedTotal`（已選合計）；action `initSelection()`（預設勾選所有非預購品項）/ `toggleSelection(id)` |
 | `wishlist.js` | 收藏清單 toggle（`C_MBR_WishList`）；`has(id)` 判斷是否收藏 |
 | `siteConfig.js` | 從 `S_SYS_Config` 一次性載入所有 Key-Value 設定（`loaded` 守衛防重複請求）；getter：`get(key)`、`announcement`、`maintenanceMode`、`paymentDisabled`；`FrontendLayout` 掛載時呼叫 `load()` |
 | `wallet.js` | 錢包餘額（balance）與交易紀錄（transactions）；fetchBalance（查 C_MBR_WalletList）；fetchTransactions（查 C_MBR_WalletTxList，最近50筆）；topup（呼叫 wallet-topup Edge Function，回傳藍新付款參數）；reset() |

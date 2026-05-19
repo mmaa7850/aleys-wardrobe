@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-18
+> 更新時間：2026-05-19（下午）
 
 ---
 
@@ -18,7 +18,7 @@
 | **Facebook OAuth** | Supabase Dashboard → Auth → Providers → Facebook | ⚠️ 程式碼已完成，等客戶提供 FB App ID/Secret | 客戶需建立 FB Developer App，取得 App ID + App Secret，填入 Supabase |
 | **LINE OA 浮動按鈕** | 後台系統設定 → `line_oa_url` | ⚠️ 待設定 | 使用者 LINE 官方帳號的連結網址 |
 | **Google Analytics 4** | Vercel 環境變數 `VITE_GA_MEASUREMENT_ID` | ⚠️ 待切換 | 使用者申請自己的 GA4 屬性，取得 `G-XXXXXXXXXX` |
-| **ezPay 電子發票** | Supabase Edge Function Secrets + ezPay 商家後台 | ⚠️ Secrets 已填入，但開票失敗（INV90005） | 需在 ezPay 商家後台確認「電子發票加值服務」是否已開通、合約是否生效 |
+| **ezPay 電子發票** | Supabase Edge Function Secrets + ezPay 商家後台 | ✅ Secrets 已填入，字軌已申請完成 | 正式上線前將 `EZPAY_ENV` 從 `test` 改為 `prod` |
 | **FB Developer App** | Supabase Dashboard → Auth → Providers → Facebook | ⚠️ 程式碼已完成，等客戶提供 FB App ID/Secret | 客戶需建立 FB Developer App，取得 App ID + App Secret，填入 Supabase |
 | **Vercel 部署** | Vercel 專案設定 | ⚠️ 待確認 | 正式網域綁定（目前用 vercel.app 預設網址） |
 
@@ -62,6 +62,7 @@
 - **購物車刪除限制**：非預購商品（IsPreOrder=false）不顯示刪除按鈕，包含現貨、直播自動入單、小編手動入單；只有預購商品可刪除
 - **買衣服付款後自動開發票**：`payment-notify` 付款成功後自動呼叫 ezPay 開立發票；支援所有載具類型；NewebpayAmt=0（全錢包）跳過 ⚠️ 待測試
 - **退款入錢包**：新增 `wallet-refund` Edge Function；後台訂單 Modal 新增「退款入錢包」操作區塊；全額退款（FinalAmount − ShippingFee）或部分退款（指定金額）；退款後入會員錢包，不走藍新退款 API，不作廢發票 ⚠️ 待測試
+- **庫存扣除時機調整**：改為加入購物車時立即扣庫存（`decrement_stock` RPC，FOR UPDATE 原子性）；增加數量扣差量、減少數量還差量；DB 寫入失敗自動回補；`create-payment` 移除結帳前庫存檢查；`payment-notify` 移除付款後庫存扣除；migration：`cart_stock_functions.sql`（`public` + `staging` schema）
 
 ---
 
@@ -85,6 +86,7 @@
    ```
    supabase/migrations/add_invoice_fields.sql
    supabase/migrations/add_invoice_preference_fields.sql
+   supabase/migrations/cart_stock_functions.sql
    ```
 
 2. **ezPay Secrets 已設定**（EZPAY_MERCHANT_ID / EZPAY_HASH_KEY / EZPAY_HASH_IV / EZPAY_ENV）
