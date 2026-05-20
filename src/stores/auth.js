@@ -97,14 +97,12 @@ export const useAuthStore = defineStore("auth", {
       return data
     },
 
-    async signInWithFacebook(finalRedirect) {
-      // finalRedirect：OAuth 完成後最終要去的頁面（預設 /auth/callback 自己決定）
-      const callbackUrl = finalRedirect
-        ? `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(finalRedirect)}`
-        : `${window.location.origin}/auth/callback`;
+    async signInWithFacebook() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "facebook",
-        options: { redirectTo: callbackUrl },
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
       if (error) throw error;
     },

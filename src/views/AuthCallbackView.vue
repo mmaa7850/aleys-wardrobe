@@ -44,8 +44,9 @@ onMounted(async () => {
     .eq("UserID", auth.user.id)
     .maybeSingle();
 
-  // redirect 目標：優先從 URL query param 取（直接帶在 OAuth redirectTo 裡，最可靠）
-  const redirect = new URLSearchParams(window.location.search).get("redirect");
+  // localStorage 跨 OAuth 跳轉仍保留，比 sessionStorage / URL param 都穩
+  const redirect = localStorage.getItem("oauth_redirect") || null;
+  localStorage.removeItem("oauth_redirect");
 
   if (!data) {
     // 新用戶尚無 MemberList 記錄
