@@ -96,6 +96,11 @@ const onRegister = async () => {
 const onFbLogin = async () => {
   errorMsg.value = "";
   fbLoading.value = true;
+  // OAuth 回來後 redirect 參數會消失，先存到 sessionStorage
+  const redirectTarget = router.currentRoute.value.query.redirect;
+  if (redirectTarget && typeof redirectTarget === "string") {
+    sessionStorage.setItem("oauth_redirect", redirectTarget);
+  }
   try {
     await auth.signInWithFacebook();
   } catch (e) {

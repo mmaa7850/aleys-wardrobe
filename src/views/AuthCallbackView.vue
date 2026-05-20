@@ -47,8 +47,13 @@ onMounted(async () => {
   if (!data) {
     router.replace("/account");
   } else {
-    const redirect = new URLSearchParams(window.location.search).get("redirect");
-    router.replace(redirect || "/");
+    // 優先從 sessionStorage 取（FB OAuth 會丟失 query param）
+    const redirect =
+      sessionStorage.getItem("oauth_redirect") ||
+      new URLSearchParams(window.location.search).get("redirect") ||
+      "/";
+    sessionStorage.removeItem("oauth_redirect");
+    router.replace(redirect);
   }
 });
 </script>
