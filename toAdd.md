@@ -98,12 +98,32 @@
 - **退款入錢包**：新增 `wallet-refund` Edge Function；後台訂單 Modal 新增「退款入錢包」操作區塊；全額退款（FinalAmount − ShippingFee）或部分退款（指定金額）；退款後入會員錢包，不走藍新退款 API，不作廢發票 ⚠️ 待測試
 - **庫存扣除時機調整**：改為加入購物車時立即扣庫存（`decrement_stock` RPC，FOR UPDATE 原子性）；增加數量扣差量、減少數量還差量；DB 寫入失敗自動回補；`create-payment` 移除結帳前庫存檢查；`payment-notify` 移除付款後庫存扣除；migration：`cart_stock_functions.sql`（`public` + `staging` schema）
 - **FB 帳號登入（Facebook OAuth）**：登入頁「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用）；FB OAuth 回調（`/auth/callback`）整合；首次 FB 登入自動建立 `C_MBR_MemberList` 最小記錄（upsert by UserID）；`FbName`（`user.user_metadata.full_name`）自動存入會員資料，供直播留言比對 ✅ 測試成功（2026-05-20）
-- **直播代建訂單工具**：後台直播場次管理（`/admin/live`）+ 場次詳情（`/admin/live/:id`）；商品對照表（代碼/顏色/尺寸 → VariantID + 直播特價）；FB 留言文字貼入 → 客戶端解析（過濾雜訊、配對姓名+商品行、標示重複）→ 預覽確認 → `live-import` Edge Function 批次建單（比對 FbName 取會員資料 + 預設地址、扣庫存、建 `LIV_YYYYMMDD_XXXXX` 訂單）→ 有 LINE 綁定自動推播付款連結，無綁定列入「待手動通知名單」 ✅ 已完成（2026-05-20）
+- **直播代建訂單工具**：後台直播場次管理（`/admin/live`）+ 場次詳情（`/admin/live/:id`）；商品對照表（代碼/顏色/尺寸 → VariantID + 直播特價）；FB 留言文字貼入 → 客戶端解析（見解析規則）→ 預覽確認 → `live-import` Edge Function 批次建單（比對 FbName 取會員資料 + 預設地址、扣庫存、建 `LIV_YYYYMMDD_XXXXX` 訂單）→ 有 LINE 綁定自動推播付款連結，無綁定列入「待手動通知名單」 ✅ 已完成（2026-05-20）⚠️ 待測試
 - **LINE OA 帳號綁定系統**：消費者加入 LINE OA → `line-webhook` 收 Follow 事件 → 產生一次性 UUID Token（存 `LineBindToken` 表）→ LINE Push 傳送綁定連結 → 消費者點連結到 `/bind-line?token=xxx` → 未登入跳 `/login`（redirect 存 localStorage）→ FB 登入完成回 `/auth/callback` → 讀 localStorage 跳回 `/bind-line` → `line-bind` 驗證 token → upsert `LineUserID` 至 `C_MBR_MemberList`；AccountView 顯示 LINE 綁定狀態（已綁定 / 尚未綁定）；封鎖 LINE OA → 清除 `LineUserID` ✅ 測試成功（2026-05-20）
 
 ---
 
 ## ⚠️ 已開發，待測試 / 待上線
+
+### 直播代建訂單工具
+
+**程式已完成，需要測試驗證。**（DB migration `add_live_tables.sql` ✅ 已執行 2026-05-20）
+
+**待測試項目：**
+
+| # | 測試項目 | 預期結果 |
+|---|---------|---------|
+| 1 | 貼上正常留言，解析後預覽正確 | 名字+商品+數量都對應正確 |
+| 2 | 貼上含 `作者` 小編回覆，回覆不被解析 | 小編回覆的商品行不出現在預覽 |
+| 3 | 同一留言有兩筆商品 → 整個跳過 | 黃色警告顯示被跳過的留言 |
+| 4 | 倒序處理：舊留言先扣庫存 | 庫存不足時，新留言被略過 |
+| 5 | 同人同代碼留兩次 → ⚠️ 重複標記 | 預覽表格標黃 ⚠️ 重複 |
+| 6 | 無法匹配 FbName 的留言 → no_member | 建單結果顯示「找不到會員」 |
+| 7 | 庫存不足 → no_stock | 建單結果顯示「庫存不足」 |
+| 8 | 成功建單 + 有 LINE 綁定 → LINE Push | 客人收到付款連結 |
+| 9 | 成功建單 + 無 LINE 綁定 → 手動通知名單 | 頁面顯示待手動通知清單 |
+
+---
 
 ### 電子發票（ezPay）+ 退款入錢包 + 購物車限制
 
@@ -207,11 +227,14 @@
 Y77藍L+1
 ```
 
-**解析邏輯：**
-- 雜訊過濾：`頭號粉絲`、時間戳（`5天`、`3小時`）、空行
-- 商品行識別：`/^[A-Z]+\d+.*\+\d+$/i`
-- 商品代碼解析：代碼（英文+數字）+ 顏色（中文）+ 尺寸（英文）+ +數量
-- 比對直播活動對照表取得 `VariantID` 與直播特價
+**解析邏輯（客戶端，`LiveSessionDetail.vue`）：**
+
+1. **雜訊過濾**：`頭號粉絲`、時間戳（`5天`、`3小時`）、空行；看到 `作者` 標記 → 跳過（小編回覆開頭），同時跳過下一行（品牌名）
+2. **分組為 Block**：每個留言人名為一個 block，以下的商品行收進該 block
+3. **倒序處理**（⚠️ 重要）：複製貼上為新到舊，倒序後舊留言（先留者）優先扣庫存
+4. **一則留言只能有一筆商品**：block 內商品行 > 1 → 整個 block 跳過，在預覽區顯示黃色警告清單，小編手動通知客人重新補留
+5. **商品行格式**：`/^([A-Za-z]+\d+)([一-鿿]+)([A-Za-z]+)\+(\d+)$/`（代碼+中文顏色+英文尺寸+數量）
+6. **跨留言重複偵測**：同一人同代碼留了多次 → ⚠️ 標記，讓小編確認
 
 **直播前需建立直播活動與商品對應表：**
 - 每場直播前，後台新建「直播活動」並填入商品對照：
