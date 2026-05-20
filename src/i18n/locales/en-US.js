@@ -35,6 +35,8 @@ export default {
       memberList: "Member List",
       memberLevels: "Member Levels",
       wallet: "Wallet",
+      live: "Livestream",
+      liveSessions: "Live Sessions",
     },
   },
   common: {

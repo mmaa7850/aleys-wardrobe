@@ -50,6 +50,15 @@ const allSections = [
     ],
   },
   {
+    key: "live",
+    labelKey: "admin.sidebar.live",
+    permission: "CanManageOrders",
+    icon: `<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>`,
+    children: [
+      { labelKey: "admin.sidebar.liveSessions", to: "/admin/live" },
+    ],
+  },
+  {
     key: "inventory",
     labelKey: "admin.sidebar.inventory",
     permission: "CanManageProducts",

@@ -35,6 +35,8 @@ export default {
       memberList: "會員列表",
       memberLevels: "會員等級",
       wallet: "錢包管理",
+      live: "直播",
+      liveSessions: "直播場次",
     },
   },
   common: {

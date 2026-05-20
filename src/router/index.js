@@ -160,6 +160,21 @@ const router = createRouter({
           meta: { superAdminOnly: true },
         },
 
+        // Live
+        {
+          path: "live",
+          name: "admin-live",
+          component: () => import("@/pages/admin/live/LiveSessionList.vue"),
+          meta: { permission: "CanManageOrders" },
+        },
+        {
+          path: "live/:id",
+          name: "admin-live-detail",
+          component: () => import("@/pages/admin/live/LiveSessionDetail.vue"),
+          meta: { permission: "CanManageOrders" },
+          props: true,
+        },
+
         // Wallet
         {
           path: "wallet",
