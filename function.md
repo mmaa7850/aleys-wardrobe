@@ -28,6 +28,8 @@
 | 常見問題 | `/faq` | Accordion Q&A（靜態） |
 | 品牌故事 | `/brand-story` | 三段式品牌敘事（靜態） |
 | 聯絡我們 | `/contact` | 聯絡資訊 + 表單（靜態） |
+| 直播場次管理 | `/admin/live` | 直播場次列表（名稱/日期/狀態）；新增場次 Modal（名稱/日期/狀態/備注）；點場次進入詳情 |
+| 直播場次詳情 | `/admin/live/:id` | 場次資訊（可編輯）；Tab 1 **商品對照表**：新增/編輯/刪除（代碼/顏色/尺寸/直播特價，內建 Variant 搜尋 dropdown）；Tab 2 **留言匯入**：貼入 FB 留言文字→客戶端解析（過濾雜訊、配對姓名+商品行、標示重複⚠️）→預覽表格→確認呼叫 `live-import`→顯示建單結果（成功/庫存不足/找不到會員）+待手動通知名單 |
 | 錢包 | `/wallet` | 前台錢包頁面（需登入）；顯示目前餘額（深色漸層卡片）；快速選擇金額按鈕（100/300/500/1000/3000）或自訂金額；發票設定（5種：紙本/手機條碼/自然人憑證/捐贈愛心碼/公司戶）；前往藍新付款；交易紀錄列表（類型/金額/前後餘額/時間）；付款成功後輪詢餘額直到入帳（最多20秒每2秒一次） |
 | 登入/註冊 | `/login` | 「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用，`#1877F2`）；Email 登入/註冊 Tab、忘記密碼；FB OAuth redirect 目標存 localStorage（防 LINE in-app browser 跨頁清空）；FB OAuth ✅ 測試成功（2026-05-20） |
 | 重設密碼 | `/reset-password` | 密碼重設表單 |
@@ -93,6 +95,8 @@
 | `wallet-refund` | ✅ 需要 | 管理員將退款金額入會員錢包；POST `{ orderNo, type: 'full'|'partial', refundAmt? }`；管理員身份驗證（IsActive）；全額退款 = FinalAmount − ShippingFee；部分退款 = 指定金額；透過 CustomerEmail → MemberList 查 UserID；upsert C_MBR_WalletList；寫入 C_MBR_WalletTxList (TxType='refund', RelatedOrderNo, Note, CreatedBy)；全額退款更新 PaymentStatus → 'refunded'；部分退款追加 AdminNote 記錄 ⚠️ 待測試 |
 | `line-webhook` | ❌ 關閉（`--no-verify-jwt`） | LINE Messaging API Webhook；x-line-signature HMAC-SHA256 驗證；**Follow 事件**：生成 UUID Token → 存入 `LineBindToken` 表（7 天有效）→ LINE Push 傳送綁定連結（`${SITE_URL}/bind-line?token=xxx`）；**Unfollow 事件**：清除 `C_MBR_MemberList.LineUserID`；Secrets：`LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / `SITE_URL` / `DB_SCHEMA` |
 | `line-bind` | ✅ 需要 | 前台呼叫，完成 LINE 帳號綁定；驗證 JWT（取得 UserID）；驗證 token（存在、未過期、未使用）；upsert `LineUserID` 至 `C_MBR_MemberList`（by UserID，避免無記錄時 update 不生效）；標記 Token.UsedAt；Secrets：`DB_SCHEMA` |
+| `line-notify` | ✅ 需要 | 管理員呼叫；POST `{ lineUserId, message }`；驗證 IsActive 管理員身份；發 LINE Push API；供未來出貨通知等場景重用 |
+| `live-import` | ✅ 需要 | 直播留言批次建單；POST `{ sessionId, items: [{ livProductId, fbName, qty }] }`；管理員身份驗證；逐筆：查 `C_LIV_ProductList`→比對 `C_MBR_MemberList.FbName`→取預設地址（`C_MBR_MemberAddressList`）→`decrement_stock` RPC→建 `C_ORD_OrderList`（OrderSource='live', OrderNo=`LIV_YYYYMMDD_XXXXX`）+ `C_ORD_OrderItemList`→有 `LineUserID` 則 LINE Push 付款連結；回傳每筆 status（success/no_stock/no_member/error）|
 
 ---
 
@@ -124,6 +128,12 @@
 - `C_MBR_WalletList` — 錢包主表（MemberID/Balance/CreatedDate/UpdatedDate）；RLS：僅本人可讀
 - `C_MBR_WalletTxList` — 交易流水帳（TxType: topup/order_deduct/refund/adjust；Amount 正=入負=扣；BalanceBefore/BalanceAfter；RelatedOrderNo/RelatedTopupNo；CreatedBy 管理員調整時填入）；RLS：僅本人可讀
 - `C_MBR_WalletTopupList` — 儲值訂單（TopupNo/MemberID/Amount/PaymentStatus/InvoiceStatus 及完整 Invoice* 欄位）；RLS：僅本人可讀
+
+### 直播
+- `C_LIV_SessionList` — 直播場次（`ID`/`Title`/`LiveDate`/`Status`: planned/active/closed/`Notes`）
+- `C_LIV_ProductList` — 直播商品對照表（`SessionID`/`Code`留言代碼/`ColorName`/`SizeName`/`VariantID`/`ProductName`快取/`LivePrice`）
+- `C_ORD_OrderList.OrderSource` — 新增欄位，`'web'`/`'live'`/`'admin'`
+- `C_ORD_OrderList.LiveSessionID` — 新增欄位，對應 `C_LIV_SessionList.ID`
 
 ### LINE 綁定
 - `LineBindToken` — 一次性 LINE 綁定 Token（`Token` UUID PK / `LineUserID` / `CreatedAt` / `UsedAt` / `ExpiresAt` 7天）；`line-webhook` 於 Follow 事件寫入，`line-bind` 驗證並標記 UsedAt；RLS: 僅 service_role 可操作

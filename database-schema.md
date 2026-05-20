@@ -14,6 +14,7 @@
 | `add_invoice_fields.sql` | 新增 Invoice* 7 個欄位（電子發票） | ⚠️ 待執行 |
 | `add_wallet_tables.sql` | 新增錢包系統三張表 + C_ORD_OrderList 兩個欄位 | ✅ 已執行 |
 | `add_line_binding.sql` | `C_MBR_MemberList` 新增 `LineUserID` / `FbName`；新增 `LineBindToken` 表 | ✅ 已執行（2026-05-20，staging + public 兩個 schema） |
+| `add_live_tables.sql` | 新增 `C_LIV_SessionList` / `C_LIV_ProductList`；`C_ORD_OrderList` 新增 `OrderSource` / `LiveSessionID` | ⚠️ 待執行 |
 
 ---
 
@@ -97,6 +98,30 @@ WITH CHECK (
 | MemberID | bigint | NO | — |
 | CreatedDate | timestamptz | YES | now() |
 | UpdatedDate | timestamptz | YES | now() |
+
+### C_LIV_SessionList
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| Title | varchar(100) | NO | — | |
+| LiveDate | date | YES | — | |
+| Status | varchar(20) | NO | 'planned' | `planned` / `active` / `closed` |
+| Notes | text | YES | — | |
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | now() | |
+
+### C_LIV_ProductList
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| SessionID | bigint | NO | — | FK → C_LIV_SessionList.ID ON DELETE CASCADE |
+| Code | varchar(20) | NO | — | 直播商品代碼（如 A1）|
+| ColorName | varchar(50) | NO | — | 顏色名稱（留言比對用）|
+| SizeName | varchar(20) | NO | — | 尺寸名稱（留言比對用）|
+| VariantID | bigint | NO | — | FK → C_PRD_ProductVariantList.ID |
+| ProductName | varchar(200) | YES | — | 快照，方便顯示 |
+| LivePrice | bigint | NO | — | 直播特價（NT$）|
+| CreatedDate | timestamptz | YES | now() | |
 
 ### C_MBR_MemberAddressList
 | 欄位 | 型別 | Nullable | Default |
@@ -222,45 +247,46 @@ WITH CHECK (
 | SubTotal | bigint | NO | — |
 
 ### C_ORD_OrderList
-| 欄位 | 型別 | Nullable | Default |
-|------|------|----------|---------|
-| ID | bigint | NO | — |
-| OrderNo | varchar | NO | — |
-
-| CustomerName | varchar | NO | — |
-| CustomerEmail | varchar | NO | — |
-| CustomerPhone | varchar | YES | — |
-| ShippingName | varchar | NO | — |
-| ShippingPhone | varchar | NO | — |
-| ShippingAddress | varchar | NO | — |
-| ShippingMethodID | bigint | YES | — |
-| ShippingFee | bigint | NO | 0 |
-| ShippingMethod | varchar(20) | YES | 'home' |
-| StoreID | varchar(10) | YES | — |
-| StoreName | varchar(50) | YES | — |
-| PayMethodID | bigint | YES | — |
-| PaymentStatus | varchar | NO | 'pending' |
-| PaymentMethod | varchar(20) | YES | — |
-| PaymentFee | bigint | YES | — |
-| PaidAt | timestamptz | YES | — |
-| ATMBankCode | varchar(10) | YES | — |
-| ATMAccount | varchar(20) | YES | — |
-| CouponID | bigint | YES | — |
-| HomeDeliveryNo | varchar(50) | YES | — |
-| HomeDeliveryCompany | varchar(20) | YES | — |
-| DiscountAmount | bigint | NO | 0 |
-| ItemsTotal | bigint | NO | 0 |
-| FinalAmount | bigint | NO | 0 |
-| StatusID | bigint | YES | — |
-| CustomerNote | text | YES | — |
-| AdminNote | text | YES | — |
-| LogisticsTradeNo | varchar(20) | YES | — |
-| LgsNo | varchar(20) | YES | — |
-| StorePrintNo | varchar(20) | YES | — |
-| ShippingStatus | varchar(10) | YES | — |
-| ShippingStatusText | varchar(50) | YES | — |
-| CreatedDate | timestamptz | NO | now() |
-| UpdatedDate | timestamptz | YES | — |
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| OrderNo | varchar | NO | — | 格式：`AW_YYYYMMDD_XXXXX`（一般）/ `LIV_YYYYMMDD_XXXXX`（直播）|
+| OrderSource | varchar(20) | YES | 'web' | `web` / `live` |
+| LiveSessionID | bigint | YES | — | FK → C_LIV_SessionList.ID（直播訂單才有值）|
+| CustomerName | varchar | NO | — | |
+| CustomerEmail | varchar | NO | — | |
+| CustomerPhone | varchar | YES | — | |
+| ShippingName | varchar | NO | — | |
+| ShippingPhone | varchar | NO | — | |
+| ShippingAddress | varchar | NO | — | |
+| ShippingMethodID | bigint | YES | — | |
+| ShippingFee | bigint | NO | 0 | |
+| ShippingMethod | varchar(20) | YES | 'home' | |
+| StoreID | varchar(10) | YES | — | |
+| StoreName | varchar(50) | YES | — | |
+| PayMethodID | bigint | YES | — | |
+| PaymentStatus | varchar | NO | 'pending' | |
+| PaymentMethod | varchar(20) | YES | — | |
+| PaymentFee | bigint | YES | — | |
+| PaidAt | timestamptz | YES | — | |
+| ATMBankCode | varchar(10) | YES | — | |
+| ATMAccount | varchar(20) | YES | — | |
+| CouponID | bigint | YES | — | |
+| HomeDeliveryNo | varchar(50) | YES | — | |
+| HomeDeliveryCompany | varchar(20) | YES | — | |
+| DiscountAmount | bigint | NO | 0 | |
+| ItemsTotal | bigint | NO | 0 | |
+| FinalAmount | bigint | NO | 0 | |
+| StatusID | bigint | YES | — | |
+| CustomerNote | text | YES | — | |
+| AdminNote | text | YES | — | |
+| LogisticsTradeNo | varchar(20) | YES | — | |
+| LgsNo | varchar(20) | YES | — | |
+| StorePrintNo | varchar(20) | YES | — | |
+| ShippingStatus | varchar(10) | YES | — | |
+| ShippingStatusText | varchar(50) | YES | — | |
+| CreatedDate | timestamptz | NO | now() | |
+| UpdatedDate | timestamptz | YES | — | |
 | InvoiceStatus ⚠️ 待測試 | varchar(20) | NO | 'none' | `none` / `issued` / `voided` / `allowance` |
 | InvoiceNo ⚠️ 待測試 | varchar(20) | YES | — | ezPay 發票開立序號（InvoiceTransNo） |
 | InvoiceNumber ⚠️ 待測試 | varchar(10) | YES | — | 實際發票號碼（如 AB12345678） |
@@ -714,6 +740,16 @@ WITH CHECK (
 | members can read own topup | authenticated | SELECT | MemberID = auth.uid() |
 
 > INSERT/UPDATE/DELETE 僅由 Edge Functions 使用 service_role 執行（繞過 RLS），無公開寫入政策。
+
+### C_LIV_SessionList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| live_session_staff_all | authenticated | ALL | staging.is_staff()（任何啟用的管理員）|
+
+### C_LIV_ProductList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| live_product_staff_all | authenticated | ALL | staging.is_staff()（任何啟用的管理員）|
 
 ---
 
