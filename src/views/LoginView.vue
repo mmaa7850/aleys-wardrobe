@@ -141,6 +141,19 @@ const onForgotPassword = async () => {
         </div>
       </header>
 
+      <!-- FB 按鈕（登入 / 註冊共用） -->
+      <div class="fb-section">
+        <button class="btn-fb" type="button" @click="onFbLogin" :disabled="isSubmitting || fbLoading">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
+          </svg>
+          <span>{{ fbLoading ? '連線中...' : '以 Facebook 繼續' }}</span>
+        </button>
+        <p class="fb-hint">首次使用將自動建立帳號</p>
+      </div>
+
+      <div class="divider"><span>或使用 Email</span></div>
+
       <!-- Tab switch -->
       <div class="tabs">
         <button :class="['tab', { 'tab--active': mode === 'login' }]" @click="switchMode('login')">登入</button>
@@ -167,15 +180,6 @@ const onForgotPassword = async () => {
         <button class="link-btn" type="button" @click="onForgotPassword" :disabled="isSubmitting || fbLoading">
           忘記密碼？
         </button>
-
-        <div class="divider"><span>或</span></div>
-
-        <button class="btn-fb" type="button" @click="onFbLogin" :disabled="isSubmitting || fbLoading">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
-          </svg>
-          <span>{{ fbLoading ? '連線中...' : '使用 Facebook 登入' }}</span>
-        </button>
       </form>
 
       <!-- ── Register form ── -->
@@ -198,15 +202,6 @@ const onForgotPassword = async () => {
 
         <button class="btn" type="submit" :disabled="isSubmitting">
           {{ isSubmitting ? '註冊中...' : '建立帳號' }}
-        </button>
-
-        <div class="divider"><span>或</span></div>
-
-        <button class="btn-fb" type="button" @click="onFbLogin" :disabled="isSubmitting || fbLoading">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
-          </svg>
-          <span>{{ fbLoading ? '連線中...' : '使用 Facebook 快速註冊' }}</span>
         </button>
       </form>
 
@@ -341,6 +336,21 @@ const onForgotPassword = async () => {
 .btn-fb:hover { background: #166FE5; }
 .btn-fb:active { transform: translateY(1px); }
 .btn-fb:disabled { opacity: 0.65; cursor: not-allowed; }
+
+.fb-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.fb-hint {
+  font-size: 11px;
+  color: rgba(31, 41, 55, 0.4);
+  margin: 0;
+  letter-spacing: 0.02em;
+}
 
 /* 分隔線 */
 .divider {
