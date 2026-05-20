@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 export const useSiteConfigStore = defineStore('siteConfig', {
   state: () => ({
@@ -17,7 +17,7 @@ export const useSiteConfigStore = defineStore('siteConfig', {
   actions: {
     async load() {
       if (this.loaded) return
-      const { data } = await supabase.from('S_SYS_Config').select('Name, Value')
+      const { data } = await db.from('S_SYS_Config').select('Name, Value')
       if (data) {
         this.config = Object.fromEntries(data.map((row) => [row.Name, row.Value]))
         this.loaded = true
