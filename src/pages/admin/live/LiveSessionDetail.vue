@@ -40,12 +40,13 @@ let _variantTimer = null
 const activeTab = ref('products')
 
 // ── 留言匯入 ──────────────────────────────────────────────
-const rawText       = ref('')
-const parsedItems   = ref([])
-const parseError    = ref('')
-const importing     = ref(false)
-const importDone    = ref(false)
-const importResults = ref([])
+const rawText            = ref('')
+const parsedItems        = ref([])
+const skippedMultiBlocks = ref([])   // 一則留言有多筆商品 → 整個跳過
+const parseError         = ref('')
+const importing          = ref(false)
+const importDone         = ref(false)
+const importResults      = ref([])
 
 // ═══════════════════════════════════════════════════════════
 // 場次
@@ -232,49 +233,84 @@ const NOISE_RE = [
 const PRODUCT_RE = /^([A-Za-z]+\d+)([一-鿿]+)([A-Za-z]+)\+(\d+)$/
 
 function parseRawText() {
-  parseError.value = ''
-  importDone.value = false
-  importResults.value = []
+  parseError.value        = ''
+  importDone.value        = false
+  importResults.value     = []
+  skippedMultiBlocks.value = []
 
   if (!rawText.value.trim()) { parseError.value = '請先貼上留言文字'; return }
   if (!products.value.length) { parseError.value = '請先在「商品對照表」建立商品對應'; return }
 
-  const lines = rawText.value
-    .split('\n')
-    .map(l => l.trim())
-    .filter(l => l && !NOISE_RE.some(re => re.test(l)))
+  // ── Step 1：過濾雜訊（時間戳、頭號粉絲、作者回覆） ──────
+  const rawLines = rawText.value.split('\n').map(l => l.trim())
+  const cleanLines = []
+  let skipNext = false
 
-  const parsed = []
-  let currentName = null
+  for (const line of rawLines) {
+    if (skipNext) { skipNext = false; continue }   // 跳過作者名稱行（品牌名）
+    if (line === '作者') { skipNext = true; continue } // 小編回覆標記
+    if (!line) continue
+    if (NOISE_RE.some(re => re.test(line))) continue
+    cleanLines.push(line)
+  }
 
-  for (const line of lines) {
-    const m = line.match(PRODUCT_RE)
-    if (m) {
-      const [, code, colorName, sizeName, qtyStr] = m
-      const key = `${code.toUpperCase()}|${colorName}|${sizeName.toUpperCase()}`
-      parsed.push({
-        _id:        Math.random().toString(36).slice(2),
-        fbName:     currentName,
-        rawLine:    line,
-        code:       code.toUpperCase(),
-        colorName,
-        sizeName:   sizeName.toUpperCase(),
-        qty:        Number(qtyStr),
-        livProduct: productMap.value.get(key) ?? null,
-        selected:   true,
-        isDuplicate: false,
-      })
+  // ── Step 2：將乾淨行分組成留言 block [{name, products[]}] ──
+  const blocks = []
+  let currentBlock = null
+
+  for (const line of cleanLines) {
+    if (PRODUCT_RE.test(line)) {
+      if (!currentBlock) {
+        currentBlock = { name: null, products: [] }
+        blocks.push(currentBlock)
+      }
+      currentBlock.products.push(line)
     } else {
-      currentName = line
+      currentBlock = { name: line, products: [] }
+      blocks.push(currentBlock)
     }
   }
 
-  if (!parsed.length) {
+  // ── Step 3：倒序 → 舊留言（貼上後在底部）優先扣庫存 ─────
+  blocks.reverse()
+
+  // ── Step 4：篩選 block，超過 1 筆商品 → 整個跳過 ─────────
+  const parsed = []
+  const skipped = []
+
+  for (const block of blocks) {
+    if (block.products.length === 0) continue
+    if (block.products.length > 1) {
+      skipped.push(block)
+      continue
+    }
+    const line = block.products[0]
+    const m = line.match(PRODUCT_RE)
+    if (!m) continue
+    const [, code, colorName, sizeName, qtyStr] = m
+    const key = `${code.toUpperCase()}|${colorName}|${sizeName.toUpperCase()}`
+    parsed.push({
+      _id:         Math.random().toString(36).slice(2),
+      fbName:      block.name,
+      rawLine:     line,
+      code:        code.toUpperCase(),
+      colorName,
+      sizeName:    sizeName.toUpperCase(),
+      qty:         Number(qtyStr),
+      livProduct:  productMap.value.get(key) ?? null,
+      selected:    true,
+      isDuplicate: false,
+    })
+  }
+
+  skippedMultiBlocks.value = skipped
+
+  if (!parsed.length && !skipped.length) {
     parseError.value = '未解析到任何商品留言，請確認格式（名字一行、商品代碼一行，例：Y77藍L+1）'
     return
   }
 
-  // 標記重複
+  // ── Step 5：標記跨留言重複（同人同代碼留了兩次）─────────
   const cnt = {}
   for (const item of parsed) {
     const k = `${item.fbName}|${item.code}`
@@ -608,6 +644,20 @@ onMounted(async () => {
             </div>
           </div>
 
+          <!-- 多筆商品被跳過的警告 -->
+          <div
+            v-if="skippedMultiBlocks.length"
+            class="alert mb-3 py-2 px-3"
+            style="font-size:12.5px; background:#fff8e1; border:1px solid #f0c040; color:#7a5c00;"
+          >
+            <strong>⚠️ 以下留言因一則留言含多筆商品，已整個跳過（請通知客人重新補留）：</strong>
+            <ul class="mb-0 mt-1">
+              <li v-for="(b, i) in skippedMultiBlocks" :key="i">
+                <strong>{{ b.name || '（無名字）' }}</strong>：{{ b.products.join('、') }}
+              </li>
+            </ul>
+          </div>
+
           <!-- 解析預覽 -->
           <div v-if="parsedItems.length" class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -688,7 +738,7 @@ onMounted(async () => {
               </table>
             </div>
             <div class="card-footer" style="font-size:12px; color:#a08060;">
-              勾選 ✓ 的項目才會建單。⚠️ 重複留言仍可建單，請先確認是否為客人失誤。❌ 項目請先修改商品對照表。
+              勾選 ✓ 的項目才會建單。處理順序：舊留言優先（先留先得）。⚠️ 重複代表同一人留了多次相同商品，請確認後再建單。❌ 項目請先修改商品對照表。
             </div>
           </div>
         </template>
