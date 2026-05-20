@@ -38,3 +38,5 @@ jobs:
           supabase functions deploy wallet-topup-return   --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
           supabase functions deploy wallet-adjust         --project-ref xyqznatwbfuscocycqtb
           supabase functions deploy wallet-refund         --project-ref xyqznatwbfuscocycqtb
+          supabase functions deploy line-webhook          --project-ref xyqznatwbfuscocycqtb --no-verify-jwt
+          supabase functions deploy line-bind             --project-ref xyqznatwbfuscocycqtb
