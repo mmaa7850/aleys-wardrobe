@@ -23,7 +23,7 @@ onMounted(async () => {
   if (!auth.isLoggedIn) {
     await auth.init()
     if (!auth.isLoggedIn) {
-      router.replace(`/login?redirect=/bind-line?token=${token}`)
+      router.replace(`/login?redirect=${encodeURIComponent('/bind-line?token=' + token)}`)
       return
     }
   }
