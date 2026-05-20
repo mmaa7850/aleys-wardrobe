@@ -8,8 +8,9 @@ const router = useRouter()
 const route  = useRoute()
 const auth   = useAuthStore()
 
-const status = ref('loading') // loading | success | error | no-token
-const errMsg = ref('')
+const status   = ref('loading') // loading | success | error | no-token
+const errMsg   = ref('')
+const countdown = ref(3)
 
 onMounted(async () => {
   const token = route.query.token
@@ -45,6 +46,14 @@ onMounted(async () => {
     const data = await res.json()
     if (data.success) {
       status.value = 'success'
+      // 3 秒後自動跳到帳號頁
+      const timer = setInterval(() => {
+        countdown.value--
+        if (countdown.value <= 0) {
+          clearInterval(timer)
+          router.push('/account')
+        }
+      }, 1000)
     } else {
       status.value = 'error'
       errMsg.value = data.error || '綁定失敗'
@@ -75,7 +84,8 @@ onMounted(async () => {
         </div>
         <h2 class="bl-title">LINE 綁定成功！</h2>
         <p class="bl-text">您的帳號已成功綁定 LINE，<br>之後直播下單通知會自動發送給您。</p>
-        <button class="bl-btn" @click="router.push('/')">回到首頁</button>
+        <p class="bl-countdown">{{ countdown }} 秒後自動跳轉...</p>
+        <button class="bl-btn" @click="router.push('/account')">前往我的帳號</button>
       </template>
 
       <!-- No token -->
@@ -180,4 +190,10 @@ onMounted(async () => {
   transition: opacity 0.2s;
 }
 .bl-btn:hover { opacity: 0.82; }
+
+.bl-countdown {
+  font-size: 12px;
+  color: var(--fe-muted);
+  margin: -4px 0 0;
+}
 </style>

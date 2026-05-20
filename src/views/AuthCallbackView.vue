@@ -29,11 +29,13 @@ onMounted(async () => {
       user.user_metadata?.name ||
       null;
     if (fbName) {
-      // 只更新 FbName，不影響其他欄位
+      // upsert：若記錄已存在只更新 FbName，若不存在則建立最小記錄
       await db
         .from("C_MBR_MemberList")
-        .update({ FbName: fbName })
-        .eq("UserID", user.id);
+        .upsert(
+          { UserID: user.id, Email: user.email ?? "", FbName: fbName },
+          { onConflict: "UserID" },
+        );
     }
   }
 

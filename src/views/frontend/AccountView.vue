@@ -58,7 +58,7 @@ async function fetchProfile() {
   isLoading.value = true
   const { data, error: fetchErr } = await db
     .from('C_MBR_MemberList')
-    .select('Name, Phone, Gender, Birthday, CreatedDate, MemberLevelID')
+    .select('Name, Phone, Gender, Birthday, CreatedDate, MemberLevelID, LineUserID')
     .eq('UserID', auth.user.id)
     .maybeSingle()
 
