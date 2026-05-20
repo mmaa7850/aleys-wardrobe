@@ -20,6 +20,23 @@ onMounted(async () => {
     return;
   }
 
+  // FB 登入：擷取 FB 顯示名稱存入會員資料（供直播訂單比對用）
+  const user = auth.user;
+  const fbIdentity = user?.identities?.find((i) => i.provider === "facebook");
+  if (fbIdentity) {
+    const fbName =
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      null;
+    if (fbName) {
+      // 只更新 FbName，不影響其他欄位
+      await db
+        .from("C_MBR_MemberList")
+        .update({ FbName: fbName })
+        .eq("UserID", user.id);
+    }
+  }
+
   // 新用戶（尚未建立 MemberList 記錄）→ 導到帳號頁填資料
   const { data } = await db
     .from("C_MBR_MemberList")

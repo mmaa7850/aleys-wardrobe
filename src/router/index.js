@@ -40,6 +40,8 @@ const router = createRouter({
       ],
     },
 
+    { path: "/bind-line", name: "bind-line", component: () => import("@/views/frontend/BindLineView.vue") },
+
     { path: "/login", name: "login", component: LoginView },
     {
       path: "/reset-password",
@@ -208,7 +210,7 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore();
 
   // 放行不需要驗證的頁面
-  if (to.path === "/reset-password" || to.path === "/auth/callback") {
+  if (to.path === "/reset-password" || to.path === "/auth/callback" || to.path === "/bind-line") {
     return true;
   }
 
