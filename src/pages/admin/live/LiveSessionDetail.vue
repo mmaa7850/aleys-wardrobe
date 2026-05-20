@@ -31,10 +31,17 @@ const prodForm   = ref({ Code: '', ColorName: '', SizeName: '', LivePrice: '', V
 const prodSaving = ref(false)
 const prodErr    = ref('')
 
-const variantSearch  = ref('')
-const variantResults = ref([])
-const variantLoading = ref(false)
-let _variantTimer = null
+// 商品瀏覽器（Modal 內）
+const browseProducts        = ref([])
+const browseLoading         = ref(false)
+const browseImageMap        = ref({})      // productId → storagePath
+const categoryList          = ref([])
+const categoryFilter        = ref('')
+const productSearchText     = ref('')
+const selectedBrowseProduct = ref(null)
+const browseVariants        = ref([])
+const browseVariantsLoading = ref(false)
+let _browseTimer = null
 
 // ── Tab ───────────────────────────────────────────────────
 const activeTab = ref('products')
@@ -102,16 +109,19 @@ async function loadProducts() {
 }
 
 function openAddProduct() {
-  editProdId.value = null
-  prodForm.value   = { Code: '', ColorName: '', SizeName: '', LivePrice: '', VariantID: null, ProductName: '' }
-  variantSearch.value  = ''
-  variantResults.value = []
-  prodErr.value = ''
+  editProdId.value            = null
+  prodForm.value              = { Code: '', ColorName: '', SizeName: '', LivePrice: '', VariantID: null, ProductName: '' }
+  selectedBrowseProduct.value = null
+  browseVariants.value        = []
+  productSearchText.value     = ''
+  categoryFilter.value        = ''
+  prodErr.value               = ''
+  browseProductList()
   _prodModal = _prodModal || new Modal(document.getElementById('prodModal'))
   _prodModal.show()
 }
 
-function openEditProduct(p) {
+async function openEditProduct(p) {
   editProdId.value = p.ID
   prodForm.value   = {
     Code:        p.Code,
@@ -121,68 +131,132 @@ function openEditProduct(p) {
     VariantID:   p.VariantID,
     ProductName: p.ProductName,
   }
-  variantSearch.value  = `${p.ProductName} ${p.ColorName} ${p.SizeName}`
-  variantResults.value = []
-  prodErr.value = ''
+  selectedBrowseProduct.value = null
+  browseVariants.value        = []
+  productSearchText.value     = ''
+  categoryFilter.value        = ''
+  prodErr.value               = ''
+
+  // 從 VariantID 反查 ProductID，再載入商品 + 規格
+  const { data: variant } = await db
+    .from('C_PRD_ProductVariantList')
+    .select('ProductID')
+    .eq('ID', p.VariantID)
+    .single()
+
+  await browseProductList()
+
+  if (variant?.ProductID) {
+    let prod = browseProducts.value.find(pr => pr.ID === variant.ProductID)
+    if (!prod) {
+      // 商品不在目前清單（例如未上架）→ 直接查
+      const { data: directProd } = await db
+        .from('C_PRD_ProductList')
+        .select('ID, ProductName, Category, IsActive')
+        .eq('ID', variant.ProductID)
+        .single()
+      prod = directProd
+    }
+    if (prod) await loadVariantsForProduct(prod, true)  // true = 保留已選 VariantID
+  }
+
   _prodModal = _prodModal || new Modal(document.getElementById('prodModal'))
   _prodModal.show()
 }
 
-// Variant 搜尋（兩步：先查商品名，再查 variants）
-function onVariantInput() {
-  clearTimeout(_variantTimer)
-  if (!variantSearch.value.trim()) { variantResults.value = []; return }
-  _variantTimer = setTimeout(doVariantSearch, 300)
+// ── 商品瀏覽器函式 ───────────────────────────────────────
+async function loadCategories() {
+  const { data } = await db.from('S_PRD_CategoryList').select('ID, Name').order('Name')
+  categoryList.value = data || []
 }
 
-async function doVariantSearch() {
-  variantLoading.value = true
-  variantResults.value = []
+function onBrowseInput() {
+  clearTimeout(_browseTimer)
+  _browseTimer = setTimeout(browseProductList, 300)
+}
 
-  const { data: prods } = await db
+async function browseProductList() {
+  browseLoading.value  = true
+  browseProducts.value = []
+
+  let query = db
     .from('C_PRD_ProductList')
-    .select('ID, ProductName')
-    .ilike('ProductName', `%${variantSearch.value.trim()}%`)
-    .limit(10)
+    .select('ID, ProductName, Category, IsActive')
+    .eq('IsActive', true)
+    .order('UpdatedDate', { ascending: false })
+    .limit(30)
 
-  if (!prods?.length) { variantLoading.value = false; return }
+  if (productSearchText.value.trim())
+    query = query.ilike('ProductName', `%${productSearchText.value.trim()}%`)
+  if (categoryFilter.value)
+    query = query.eq('Category', categoryFilter.value)
 
-  const productIds = prods.map(p => p.ID)
+  const { data: prods } = await query
+  browseProducts.value = prods || []
 
-  const [{ data: variants }, { data: allColors }, { data: allSizes }] = await Promise.all([
-    db.from('C_PRD_ProductVariantList').select('ID, ProductID, ColorID, SizeID, StockQty').in('ProductID', productIds),
+  // 批次取主圖
+  if (prods?.length) {
+    const ids = prods.map(p => p.ID)
+    const { data: pics } = await db
+      .from('C_PRD_ProductPictureList')
+      .select('ProductID, StoragePath')
+      .in('ProductID', ids)
+      .eq('IsMain', true)
+    const map = {}
+    for (const pic of pics || []) {
+      if (!map[pic.ProductID]) map[pic.ProductID] = pic.StoragePath
+    }
+    browseImageMap.value = map
+  }
+
+  browseLoading.value = false
+}
+
+function getImageUrl(path) {
+  if (!path) return null
+  return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/product-pictures/${path}`
+}
+
+async function loadVariantsForProduct(prod, keepVariant = false) {
+  selectedBrowseProduct.value = prod
+  prodForm.value.ProductName  = prod.ProductName
+  if (!keepVariant) {
+    prodForm.value.VariantID  = null
+    prodForm.value.ColorName  = ''
+    prodForm.value.SizeName   = ''
+  }
+  browseVariantsLoading.value = true
+  browseVariants.value        = []
+
+  const [{ data: variants }, { data: colors }, { data: sizes }] = await Promise.all([
+    db.from('C_PRD_ProductVariantList').select('ID, ColorID, SizeID, StockQty').eq('ProductID', prod.ID),
     db.from('S_PRD_ColorList').select('ID, Name'),
     db.from('S_PRD_SizeList').select('ID, Name'),
   ])
 
-  const prodMap  = Object.fromEntries((prods      || []).map(p => [p.ID, p.ProductName]))
-  const colorMap = Object.fromEntries((allColors  || []).map(c => [c.ID, c.Name]))
-  const sizeMap  = Object.fromEntries((allSizes   || []).map(s => [s.ID, s.Name]))
+  const colorMap = Object.fromEntries((colors || []).map(c => [c.ID, c.Name]))
+  const sizeMap  = Object.fromEntries((sizes  || []).map(s => [s.ID, s.Name]))
 
-  variantResults.value = (variants || []).map(v => ({
-    ID:          v.ID,
-    StockQty:    v.StockQty,
-    ProductName: prodMap[v.ProductID]  || '',
-    ColorName:   colorMap[v.ColorID]   || '',
-    SizeName:    sizeMap[v.SizeID]     || '',
+  browseVariants.value = (variants || []).map(v => ({
+    ID:        v.ID,
+    StockQty:  v.StockQty,
+    ColorName: colorMap[v.ColorID] || '',
+    SizeName:  sizeMap[v.SizeID]   || '',
   }))
 
-  variantLoading.value = false
+  browseVariantsLoading.value = false
 }
 
 function selectVariant(v) {
-  prodForm.value.VariantID   = v.ID
-  prodForm.value.ProductName = v.ProductName
-  if (!prodForm.value.ColorName) prodForm.value.ColorName = v.ColorName
-  if (!prodForm.value.SizeName)  prodForm.value.SizeName  = v.SizeName
-  variantSearch.value  = `${v.ProductName} ${v.ColorName} ${v.SizeName}`
-  variantResults.value = []
+  prodForm.value.VariantID = v.ID
+  prodForm.value.ColorName = v.ColorName
+  prodForm.value.SizeName  = v.SizeName
 }
 
 async function saveProduct() {
   const { Code, ColorName, SizeName, LivePrice, VariantID, ProductName } = prodForm.value
-  if (!Code.trim() || !ColorName.trim() || !SizeName.trim() || !LivePrice || !VariantID) {
-    prodErr.value = '請填寫所有欄位，並從搜尋結果中選擇商品規格'
+  if (!Code.trim() || !LivePrice || !VariantID) {
+    prodErr.value = '請從商品列表選擇規格，並填寫留言代碼與直播特價'
     return
   }
   prodSaving.value = true
@@ -384,6 +458,7 @@ const RESULT_STATUS = {
 onMounted(async () => {
   await loadSession()
   await loadProducts()
+  await loadCategories()
 })
 </script>
 
@@ -747,87 +822,158 @@ onMounted(async () => {
 
     <!-- ════ 商品對照 Modal ════ -->
     <div class="modal fade" id="prodModal" tabindex="-1">
-      <div class="modal-dialog modal-lg">
+      <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title">{{ editProdId ? '編輯商品對照' : '新增商品對照' }}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
           </div>
           <div class="modal-body">
-            <div class="row g-3">
 
-              <!-- 搜尋商品規格 -->
-              <div class="col-12">
-                <label class="form-label">搜尋商品規格 <span class="text-danger">*</span></label>
-                <input
-                  v-model="variantSearch"
-                  class="form-control"
-                  placeholder="輸入商品名稱搜尋，例：白色鬆緊"
-                  @input="onVariantInput"
-                />
-                <div v-if="variantLoading" style="font-size:12px; color:#a08060; margin-top:4px;">搜尋中...</div>
-                <!-- 搜尋結果 dropdown -->
-                <div
-                  v-if="variantResults.length"
-                  class="border rounded mt-1"
-                  style="max-height:200px; overflow-y:auto; background:#fff; position:relative; z-index:10;"
+            <!-- ① 篩選列 -->
+            <div class="row g-2 mb-2">
+              <div class="col-sm-4">
+                <select
+                  v-model="categoryFilter"
+                  class="form-select form-select-sm"
+                  @change="browseProductList"
                 >
-                  <div
-                    v-for="v in variantResults"
-                    :key="v.ID"
-                    class="px-3 py-2"
-                    style="cursor:pointer; font-size:13px; border-bottom:1px solid #f0e8dc; transition:background 0.12s;"
-                    @mouseenter="$event.currentTarget.style.background='#fdf5eb'"
-                    @mouseleave="$event.currentTarget.style.background=''"
-                    @click="selectVariant(v)"
-                  >
-                    {{ v.ProductName }} {{ v.ColorName }} {{ v.SizeName }}
-                    <span style="color:#a08060; font-size:11px; margin-left:6px;">庫存 {{ v.StockQty }}</span>
-                  </div>
-                </div>
-                <!-- 已選 -->
-                <div v-if="prodForm.VariantID" class="mt-1" style="font-size:12px; color:#3d8a4e;">
-                  ✓ 已選擇：{{ prodForm.ProductName }} {{ prodForm.ColorName }} {{ prodForm.SizeName }}
-                </div>
+                  <option value="">全部分類</option>
+                  <option v-for="c in categoryList" :key="c.ID" :value="c.Name">{{ c.Name }}</option>
+                </select>
               </div>
-
-              <!-- 代碼 -->
-              <div class="col-sm-4">
-                <label class="form-label">留言代碼 <span class="text-danger">*</span></label>
+              <div class="col-sm-8">
                 <input
-                  v-model="prodForm.Code"
-                  class="form-control"
-                  placeholder="例：Y77"
-                  style="text-transform:uppercase;"
+                  v-model="productSearchText"
+                  class="form-control form-control-sm"
+                  placeholder="搜尋商品名稱..."
+                  @input="onBrowseInput"
                 />
-                <div class="form-text">客人留言時用的英數代碼</div>
-              </div>
-
-              <!-- 顏色 -->
-              <div class="col-sm-4">
-                <label class="form-label">顏色名稱 <span class="text-danger">*</span></label>
-                <input v-model="prodForm.ColorName" class="form-control" placeholder="例：藍" />
-                <div class="form-text">留言中的中文顏色字（會自動比對）</div>
-              </div>
-
-              <!-- 尺寸 -->
-              <div class="col-sm-4">
-                <label class="form-label">尺寸 <span class="text-danger">*</span></label>
-                <input
-                  v-model="prodForm.SizeName"
-                  class="form-control"
-                  placeholder="例：L"
-                  style="text-transform:uppercase;"
-                />
-                <div class="form-text">留言中的英文尺寸</div>
-              </div>
-
-              <!-- 直播特價 -->
-              <div class="col-sm-4">
-                <label class="form-label">直播特價（NT$）<span class="text-danger">*</span></label>
-                <input v-model="prodForm.LivePrice" type="number" min="0" class="form-control" placeholder="例：890" />
               </div>
             </div>
+
+            <!-- ② 商品列表 -->
+            <div
+              style="max-height:220px; overflow-y:auto; border:1px solid #e8ddd0; border-radius:6px;"
+              class="mb-3"
+            >
+              <table class="table table-hover table-sm mb-0" style="font-size:13px;">
+                <thead style="position:sticky; top:0; background:#faf7f4; z-index:1;">
+                  <tr>
+                    <th style="width:56px;">圖片</th>
+                    <th>商品名稱</th>
+                    <th style="width:100px;">分類</th>
+                    <th style="width:40px;"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="browseLoading">
+                    <td colspan="4" class="text-center py-3" style="color:#a08060;">載入中...</td>
+                  </tr>
+                  <tr v-else-if="!browseProducts.length">
+                    <td colspan="4" class="text-center py-3" style="color:#a08060;">找不到商品</td>
+                  </tr>
+                  <tr
+                    v-for="p in browseProducts"
+                    :key="p.ID"
+                    style="cursor:pointer;"
+                    :style="selectedBrowseProduct?.ID === p.ID ? 'background:#fdf5eb;' : ''"
+                    @click="loadVariantsForProduct(p)"
+                  >
+                    <td>
+                      <img
+                        v-if="browseImageMap[p.ID]"
+                        :src="getImageUrl(browseImageMap[p.ID])"
+                        style="width:40px; height:40px; object-fit:cover; border-radius:4px;"
+                      />
+                      <div
+                        v-else
+                        style="width:40px; height:40px; background:#f0e8dc; border-radius:4px;"
+                      ></div>
+                    </td>
+                    <td>{{ p.ProductName }}</td>
+                    <td style="color:#a08060;">{{ p.Category || '–' }}</td>
+                    <td class="text-center">
+                      <span v-if="selectedBrowseProduct?.ID === p.ID" style="color:#c8a882; font-weight:600;">✓</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ③ 規格列表（選完商品後顯示） -->
+            <template v-if="selectedBrowseProduct">
+              <div class="mb-1" style="font-size:13px; color:#a08060;">
+                選擇規格：<strong style="color:#3d2e1e;">{{ selectedBrowseProduct.ProductName }}</strong>
+              </div>
+              <div
+                style="max-height:160px; overflow-y:auto; border:1px solid #e8ddd0; border-radius:6px;"
+                class="mb-3"
+              >
+                <table class="table table-hover table-sm mb-0" style="font-size:13px;">
+                  <thead style="position:sticky; top:0; background:#faf7f4;">
+                    <tr>
+                      <th>顏色</th>
+                      <th>尺寸</th>
+                      <th>庫存</th>
+                      <th style="width:40px;"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-if="browseVariantsLoading">
+                      <td colspan="4" class="text-center py-2" style="color:#a08060;">載入中...</td>
+                    </tr>
+                    <tr v-else-if="!browseVariants.length">
+                      <td colspan="4" class="text-center py-2" style="color:#a08060;">無可用規格</td>
+                    </tr>
+                    <tr
+                      v-for="v in browseVariants"
+                      :key="v.ID"
+                      style="cursor:pointer;"
+                      :style="prodForm.VariantID === v.ID ? 'background:#fdf5eb;' : ''"
+                      @click="selectVariant(v)"
+                    >
+                      <td>{{ v.ColorName }}</td>
+                      <td>{{ v.SizeName }}</td>
+                      <td>{{ v.StockQty }}</td>
+                      <td class="text-center">
+                        <span v-if="prodForm.VariantID === v.ID" style="color:#c8a882; font-weight:600;">✓</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </template>
+
+            <!-- ④ 已選規格 banner + 代碼 & 特價（選完規格後顯示） -->
+            <template v-if="prodForm.VariantID">
+              <div class="mb-3 px-3 py-2 rounded" style="background:#fdf5eb; border:1px solid #e8c98a; font-size:13px;">
+                ✓ 已選：<strong>{{ prodForm.ProductName }}</strong>
+                　{{ prodForm.ColorName }} {{ prodForm.SizeName }}
+              </div>
+              <div class="row g-3">
+                <div class="col-sm-6">
+                  <label class="form-label">留言代碼 <span class="text-danger">*</span></label>
+                  <input
+                    v-model="prodForm.Code"
+                    class="form-control"
+                    placeholder="例：A1"
+                    style="text-transform:uppercase;"
+                  />
+                  <div class="form-text">客人留言時用的英數代碼</div>
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label">直播特價（NT$）<span class="text-danger">*</span></label>
+                  <input
+                    v-model="prodForm.LivePrice"
+                    type="number"
+                    min="0"
+                    class="form-control"
+                    placeholder="例：890"
+                  />
+                </div>
+              </div>
+            </template>
 
             <p v-if="prodErr" class="text-danger mt-3 mb-0" style="font-size:13px;">{{ prodErr }}</p>
           </div>
