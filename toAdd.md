@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-19（下午）
+> 更新時間：2026-05-20（下午）
 
 ---
 
@@ -14,12 +14,11 @@
 |------|----------|------|----------|
 | **藍新金流 MPG** | Vercel 環境變數 | ⚠️ 待切換 | 商店代號、Hash Key、Hash IV、`RespondURL`/`NotifyURL` 改正式網址 |
 | **藍新物流** | Vercel 環境變數 | ⚠️ 待切換 | 物流商店代號、Hash Key、Hash IV |
-| **Supabase 專案** | Vercel 環境變數 + Edge Function Secrets | ⚠️ 待確認 | 是否要開新的正式 Supabase 專案，或沿用現在這個 |
-| **Facebook OAuth** | Supabase Dashboard → Auth → Providers → Facebook | ⚠️ 程式碼已完成，等客戶提供 FB App ID/Secret | 客戶需建立 FB Developer App，取得 App ID + App Secret，填入 Supabase |
-| **LINE OA 浮動按鈕** | 後台系統設定 → `line_oa_url` | ⚠️ 待設定 | 使用者 LINE 官方帳號的連結網址 |
+| **Supabase 專案** | Vercel 環境變數 + Edge Function Secrets | ⚠️ 待切換 | 已確認上線時需新建正式環境 Supabase 專案（目前 `xyqznatwbfuscocycqtb` 為 staging 用）。上線前需：新建 prod 專案、遷移 schema / RLS、重新設定所有 Edge Function Secrets（LINE、藍新、ezPay）、更新 Vercel 環境變數（`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`），同時更新 LINE Developers Webhook URL |
+| **Facebook OAuth** | Supabase Dashboard → Auth → Providers → Facebook | ✅ 測試成功（2026-05-20）。⚠️ 上線前需切換正式模式 | 目前 App「Aley's Wardrobe Test」為開發模式，只有 App 擁有者可用 FB 登入。正式上線前需在 FB Developer 將 App 切換為 Live 模式（需通過 App Review） |
+| **LINE OA 浮動按鈕** | 後台系統設定 → `line_oa_url` | ✅ 測試成功（2026-05-20）。⚠️ 上線前需在正式後台重新設定 | 測試帳號「Aley's Test」已設定，前台按鈕正常顯示。正式上線時需在 public schema 後台填入正式 LINE OA 連結（staging 和 public 是不同的 S_SYS_Config） |
 | **Google Analytics 4** | Vercel 環境變數 `VITE_GA_MEASUREMENT_ID` | ⚠️ 待切換 | 使用者申請自己的 GA4 屬性，取得 `G-XXXXXXXXXX` |
 | **ezPay 電子發票** | Supabase Edge Function Secrets + ezPay 商家後台 | ✅ Secrets 已填入，字軌已申請完成 | 正式上線前將 `EZPAY_ENV` 從 `test` 改為 `prod` |
-| **FB Developer App** | Supabase Dashboard → Auth → Providers → Facebook | ⚠️ 程式碼已完成，等客戶提供 FB App ID/Secret | 客戶需建立 FB Developer App，取得 App ID + App Secret，填入 Supabase |
 | **Vercel 部署** | Vercel 專案設定 | ⚠️ 待確認 | 正式網域綁定（目前用 vercel.app 預設網址） |
 
 ### 額外要在後台設定的（不是環境變數）
@@ -32,12 +31,47 @@
 | 付款方式名稱 | 後台 → 付款方式設定 | 確認顯示名稱符合正式環境 |
 | 配送方式與運費 | 後台 → 配送方式設定 | 確認費用正確 |
 | 管理員帳號 | 後台 → 管理者帳號 | 確認正式帳號都有設定權限 |
+| LINE OA 網址（正式） | 後台 → 系統設定 → `line_oa_url` | 正式上線時填入正式 LINE OA 的加入好友連結（格式：`https://lin.ee/XXXXXXX`） |
 
 ### 未來可能需要
 | 服務 | 狀態 | 說明 |
 |------|------|------|
 | **Resend / SendGrid（SMTP）** | ❌ 尚未決定 | 訂單通知信、發票通知信用；需先決定是否要做 Email 通知 |
-| **FB Developer App 留言權限** | ❌ 尚未申請 | `pages_read_engagement` App Review，直播自動化才需要 |
+| **FB App Review（直播留言權限）** | ⏳ 待申請（直播功能做好後送審） | `pages_read_engagement` 權限，讀取粉專直播留言；需先完成直播後台功能 + 隱私政策頁面 + 錄示範影片再送審 |
+
+---
+
+## 📋 FB App Review 示範影片規劃
+
+> 送審 `pages_read_engagement`（直播留言讀取）時需附上的示範影片。
+> **送審時機：** 直播代建訂單後台功能完成後。
+
+### 影片內容（建議 2〜5 分鐘）
+
+**第一段：說明業務背景（30 秒）**
+- 用旁白或字幕說明：這是一個台灣服飾電商，透過 Facebook 直播銷售商品
+- 客人在直播留言商品關鍵字（例如「+1 A001 黑色 M」）下單
+- 系統需要即時讀取留言並自動建立訂單
+
+**第二段：示範購物網站（1 分鐘）**
+- 打開官網，展示商品列表、購物車、結帳流程
+- 說明這是官網，客人平時在這裡購物
+
+**第三段：示範直播留言讀取流程（2〜3 分鐘）**
+- 在 FB 粉專開一個測試直播（不公開）
+- 用測試帳號在直播留言「+1 商品關鍵字」
+- 打開後台系統，顯示留言被讀取進來
+- 系統根據關鍵字比對商品，自動建立訂單
+- 顯示訂單建立成功的畫面
+
+**第四段：說明為什麼需要這個權限（30 秒）**
+- `pages_read_engagement`：讀取粉專直播底下的留言
+- 沒有這個權限，系統就無法自動讀取留言建單
+
+### 注意事項
+- 影片要全程英文旁白或英文字幕（FB Review 是英文審核）
+- 需要準備好隱私政策頁面（Privacy Policy）的網址
+- 可以是測試環境的示範，不一定要正式上線的功能
 
 ---
 
@@ -63,6 +97,8 @@
 - **買衣服付款後自動開發票**：`payment-notify` 付款成功後自動呼叫 ezPay 開立發票；支援所有載具類型；NewebpayAmt=0（全錢包）跳過 ⚠️ 待測試
 - **退款入錢包**：新增 `wallet-refund` Edge Function；後台訂單 Modal 新增「退款入錢包」操作區塊；全額退款（FinalAmount − ShippingFee）或部分退款（指定金額）；退款後入會員錢包，不走藍新退款 API，不作廢發票 ⚠️ 待測試
 - **庫存扣除時機調整**：改為加入購物車時立即扣庫存（`decrement_stock` RPC，FOR UPDATE 原子性）；增加數量扣差量、減少數量還差量；DB 寫入失敗自動回補；`create-payment` 移除結帳前庫存檢查；`payment-notify` 移除付款後庫存扣除；migration：`cart_stock_functions.sql`（`public` + `staging` schema）
+- **FB 帳號登入（Facebook OAuth）**：登入頁「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用）；FB OAuth 回調（`/auth/callback`）整合；首次 FB 登入自動建立 `C_MBR_MemberList` 最小記錄（upsert by UserID）；`FbName`（`user.user_metadata.full_name`）自動存入會員資料，供直播留言比對 ✅ 測試成功（2026-05-20）
+- **LINE OA 帳號綁定系統**：消費者加入 LINE OA → `line-webhook` 收 Follow 事件 → 產生一次性 UUID Token（存 `LineBindToken` 表）→ LINE Push 傳送綁定連結 → 消費者點連結到 `/bind-line?token=xxx` → 未登入跳 `/login`（redirect 存 localStorage）→ FB 登入完成回 `/auth/callback` → 讀 localStorage 跳回 `/bind-line` → `line-bind` 驗證 token → upsert `LineUserID` 至 `C_MBR_MemberList`；AccountView 顯示 LINE 綁定狀態（已綁定 / 尚未綁定）；封鎖 LINE OA → 清除 `LineUserID` ✅ 測試成功（2026-05-20）
 
 ---
 
@@ -131,42 +167,54 @@
 
 ## 🟡 中優先（功能重要，工程量中等）
 
-### 1. 後台直播代建訂單工具（24 小時貼文 CSV 版）
+### 1. 後台直播代建訂單工具（FB 留言貼文匯入版）
 
 **適用時機：直播結束後的 24 小時限時 FB 貼文**
 
-直播結束後會開一篇限時 24 小時的 FB 貼文，讓沒在現場的客人可以用直播當下的價格購買。貼文關閉後，小編人工看貼文底下的留言，整理成 CSV 上傳到後台批次建單。
+直播結束後會開一篇限時 24 小時的 FB 貼文，讓沒在現場的客人可以用直播當下的價格購買。貼文關閉後，小編複製 FB 貼文底下的留言文字，貼到後台匯入工具，系統自動解析並批次建單。
 
 **與直播即時自動化的區別：**
 - 直播**當下**搶商品 → 需要 FB API 即時捕捉（見 🟢 第 6 項）
-- 直播**結束後** 24 小時貼文留言 → 本工具，人工整理 CSV，不需要 FB API
+- 直播**結束後** 24 小時貼文留言 → 本工具，小編複製貼文文字，不需要 FB API
+
+**已確認的業務規則：**
+- **一則留言 = 一個商品 = 一筆訂單**（同一人可留多則，各自建單）
+- 重複留同款 → 顯示 ⚠️ 警告，讓小編確認
+- 庫存不足 → 略過，不建單，不轉預購（❌）
 
 **已確認的流程：**
 ```
 直播結束 → 開 24 小時限時 FB 貼文
-  → 客人在貼文留言購買
-  → 貼文關閉後，小編看留言 → 依留言時間順序整理成 CSV（FIFO）
-  → 上傳 CSV 到後台
-  → 系統依序處理每一行：
+  → 客人在貼文留言購買（格式：姓名 + 商品代碼顏色尺寸+數量）
+  → 貼文關閉後，小編複製全部留言文字
+  → 貼到後台「直播留言匯入」頁面 → 系統解析
+  → 預覽解析結果（標示 ⚠️ 警告：重複留言、未對應商品）
+  → 確認後批次建單
       ├─ 該 variant 還有庫存 → 建立訂單，扣庫存
       └─ 該 variant 庫存已耗盡 → 略過，不建單（❌ 不轉預購）
   → 建單成功的客人批次透過 LINE 傳送付款連結
   → 建單失敗（庫存不足）的客人：產生「未成功名單」供小編手動通知
 ```
 
-> **範例：** Red/S 庫存 30 件，CSV 共 40 筆 Red/S 留言
+> **範例：** Red/S 庫存 30 件，留言共 40 筆 Red/S
 > → 前 30 筆建立訂單 ✅
 > → 後 10 筆略過，列入未成功名單 ❌（顯示姓名、電話、商品，供小編手動聯絡）
 
-**CSV 內容設計：**
-- 客人姓名、電話、地址（客人私訊給小編）
-- 商品關鍵字（對應 `S_LIV_KeywordList`）
-- 數量
-- 直播特價（直接覆蓋商品原價存入 `UnitPrice`）
+**留言格式（一則留言一款）：**
+```
+楊筱婷
+Y77藍L+1
+```
 
-**直播前需建立關鍵字對照表：**
-- 每場直播前，後台建立「關鍵字 → 商品+顏色+尺寸」的對照表
-- 留言只接受完全符合關鍵字的，不做模糊比對
+**解析邏輯：**
+- 雜訊過濾：`頭號粉絲`、時間戳（`5天`、`3小時`）、空行
+- 商品行識別：`/^[A-Z]+\d+.*\+\d+$/i`
+- 商品代碼解析：代碼（英文+數字）+ 顏色（中文）+ 尺寸（英文）+ +數量
+- 比對直播活動對照表取得 `VariantID` 與直播特價
+
+**直播前需建立直播活動與商品對應表：**
+- 每場直播前，後台新建「直播活動」並填入商品對照：
+  `代碼 + 顏色 + 尺寸 → VariantID + 直播特價`
 - 此表存於新 table `S_LIV_KeywordList`
 
 ---
@@ -261,33 +309,20 @@ CreatedDate     timestamptz
 
 ---
 
-### 2. FB 帳號登入 / 綁定（FB OAuth）
+### 2. FB 帳號登入 / 綁定（FB OAuth）✅ 已完成（2026-05-20）
 
-**程式碼已完成，等待客戶提供 FB App ID/Secret。**
-
-官網已實作 FB OAuth 登入（Facebook 藍色按鈕，`#1877F2`），並允許已有 Email 帳號的會員在會員中心綁定 FB。
+**測試成功，目前使用開發模式 App「Aley's Wardrobe Test」運作。**
 
 **已完成的範圍：**
-- 登入頁新增「使用 Facebook 登入」按鈕（FB f logo，藍色 #1877F2）
-- 會員中心「綁定 Facebook 帳號」選項（已登入 Email 帳號的用戶可操作）
-- FB OAuth 回調處理（`/auth/callback` 已整合）
-- FB User ID 存入 `C_MBR_MemberSocialList`（Platform=`facebook`, SocialUserID=FB_User_ID）
+- 登入頁「以 Facebook 繼續」按鈕（移至 Tab 上方，登入/註冊共用）
+- FB OAuth 回調（`/auth/callback`）自動 upsert 會員資料 + 擷取 `FbName`
+- `FbName` 存入 `C_MBR_MemberList.FbName`（供直播留言比對）
+- AccountView 顯示 LINE 綁定狀態
 
-**為什麼需要這個功能：**
-- 直播 FB API 自動化（Phase 2）的 FB User ID ↔ 官網帳號比對，依賴這張表有資料
-- 對客人來說，不需要記密碼，直接用 FB 登入更方便
-
-**技術說明：**
-- Supabase Auth 原生支援 FB OAuth Provider
-- 需要在 FB Developer Console 建立 App，取得 App ID + App Secret
-- Supabase Dashboard → Auth → Providers → Facebook → 填入 App ID / App Secret
-
-**需使用者確認的問題：**
-
-> ⚠️ **Q1：客戶需建立 FB Developer App**
-> 程式碼已完成，只差 FB App ID + App Secret。
-> 客戶需至 https://developers.facebook.com 建立 App，取得 App ID + App Secret，填入 Supabase Dashboard → Auth → Providers → Facebook。
-> 若直播自動化同時在申請 `pages_read_engagement` 權限，可用同一個 App。
+**上線前需確認：**
+- 目前 FB App 為**開發模式**，只有 App 擁有者帳號可使用 FB 登入
+- 正式上線前需在 FB Developer 將 App 切換為 **Live 模式**（需通過 App Review）
+- 若直播自動化需要 `pages_read_engagement`，可用同一個 App 一起申請審核
 
 ---
 

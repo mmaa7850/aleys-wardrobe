@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-05-19
+> 更新時間：2026-05-20
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -20,7 +20,7 @@
 | 結帳成功 | `/order-success/:orderNo` | 成功訊息、訂單編號、前往訂單詳情 / 繼續購物 |
 | 訂單紀錄 | `/orders` | 完整訂單列表（依建立時間倒序）；四色付款狀態 badge（待付款/已付款/付款失敗/已退款）；桌面版表格 header，行動版簡化雙列；空清單提示「去逛逛」 |
 | 訂單詳情 | `/orders/:orderNo` | 訂單狀態、付款狀態 badge、商品明細、收件人資訊、**宅配物流追蹤**：後台填入單號後顯示物流公司 + 單號 + 可點擊的查詢連結（黑貓、新竹、郵局）；ATM 繳費帳號（付款前）；**重新付款**按鈕（呼叫 `retry-payment`） |
-| 會員中心 | `/account` | 個人資料（姓名/電話/性別/生日）可編輯儲存、會員等級顯示、最近 3 筆訂單預覽（附「查看全部訂單」連結跳 `/orders`）、登出；**⚠️ 待開發** — 「綁定 Facebook 帳號」選項（Email 帳號用戶可綁定 FB，FB User ID 存 `C_MBR_MemberSocialList`） |
+| 會員中心 | `/account` | 個人資料（姓名/電話/性別/生日）可編輯儲存、會員等級顯示、最近 3 筆訂單預覽（附「查看全部訂單」連結跳 `/orders`）、登出；**LINE 綁定狀態**：顯示「已綁定，直播訂單通知已開啟」（綠色 badge）或「加入好友綁定」按鈕（連到 LINE OA @563sjoch） |
 | 收藏清單 | `/wishlist` | 收藏商品格狀顯示、移除收藏 |
 | 尺寸指南 | `/size-guide` | S/M/L/XL 量法說明 + 各尺寸對照表（靜態） |
 | 退換貨政策 | `/returns` | 7 天鑑賞期、退換條件、4 步驟流程（靜態） |
@@ -29,9 +29,10 @@
 | 品牌故事 | `/brand-story` | 三段式品牌敘事（靜態） |
 | 聯絡我們 | `/contact` | 聯絡資訊 + 表單（靜態） |
 | 錢包 | `/wallet` | 前台錢包頁面（需登入）；顯示目前餘額（深色漸層卡片）；快速選擇金額按鈕（100/300/500/1000/3000）或自訂金額；發票設定（5種：紙本/手機條碼/自然人憑證/捐贈愛心碼/公司戶）；前往藍新付款；交易紀錄列表（類型/金額/前後餘額/時間）；付款成功後輪詢餘額直到入帳（最多20秒每2秒一次） |
-| 登入/註冊 | `/login` | Email 登入/註冊、Facebook OAuth（FB f logo，藍色 #1877F2）、忘記密碼；**⚠️ 等待客戶提供 FB App ID/Secret** |
+| 登入/註冊 | `/login` | 「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用，`#1877F2`）；Email 登入/註冊 Tab、忘記密碼；FB OAuth redirect 目標存 localStorage（防 LINE in-app browser 跨頁清空）；FB OAuth ✅ 測試成功（2026-05-20） |
 | 重設密碼 | `/reset-password` | 密碼重設表單 |
-| OAuth 回調 | `/auth/callback` | OAuth 登入回調處理 |
+| LINE 綁定 | `/bind-line` | LINE 帳號綁定頁（無需登入即可訪問）；讀取 URL query `token`；未登入跳 `/login?redirect=/bind-line?token=xxx`（redirect 存 localStorage）；登入後呼叫 `line-bind` Edge Function；顯示 Loading / 成功（3秒倒數後跳 `/account`）/ 失敗 / 無token 四種狀態 |
+| OAuth 回調 | `/auth/callback` | OAuth 登入回調處理；FB 登入後擷取 `FbName` upsert 至 `C_MBR_MemberList`；讀取 localStorage 的 `oauth_redirect`，存在且以 `/bind-line` 開頭時跳回綁定頁 |
 
 ---
 
@@ -90,6 +91,8 @@
 | `wallet-topup-return` | ❌ 關閉 | 藍新儲值付款後瀏覽器 redirect；解密結果；導向 /wallet?topup=success 或 /wallet?topup=fail |
 | `wallet-adjust` | ✅ 需要 | 管理員手動調整錢包餘額；GET：取得餘額+交易紀錄；POST：驗證金額（非零整數）與備注、確認餘額不低於0、upsert C_MBR_WalletList、寫入 C_MBR_WalletTxList (TxType='adjust') |
 | `wallet-refund` | ✅ 需要 | 管理員將退款金額入會員錢包；POST `{ orderNo, type: 'full'|'partial', refundAmt? }`；管理員身份驗證（IsActive）；全額退款 = FinalAmount − ShippingFee；部分退款 = 指定金額；透過 CustomerEmail → MemberList 查 UserID；upsert C_MBR_WalletList；寫入 C_MBR_WalletTxList (TxType='refund', RelatedOrderNo, Note, CreatedBy)；全額退款更新 PaymentStatus → 'refunded'；部分退款追加 AdminNote 記錄 ⚠️ 待測試 |
+| `line-webhook` | ❌ 關閉（`--no-verify-jwt`） | LINE Messaging API Webhook；x-line-signature HMAC-SHA256 驗證；**Follow 事件**：生成 UUID Token → 存入 `LineBindToken` 表（7 天有效）→ LINE Push 傳送綁定連結（`${SITE_URL}/bind-line?token=xxx`）；**Unfollow 事件**：清除 `C_MBR_MemberList.LineUserID`；Secrets：`LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / `SITE_URL` / `DB_SCHEMA` |
+| `line-bind` | ✅ 需要 | 前台呼叫，完成 LINE 帳號綁定；驗證 JWT（取得 UserID）；驗證 token（存在、未過期、未使用）；upsert `LineUserID` 至 `C_MBR_MemberList`（by UserID，避免無記錄時 update 不生效）；標記 Token.UsedAt；Secrets：`DB_SCHEMA` |
 
 ---
 
@@ -97,7 +100,7 @@
 
 | Store | 說明 |
 |-------|------|
-| `auth.js` | 使用者 session、登入（Email / Facebook OAuth，`signInWithFacebook`，provider: "facebook"）/登出/重設密碼；查 `S_SYS_AdminUserList` 取得 `isAdmin`/`isActive`/`permissions`（5 個 Can*）；getter `canEnterAdmin`（IsActive=true）、`canAccess(perm)` |
+| `auth.js` | 使用者 session、登入（Email / Facebook OAuth，`signInWithFacebook`，provider: "facebook"，redirectTo: `/auth/callback`）/登出/重設密碼；查 `S_SYS_AdminUserList` 取得 `isAdmin`/`isActive`/`permissions`（5 個 Can*）；getter `canEnterAdmin`（IsActive=true）、`canAccess(perm)`；FB OAuth redirect 目標由 `LoginView` 寫入 localStorage，`AuthCallbackView` 讀取 |
 | `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊；**品項預購判斷**：`IsPreOrder=true && variant.StockQty <= 0` 雙重條件，同一商品不同 variant 可各自獨立判斷現貨/預購；**庫存扣除時機**：`addItem` 時呼叫 `decrement_stock` RPC 原子性扣庫存（預購品不扣）；`updateQty` 增量時扣差量、減量時還差量；DB insert 失敗自動回補；`removeItem` 不還庫存（庫存已消費）；**選取狀態**：state `selectedItemIds`；getter `selectedItems`（已選品項）/ `selectedTotal`（已選合計）；action `initSelection()`（預設勾選所有非預購品項）/ `toggleSelection(id)` |
 | `wishlist.js` | 收藏清單 toggle（`C_MBR_WishList`）；`has(id)` 判斷是否收藏 |
 | `siteConfig.js` | 從 `S_SYS_Config` 一次性載入所有 Key-Value 設定（`loaded` 守衛防重複請求）；getter：`get(key)`、`announcement`、`maintenanceMode`、`paymentDisabled`；`FrontendLayout` 掛載時呼叫 `load()` |
@@ -115,12 +118,15 @@
 - `S_PRD_ColorList` / `S_PRD_SizeList` / `S_PRD_CategoryList` / `S_PRD_TagList` — 系統選項
 
 ### 會員與購物
-- `C_MBR_MemberList` — 會員資料（`UserID`/`Email`/`Phone`/`Gender`/`Birthday`/`MemberLevelID`）
+- `C_MBR_MemberList` — 會員資料（`UserID`/`Email`/`Phone`/`Gender`/`Birthday`/`MemberLevelID`/`LineUserID`（LINE 帳號綁定）/`FbName`（FB 顯示名稱，直播留言比對用））
 - `C_MBR_WishList` — 收藏清單
 - `C_CART_CartList` / `C_CART_CartItemList` — 購物車
 - `C_MBR_WalletList` — 錢包主表（MemberID/Balance/CreatedDate/UpdatedDate）；RLS：僅本人可讀
 - `C_MBR_WalletTxList` — 交易流水帳（TxType: topup/order_deduct/refund/adjust；Amount 正=入負=扣；BalanceBefore/BalanceAfter；RelatedOrderNo/RelatedTopupNo；CreatedBy 管理員調整時填入）；RLS：僅本人可讀
 - `C_MBR_WalletTopupList` — 儲值訂單（TopupNo/MemberID/Amount/PaymentStatus/InvoiceStatus 及完整 Invoice* 欄位）；RLS：僅本人可讀
+
+### LINE 綁定
+- `LineBindToken` — 一次性 LINE 綁定 Token（`Token` UUID PK / `LineUserID` / `CreatedAt` / `UsedAt` / `ExpiresAt` 7天）；`line-webhook` 於 Follow 事件寫入，`line-bind` 驗證並標記 UsedAt；RLS: 僅 service_role 可操作
 
 ### 訂單
 - `C_ORD_OrderList` — 訂單主檔（付款狀態、配送方式/運費/地址、`DiscountAmount`/`FinalAmount`、`HomeDeliveryNo`/`HomeDeliveryCompany`、`ShippingStatus`/`ShippingStatusText`、ATM 帳號、超商門市資訊；**⚠️ 待測試** — 電子發票欄位：`InvoiceStatus`/`InvoiceNo`/`InvoiceNumber`/`InvoiceRandomNum`/`InvoiceIssuedAt`/`InvoiceAllowanceNo`/`InvoiceAllowanceAmt`；**客戶發票偏好**：`InvoiceCarrierType`（null=紙本/`0`=手機條碼/`1`=自然人憑證/`2`=ezPay 載具/`D`=捐贈/`B2B`=公司戶）/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName`；migration：`add_invoice_preference_fields.sql`；**錢包欄位**：`WalletDeductAmt`（integer，錢包折抵金額）/`NewebpayAmt`（integer，藍新實付金額，0=全錢包支付）；migration：`add_wallet_tables.sql`）
@@ -155,13 +161,14 @@
 
 ## Edge Function JWT 例外設定（supabase/config.toml）
 
-以下 Edge Functions 設定 `verify_jwt = false`（接收藍新 webhook 或瀏覽器 redirect，無法帶 JWT）：
+以下 Edge Functions 設定 `verify_jwt = false`（接收第三方 webhook 或瀏覽器 redirect，無法帶 JWT）：
 - `payment-notify`
 - `payment-return`
 - `logistics-notify`
 - `store-callback`
 - `wallet-topup-notify`
 - `wallet-topup-return`
+- `line-webhook`（LINE 平台不傳 JWT，改以 x-line-signature HMAC-SHA256 驗簽）
 
 ---
 
@@ -173,7 +180,8 @@
 | 藍新物流 (NewebPay Logistics) | 7-11 C2C 超商取貨不付款；藍新自動建立物流單並回傳 `LgsNo`；NPA-B58 推播貨態 |
 | 藍新退款 NPA-B032 | 信用卡類訂單退款 API |
 | ezPay 電子發票加值服務 ⚠️ 待測試 | 開立/作廢/折讓電子發票；測試環境：`cinv.ezpay.com.tw`；正式環境：`inv.ezpay.com.tw`；API 文件整理於 `ezpay.md` |
-| Supabase Auth | Email 登入/註冊/重設密碼、Facebook OAuth（程式碼已完成，等待客戶提供 FB App ID/Secret） |
+| Supabase Auth | Email 登入/註冊/重設密碼、Facebook OAuth ✅ 測試成功（2026-05-20，目前開發模式 App） |
+| LINE Messaging API | LINE OA Webhook（Follow/Unfollow 事件）；LINE Push API（發送綁定連結）；Channel ID: 2010141809；@563sjoch ✅ 測試成功（2026-05-20） |
 | Supabase Storage | 商品圖片/影片、Banner 圖片存放 |
 | Chart.js | 後台報表圖表（折線圖、甜甜圈圖、柱狀圖）；僅後台報表頁使用，lazy load |
 | Google Analytics 4 | `src/lib/gtag.js`；`initGA()` 啟動時注入 gtag.js；追蹤 4 個事件：`view_item`（商品詳情）、`add_to_cart`（加入購物車）、`begin_checkout`（進入結帳）、`purchase`（付款成功，sessionStorage 防重複）；Measurement ID 存 `.env` `VITE_GA_MEASUREMENT_ID`；後台 `/admin/reports/analytics` 頁面顯示追蹤狀態 + Looker Studio 嵌入（`ga_looker_studio_url` 存 S_SYS_Config） |

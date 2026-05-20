@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-16
+> 更新時間：2026-05-20
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -13,6 +13,7 @@
 | `add_trade_no.sql` | 新增 TradeNo 欄位（藍新退款用） | ✅ 已執行 |
 | `add_invoice_fields.sql` | 新增 Invoice* 7 個欄位（電子發票） | ⚠️ 待執行 |
 | `add_wallet_tables.sql` | 新增錢包系統三張表 + C_ORD_OrderList 兩個欄位 | ✅ 已執行 |
+| `add_line_binding.sql` | `C_MBR_MemberList` 新增 `LineUserID` / `FbName`；新增 `LineBindToken` 表 | ✅ 已執行（2026-05-20，staging + public 兩個 schema） |
 
 ---
 
@@ -125,6 +126,8 @@ WITH CHECK (
 | DefaultPayMethodID | bigint | YES | — |
 | MemberLevelID | bigint | YES | — (FK → S_MBR_MemberLevelList.ID) |
 | IsActive | boolean | YES | true |
+| LineUserID | text | YES | — （UNIQUE；LINE 帳號綁定後填入；`line-webhook` Unfollow 時清除）|
+| FbName | text | YES | — （FB 登入後擷取 `user_metadata.full_name`；直播留言比對用）|
 | CreatedDate | timestamptz | YES | now() |
 | UpdatedDate | timestamptz | YES | now() |
 
@@ -137,6 +140,17 @@ WITH CHECK (
 | SocialUserID | text | YES | — |
 | SocialEmail | text | YES | — |
 | CreatedDate | timestamptz | YES | now() |
+
+### LineBindToken
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| Token | text | NO | — | PRIMARY KEY（UUID v4） |
+| LineUserID | text | NO | — | LINE 用戶 ID |
+| CreatedAt | timestamptz | YES | now() | |
+| UsedAt | timestamptz | YES | — | 綁定完成後填入 |
+| ExpiresAt | timestamptz | YES | now() + 7 days | 7 天有效期 |
+
+> RLS：已啟用（ENABLE ROW LEVEL SECURITY）；僅由 `line-webhook` / `line-bind` Edge Functions 使用 service_role 操作，無公開讀寫 policy。
 
 ### C_MBR_WishList
 | 欄位 | 型別 | Nullable | Default |
@@ -676,6 +690,9 @@ WITH CHECK (
 | admin_update | authenticated | UPDATE | staging.is_admin() |
 | admin_delete | authenticated | DELETE | staging.is_admin() |
 | self_select | authenticated | SELECT | UserId = auth.uid()（任何管理員可讀自己那筆，loadAdminProfile 使用）|
+
+### LineBindToken
+> 無公開 policy；僅由 `line-webhook` 和 `line-bind` Edge Functions 以 service_role（繞過 RLS）讀寫。已啟用 RLS（`ENABLE ROW LEVEL SECURITY`）。
 
 ### C_MBR_WalletList
 | Policy | Role | CMD | 條件 |
