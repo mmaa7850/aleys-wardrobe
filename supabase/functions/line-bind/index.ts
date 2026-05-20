@@ -57,14 +57,16 @@ Deno.serve(async (req) => {
 
     const lineUserId: string = bindToken.LineUserID
 
-    // ── 寫入 LineUserID（upsert，保留其他欄位）──────────────────────
+    // ── 寫入 LineUserID：upsert 確保即使尚無 MemberList 記錄也能寫入 ─
     const { error: updateErr } = await supabase.schema(DB_SCHEMA)
       .from('C_MBR_MemberList')
-      .update({ LineUserID: lineUserId })
-      .eq('UserID', user.id)
+      .upsert(
+        { UserID: user.id, Email: user.email ?? '', LineUserID: lineUserId },
+        { onConflict: 'UserID' },
+      )
 
     if (updateErr) {
-      console.error('[line-bind] update error:', updateErr.message)
+      console.error('[line-bind] upsert error:', updateErr.message)
       return new Response(
         JSON.stringify({ error: '綁定失敗，請稍後再試' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
