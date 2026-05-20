@@ -44,24 +44,19 @@ onMounted(async () => {
     .eq("UserID", auth.user.id)
     .maybeSingle();
 
-  // 優先從 sessionStorage 取（FB OAuth 會丟失 query param）
-  const oauthRedirect = sessionStorage.getItem("oauth_redirect") || null;
-  sessionStorage.removeItem("oauth_redirect");
+  // redirect 目標：優先從 URL query param 取（直接帶在 OAuth redirectTo 裡，最可靠）
+  const redirect = new URLSearchParams(window.location.search).get("redirect");
 
   if (!data) {
     // 新用戶尚無 MemberList 記錄
     // 若是 bind-line 流程，仍跳回綁定頁（不需要 MemberList）
-    if (oauthRedirect && oauthRedirect.startsWith("/bind-line")) {
-      router.replace(oauthRedirect);
+    if (redirect && redirect.startsWith("/bind-line")) {
+      router.replace(redirect);
     } else {
       router.replace("/account");
     }
   } else {
-    const redirect =
-      oauthRedirect ||
-      new URLSearchParams(window.location.search).get("redirect") ||
-      "/";
-    router.replace(redirect);
+    router.replace(redirect || "/");
   }
 });
 </script>
