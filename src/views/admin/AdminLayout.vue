@@ -130,7 +130,7 @@ onUnmounted(() => {
 
 /* ─── Sidebar layout guarantee ──────────────────────────────── */
 /* 放在 non-scoped 確保 scoped hash 偏移時 sidebar 仍正常顯示   */
-.ad-sidebar {
+.asb-sidebar {
   width: 240px;
   min-height: 100vh;
   background: #1a1714;
@@ -140,23 +140,23 @@ onUnmounted(() => {
   transition: transform 0.28s ease;
 }
 /* 高 specificity override，防止 bootstrap / 擴充功能 display:none !important */
-.admin-layout > .ad-sidebar {
+.admin-layout > .asb-sidebar {
   display: flex !important;
 }
 @media (max-width: 991.98px) {
-  .ad-sidebar {
+  .asb-sidebar {
     position: fixed;
     top: 0;
     left: 0;
     z-index: 1100;
     transform: translateX(-100%);
   }
-  .ad-sidebar.open {
+  .asb-sidebar.open {
     transform: translateX(0);
   }
 }
 @media (min-width: 992px) {
-  .ad-sidebar {
+  .asb-sidebar {
     position: sticky;
     top: 0;
     height: 100vh;

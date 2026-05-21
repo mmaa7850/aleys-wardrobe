@@ -161,56 +161,56 @@ const onNavClick = () => {
 </script>
 
 <template>
-  <aside class="ad-sidebar" :class="{ open: mobileOpen }">
+  <aside class="asb-sidebar" :class="{ open: mobileOpen }">
 
     <!-- Brand -->
-    <div class="ad-brand">
-      <RouterLink to="/" class="ad-brand__link" title="前往前台">
-        <span class="ad-brand__name">Aley's Wardrobe</span>
-        <span class="ad-brand__sub">Admin Panel</span>
+    <div class="asb-brand">
+      <RouterLink to="/" class="asb-brand__link" title="前往前台">
+        <span class="asb-brand__name">Aley's Wardrobe</span>
+        <span class="asb-brand__sub">Admin Panel</span>
       </RouterLink>
-      <button class="ad-close d-lg-none" @click="emit('close')" aria-label="Close">
+      <button class="asb-close d-lg-none" @click="emit('close')" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
 
     <!-- Nav -->
-    <nav class="ad-nav">
-      <div v-for="s in sections" :key="s.key" class="ad-nav__group">
+    <nav class="asb-nav">
+      <div v-for="s in sections" :key="s.key" class="asb-nav__group">
 
         <!-- Section with children -->
         <button
           v-if="s.children"
-          class="ad-nav__btn"
-          :class="{ 'ad-nav__btn--active': activeSectionKey === s.key }"
+          class="asb-nav__btn"
+          :class="{ 'asb-nav__btn--active': activeSectionKey === s.key }"
           @click="toggle(s.key)"
         >
-          <svg v-if="s.icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" v-html="s.icon" class="ad-nav__icon" />
+          <svg v-if="s.icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" v-html="s.icon" class="asb-nav__icon" />
           <span>{{ t(s.labelKey) }}</span>
-          <svg class="ad-nav__chevron" :class="{ 'ad-nav__chevron--open': isOpen(s.key) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg class="asb-nav__chevron" :class="{ 'asb-nav__chevron--open': isOpen(s.key) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
 
         <!-- Single link -->
         <RouterLink
           v-else
           :to="s.to"
-          class="ad-nav__btn"
-          :class="{ 'ad-nav__btn--active': route.path === s.to }"
+          class="asb-nav__btn"
+          :class="{ 'asb-nav__btn--active': route.path === s.to }"
           @click="onNavClick"
         >
-          <svg v-if="s.icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" v-html="s.icon" class="ad-nav__icon" />
+          <svg v-if="s.icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" v-html="s.icon" class="asb-nav__icon" />
           <span>{{ t(s.labelKey) }}</span>
         </RouterLink>
 
         <!-- Children -->
-        <Transition name="ad-collapse">
-          <div v-if="s.children && isOpen(s.key)" class="ad-nav__children">
+        <Transition name="asb-collapse">
+          <div v-if="s.children && isOpen(s.key)" class="asb-nav__children">
             <RouterLink
               v-for="c in s.children"
               :key="c.to"
               :to="c.to"
-              class="ad-nav__child"
-              :class="{ 'ad-nav__child--active': route.path.startsWith(c.to) }"
+              class="asb-nav__child"
+              :class="{ 'asb-nav__child--active': route.path.startsWith(c.to) }"
               @click="onNavClick"
             >
               {{ t(c.labelKey) }}
@@ -221,16 +221,16 @@ const onNavClick = () => {
     </nav>
 
     <!-- Bottom -->
-    <div class="ad-bottom">
-      <div class="ad-bottom__email">{{ auth.user?.email }}</div>
-      <button class="ad-logout" @click="logout">登出</button>
+    <div class="asb-bottom">
+      <div class="asb-bottom__email">{{ auth.user?.email }}</div>
+      <button class="asb-logout" @click="logout">登出</button>
     </div>
 
   </aside>
 </template>
 
 <style scoped>
-.ad-sidebar {
+.asb-sidebar {
   width: 240px;
   min-height: 100vh;
   background: #1a1714;
@@ -241,20 +241,20 @@ const onNavClick = () => {
 }
 
 @media (max-width: 991.98px) {
-  .ad-sidebar {
+  .asb-sidebar {
     position: fixed;
     top: 0;
     left: 0;
     z-index: 1100;
     transform: translateX(-100%);
   }
-  .ad-sidebar.open {
+  .asb-sidebar.open {
     transform: translateX(0);
   }
 }
 
 @media (min-width: 992px) {
-  .ad-sidebar {
+  .asb-sidebar {
     position: sticky;
     top: 0;
     height: 100vh;
@@ -263,7 +263,7 @@ const onNavClick = () => {
 }
 
 /* Brand */
-.ad-brand {
+.asb-brand {
   padding: 24px 20px 20px;
   border-bottom: 1px solid rgba(200,168,130,0.12);
   display: flex;
@@ -271,14 +271,14 @@ const onNavClick = () => {
   justify-content: space-between;
 }
 
-.ad-brand__link {
+.asb-brand__link {
   display: flex;
   flex-direction: column;
   gap: 3px;
   text-decoration: none;
 }
 
-.ad-brand__name {
+.asb-brand__name {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 17px;
   font-weight: 600;
@@ -287,14 +287,14 @@ const onNavClick = () => {
   line-height: 1.2;
 }
 
-.ad-brand__sub {
+.asb-brand__sub {
   font-size: 9.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: #C8A882;
 }
 
-.ad-close {
+.asb-close {
   background: none;
   border: none;
   color: rgba(232,221,208,0.5);
@@ -304,21 +304,21 @@ const onNavClick = () => {
   line-height: 1;
 }
 
-.ad-close:hover { color: #e8ddd0; }
+.asb-close:hover { color: #e8ddd0; }
 
 /* Nav */
-.ad-nav {
+.asb-nav {
   flex: 1;
   padding: 16px 10px;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-.ad-nav__group {
+.asb-nav__group {
   margin-bottom: 2px;
 }
 
-.ad-nav__btn {
+.asb-nav__btn {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -337,45 +337,45 @@ const onNavClick = () => {
   text-align: left;
 }
 
-.ad-nav__btn:hover {
+.asb-nav__btn:hover {
   color: #e8ddd0;
   background: rgba(200,168,130,0.08);
 }
 
-.ad-nav__btn--active {
+.asb-nav__btn--active {
   color: #C8A882;
   background: rgba(200,168,130,0.1);
 }
 
-.ad-nav__icon {
+.asb-nav__icon {
   flex-shrink: 0;
   opacity: 0.7;
 }
 
-.ad-nav__btn--active .ad-nav__icon {
+.asb-nav__btn--active .asb-nav__icon {
   opacity: 1;
 }
 
-.ad-nav__chevron {
+.asb-nav__chevron {
   margin-left: auto;
   flex-shrink: 0;
   transition: transform 0.25s ease;
   opacity: 0.5;
 }
 
-.ad-nav__chevron--open {
+.asb-nav__chevron--open {
   transform: rotate(180deg);
 }
 
 /* Children */
-.ad-nav__children {
+.asb-nav__children {
   padding: 4px 0 6px 34px;
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
 
-.ad-nav__child {
+.asb-nav__child {
   display: block;
   padding: 6px 10px;
   font-size: 12px;
@@ -387,41 +387,41 @@ const onNavClick = () => {
   letter-spacing: 0.01em;
 }
 
-.ad-nav__child:hover {
+.asb-nav__child:hover {
   color: rgba(232,221,208,0.85);
   background: rgba(200,168,130,0.06);
 }
 
-.ad-nav__child--active {
+.asb-nav__child--active {
   color: #C8A882;
   border-left-color: #C8A882;
   background: rgba(200,168,130,0.08);
 }
 
 /* Collapse animation */
-.ad-collapse-enter-active,
-.ad-collapse-leave-active {
+.asb-collapse-enter-active,
+.asb-collapse-leave-active {
   transition: max-height 0.28s ease, opacity 0.28s ease;
   overflow: hidden;
 }
-.ad-collapse-enter-from,
-.ad-collapse-leave-to {
+.asb-collapse-enter-from,
+.asb-collapse-leave-to {
   max-height: 0;
   opacity: 0;
 }
-.ad-collapse-enter-to,
-.ad-collapse-leave-from {
+.asb-collapse-enter-to,
+.asb-collapse-leave-from {
   max-height: 320px;
   opacity: 1;
 }
 
 /* Bottom */
-.ad-bottom {
+.asb-bottom {
   padding: 16px 20px;
   border-top: 1px solid rgba(200,168,130,0.12);
 }
 
-.ad-bottom__email {
+.asb-bottom__email {
   font-size: 11px;
   color: rgba(232,221,208,0.35);
   margin-bottom: 10px;
@@ -429,7 +429,7 @@ const onNavClick = () => {
   letter-spacing: 0.02em;
 }
 
-.ad-logout {
+.asb-logout {
   width: 100%;
   padding: 8px 0;
   background: none;
@@ -444,7 +444,7 @@ const onNavClick = () => {
   font-family: inherit;
 }
 
-.ad-logout:hover {
+.asb-logout:hover {
   border-color: #C8A882;
   color: #C8A882;
 }
