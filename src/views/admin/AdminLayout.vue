@@ -128,6 +128,38 @@ onUnmounted(() => {
   background: #faf7f4;
 }
 
+/* ─── Sidebar layout guarantee ──────────────────────────────── */
+/* 放在 non-scoped 確保 scoped hash 偏移時 sidebar 仍正常顯示   */
+.ad-sidebar {
+  width: 240px;
+  min-height: 100vh;
+  background: #1a1714;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: transform 0.28s ease;
+}
+@media (max-width: 991.98px) {
+  .ad-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1100;
+    transform: translateX(-100%);
+  }
+  .ad-sidebar.open {
+    transform: translateX(0);
+  }
+}
+@media (min-width: 992px) {
+  .ad-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    transform: none !important;
+  }
+}
+
 .al-overlay {
   position: fixed;
   inset: 0;
