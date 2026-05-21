@@ -32,7 +32,22 @@ const range = computed(() => {
 
 // ── State ─────────────────────────────────────────────────────
 const loading = ref(false)
-const stats = ref({ revenue: 0, orders: 0, aov: 0, refunds: 0, lowStock: 0 })
+const stats = ref({ revenue: 0, orders: 0, aov: 0, refunds: 0, lowStock: 0, estFee: 0 })
+
+// ── 估算藍新手續費 ─────────────────────────────────────────────
+// 只有 NewebpayAmt > 0 的訂單才有手續費（全額錢包付款不經藍新）
+function estimateFee(order) {
+  const amt = order.NewebpayAmt ?? 0
+  if (amt === 0) return 0
+  const method = order.PaymentMethod ?? ''
+  if (['CREDIT', 'APPLEPAY', 'GOOGLEPAY', 'SAMSUNGPAY', 'UNIONPAY', 'CREDITAE', 'LINEPAY'].includes(method)) {
+    return Math.round(amt * 0.028)
+  }
+  if (['VACC', 'WEBATM'].includes(method)) {
+    return Math.min(Math.round(amt * 0.01), 20)
+  }
+  return 0 // CVS / 其他：費率未知，不估算
+}
 const chartLabels = ref([])
 const chartData   = ref([])
 
@@ -81,7 +96,7 @@ async function load() {
 
   const [{ data: orders }, { data: lowStock }] = await Promise.all([
     db.from('C_ORD_OrderList')
-      .select('FinalAmount, PaymentStatus, CreatedDate')
+      .select('FinalAmount, PaymentStatus, CreatedDate, NewebpayAmt, PaymentMethod')
       .gte('CreatedDate', start + 'T00:00:00')
       .lte('CreatedDate', end + 'T23:59:59'),
     db.from('C_PRD_ProductVariantList')
@@ -94,12 +109,15 @@ async function load() {
   const refunded = (orders ?? []).filter(o => o.PaymentStatus === 'refunded')
   const revenue  = paid.reduce((s, o) => s + (o.FinalAmount ?? 0), 0)
 
+  const estFee = paid.reduce((s, o) => s + estimateFee(o), 0)
+
   stats.value = {
     revenue,
     orders: (orders ?? []).length,
     aov: paid.length ? Math.round(revenue / paid.length) : 0,
     refunds: refunded.reduce((s, o) => s + (o.FinalAmount ?? 0), 0),
     lowStock: lowStock?.length ?? 0,
+    estFee,
   }
 
   // Build daily series
@@ -183,6 +201,15 @@ onUnmounted(() => chartInstance?.destroy())
             <div class="rpt-value">NT$ {{ stats.refunds.toLocaleString() }}</div>
           </div>
         </div>
+        <div class="col-6 col-lg-3">
+          <div class="rpt-card">
+            <div class="rpt-label">
+              估算藍新手續費
+              <span class="rpt-hint">信用卡 2.8%／ATM min(1%,20)</span>
+            </div>
+            <div class="rpt-value text-danger">NT$ {{ stats.estFee.toLocaleString() }}</div>
+          </div>
+        </div>
       </div>
 
       <!-- Low stock alert -->
@@ -217,4 +244,5 @@ onUnmounted(() => chartInstance?.destroy())
 .rpt-card--warn { border-color: #f59e0b; background: #fffbeb; }
 .rpt-label { font-size: 13px; color: #6b7280; margin-bottom: 6px; }
 .rpt-value { font-size: 24px; font-weight: 700; color: #111827; }
+.rpt-hint { display: block; font-size: 11px; color: #9ca3af; font-weight: 400; margin-top: 2px; }
 </style>
