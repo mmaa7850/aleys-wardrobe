@@ -176,13 +176,15 @@ Deno.serve(async (req) => {
         const shippingAddress = addr?.Address || ''
 
         // ── 扣庫存（原子性）──────────────────────────────
-        const { error: stockErr } = await supabase.rpc('decrement_stock', {
-          p_variant_id: livProduct.VariantID,
-          p_qty: qty,
-          p_schema: dbSchema,
-        })
+        // 使用正確 schema 呼叫 RPC；decrement_stock 回傳 false = 庫存不足
+        const { data: stockOk, error: stockErr } = await supabase
+          .schema(dbSchema)
+          .rpc('decrement_stock', {
+            p_variant_id: livProduct.VariantID,
+            p_qty: qty,
+          })
 
-        if (stockErr) {
+        if (stockErr || !stockOk) {
           results.push({
             fbName,
             productName: productLabel,
