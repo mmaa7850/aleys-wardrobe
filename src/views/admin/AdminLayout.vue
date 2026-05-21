@@ -139,6 +139,10 @@ onUnmounted(() => {
   flex-shrink: 0;
   transition: transform 0.28s ease;
 }
+/* 高 specificity override，防止 bootstrap / 擴充功能 display:none !important */
+.admin-layout > .ad-sidebar {
+  display: flex !important;
+}
 @media (max-width: 991.98px) {
   .ad-sidebar {
     position: fixed;
