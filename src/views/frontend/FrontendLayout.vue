@@ -175,6 +175,7 @@ onUnmounted(() => {
           <h6>關於我們</h6>
           <RouterLink to="/brand-story">品牌故事</RouterLink>
           <RouterLink to="/contact">聯絡我們</RouterLink>
+          <RouterLink to="/privacy-policy">隱私權政策</RouterLink>
         </div>
       </div>
       <div class="fe-footer__bottom">© 2025 Aley's Wardrobe. All rights reserved.</div>
