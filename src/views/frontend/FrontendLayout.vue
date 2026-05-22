@@ -134,9 +134,9 @@ onUnmounted(() => {
 
     <main><RouterView /></main>
 
-    <!-- LINE FAB -->
+    <!-- LINE FAB（管理員不顯示，避免遮住後台 FAB） -->
     <a
-      v-if="lineOaUrl"
+      v-if="lineOaUrl && !auth.canEnterAdmin"
       :href="lineOaUrl"
       target="_blank"
       rel="noopener noreferrer"
