@@ -45,12 +45,27 @@ export const useCartStore = defineStore('cart', {
         return this.memberDbId
       }
 
-      // Auto-create member record
+      // Auto-create member record（email 註冊）
       const auth2 = useAuthStore()
       const email = auth2.user?.email || ''
+
+      // 取預設會員等級（SortOrder 最小的那筆）
+      const { data: defaultLevel } = await db
+        .from('S_MBR_MemberLevelList')
+        .select('ID')
+        .order('SortOrder')
+        .limit(1)
+        .maybeSingle()
+
       const { data: created, error: createErr } = await db
         .from('C_MBR_MemberList')
-        .insert({ UserID: userId, Email: email, IsActive: true })
+        .insert({
+          UserID:         userId,
+          Email:          email,
+          IsActive:       true,
+          RegisterSource: 'email',
+          MemberLevelID:  defaultLevel?.ID ?? null,
+        })
         .select('ID')
         .single()
 

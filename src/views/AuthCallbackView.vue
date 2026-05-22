@@ -28,14 +28,39 @@ onMounted(async () => {
       user.user_metadata?.full_name ||
       user.user_metadata?.name ||
       null;
-    if (fbName) {
-      // upsert：若記錄已存在只更新 FbName，若不存在則建立最小記錄
-      await db
-        .from("C_MBR_MemberList")
-        .upsert(
-          { UserID: user.id, Email: user.email ?? "", FbName: fbName },
-          { onConflict: "UserID" },
-        );
+
+    // 判斷是否已有會員記錄
+    const { data: existingMbr } = await db
+      .from("C_MBR_MemberList")
+      .select("ID")
+      .eq("UserID", user.id)
+      .maybeSingle();
+
+    if (existingMbr) {
+      // 已存在：只更新 FbName（不覆蓋 RegisterSource / MemberLevelID）
+      if (fbName) {
+        await db
+          .from("C_MBR_MemberList")
+          .update({ FbName: fbName, UpdatedDate: new Date().toISOString() })
+          .eq("UserID", user.id);
+      }
+    } else {
+      // 新 FB 用戶：建立記錄，帶入 RegisterSource 與預設會員等級
+      const { data: defaultLevel } = await db
+        .from("S_MBR_MemberLevelList")
+        .select("ID")
+        .order("SortOrder")
+        .limit(1)
+        .maybeSingle();
+
+      await db.from("C_MBR_MemberList").insert({
+        UserID:        user.id,
+        Email:         user.email ?? "",
+        FbName:        fbName ?? null,
+        RegisterSource: "facebook",
+        MemberLevelID: defaultLevel?.ID ?? null,
+        IsActive:      true,
+      });
     }
   }
 

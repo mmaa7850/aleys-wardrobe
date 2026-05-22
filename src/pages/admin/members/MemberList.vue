@@ -1,5 +1,6 @@
 <script setup>
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, nextTick } from "vue";
+import { Modal } from "bootstrap";
 import { db } from "@/lib/db";
 
 const members = ref([]);
@@ -11,24 +12,24 @@ const filterLevel = ref("");
 const savingId = ref(null);
 
 // ── Edit modal ────────────────────────────────────────────────
-const editTarget = ref(null);   // member object being edited
+const modalEl   = ref(null);   // template ref for the modal DOM element
+const editTarget = ref(null);
 const editName   = ref('');
 const editPhone  = ref('');
 const editFbName = ref('');
+const editLevel  = ref('');    // MemberLevelID (string for select binding)
 const editSaving = ref(false);
 const editError  = ref('');
 
-function openEdit(m) {
+async function openEdit(m) {
   editTarget.value = m;
   editName.value   = m.Name   || '';
   editPhone.value  = m.Phone  || '';
   editFbName.value = m.FbName || '';
+  editLevel.value  = m.MemberLevelID ? String(m.MemberLevelID) : '';
   editError.value  = '';
-  // Bootstrap modal open
-  const el = document.getElementById('memberEditModal');
-  if (el && window.bootstrap) {
-    window.bootstrap.Modal.getOrCreateInstance(el).show();
-  }
+  await nextTick();
+  Modal.getOrCreateInstance(modalEl.value).show();
 }
 
 async function saveEdit() {
@@ -36,26 +37,26 @@ async function saveEdit() {
   editSaving.value = true;
   editError.value  = '';
   try {
+    const newLevel = editLevel.value ? Number(editLevel.value) : null;
     const { error } = await db
       .from('C_MBR_MemberList')
       .update({
-        Name:        editName.value.trim()   || null,
-        Phone:       editPhone.value.trim()  || null,
-        FbName:      editFbName.value.trim() || null,
-        UpdatedDate: new Date().toISOString(),
+        Name:          editName.value.trim()   || null,
+        Phone:         editPhone.value.trim()  || null,
+        FbName:        editFbName.value.trim() || null,
+        MemberLevelID: newLevel,
+        UpdatedDate:   new Date().toISOString(),
       })
       .eq('ID', editTarget.value.ID);
     if (error) throw error;
 
     // Sync local state
-    editTarget.value.Name   = editName.value.trim()   || null;
-    editTarget.value.Phone  = editPhone.value.trim()  || null;
-    editTarget.value.FbName = editFbName.value.trim() || null;
+    editTarget.value.Name          = editName.value.trim()   || null;
+    editTarget.value.Phone         = editPhone.value.trim()  || null;
+    editTarget.value.FbName        = editFbName.value.trim() || null;
+    editTarget.value.MemberLevelID = newLevel;
 
-    const el = document.getElementById('memberEditModal');
-    if (el && window.bootstrap) {
-      window.bootstrap.Modal.getOrCreateInstance(el).hide();
-    }
+    Modal.getOrCreateInstance(modalEl.value).hide();
   } catch (err) {
     editError.value = err?.message ?? String(err);
   } finally {
@@ -98,8 +99,6 @@ async function loadMembers() {
   }
 }
 
-const levelName = (id) => levels.value.find((l) => l.ID === id)?.Name ?? "—";
-
 const filtered = computed(() => {
   let list = members.value;
   if (filterLevel.value !== "") {
@@ -119,6 +118,7 @@ const filtered = computed(() => {
 });
 
 async function changeLevel(member, newLevelId) {
+  if (!newLevelId) return;
   savingId.value = member.ID;
   try {
     const { error } = await db
@@ -142,6 +142,10 @@ const formatDate = (val) => {
 };
 
 const genderLabel = (g) => ({ F: "女", M: "男", other: "其他" }[g] ?? "—");
+
+const sourceLabel = (s) => ({
+  facebook: 'Facebook', fb: 'Facebook', email: 'Email',
+}[s] ?? (s || 'Email'));
 </script>
 
 <template>
@@ -160,7 +164,7 @@ const genderLabel = (g) => ({ F: "女", M: "男", other: "其他" }[g] ?? "—")
         v-model="search"
         type="text"
         class="form-control form-control-sm"
-        style="max-width:240px"
+        style="max-width:260px"
         placeholder="搜尋姓名 / FB名稱 / Email / 電話"
       />
       <select v-model="filterLevel" class="form-select form-select-sm" style="max-width:160px">
@@ -179,12 +183,12 @@ const genderLabel = (g) => ({ F: "女", M: "男", other: "其他" }[g] ?? "—")
           <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
               <tr>
-                <th style="width:14%">姓名</th>
-                <th style="width:12%">FB名稱</th>
-                <th style="width:20%">Email</th>
+                <th style="width:13%">姓名</th>
+                <th style="width:13%">FB名稱</th>
+                <th style="width:19%">Email</th>
                 <th style="width:12%">電話</th>
                 <th style="width:5%">性別</th>
-                <th style="width:9%">來源</th>
+                <th style="width:8%">來源</th>
                 <th style="width:14%">會員等級</th>
                 <th style="width:6%">狀態</th>
                 <th style="width:8%">註冊日</th>
@@ -202,15 +206,16 @@ const genderLabel = (g) => ({ F: "女", M: "男", other: "其他" }[g] ?? "—")
                 <td class="text-muted small">{{ m.Phone || "—" }}</td>
                 <td class="text-muted small">{{ genderLabel(m.Gender) }}</td>
                 <td>
-                  <span class="badge bg-light text-dark border">{{ m.RegisterSource || "email" }}</span>
+                  <span class="badge bg-light text-dark border">{{ sourceLabel(m.RegisterSource) }}</span>
                 </td>
                 <td>
                   <select
                     class="form-select form-select-sm level-select"
-                    :value="m.MemberLevelID"
+                    :value="m.MemberLevelID ?? ''"
                     :disabled="savingId === m.ID"
                     @change="changeLevel(m, Number($event.target.value))"
                   >
+                    <option value="" disabled>（未設定）</option>
                     <option v-for="l in levels" :key="l.ID" :value="l.ID">{{ l.Name }}</option>
                   </select>
                 </td>
@@ -232,7 +237,7 @@ const genderLabel = (g) => ({ F: "女", M: "男", other: "其他" }[g] ?? "—")
   </div>
 
   <!-- Edit Modal -->
-  <div class="modal fade" id="memberEditModal" tabindex="-1" aria-labelledby="memberEditModalLabel" aria-hidden="true">
+  <div class="modal fade" ref="modalEl" tabindex="-1" aria-labelledby="memberEditModalLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
@@ -256,6 +261,13 @@ const genderLabel = (g) => ({ F: "女", M: "男", other: "其他" }[g] ?? "—")
           <div class="mb-3">
             <label class="form-label fw-semibold small">FB 名稱 <span class="text-muted fw-normal">（直播私訊對應用）</span></label>
             <input v-model="editFbName" type="text" class="form-control" placeholder="Facebook 顯示名稱" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">會員等級</label>
+            <select v-model="editLevel" class="form-select">
+              <option value="">（未設定）</option>
+              <option v-for="l in levels" :key="l.ID" :value="String(l.ID)">{{ l.Name }}</option>
+            </select>
           </div>
         </div>
         <div class="modal-footer">
