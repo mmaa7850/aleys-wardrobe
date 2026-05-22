@@ -310,6 +310,7 @@ Deno.serve(async (req) => {
       Amt: newebpayAmount,
       ClientBackURL: `${siteUrl}/orders/${orderNo}`,
       CREDIT: 1,
+      LINEPAY: 1,
       CustomerURL: `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-return`,
       Email: email,
       ExpireDate: expireDate,
