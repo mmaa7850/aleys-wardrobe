@@ -101,6 +101,9 @@ export const useAuthStore = defineStore("auth", {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "facebook",
         options: {
+          // pages_read_engagement：讀取粉專直播留言
+          // pages_manage_engagement：代發結標線/結標公告到 FB
+          scopes: 'pages_read_engagement,pages_manage_engagement',
           redirectTo: `${window.location.origin}/auth/callback`,
         },
       });

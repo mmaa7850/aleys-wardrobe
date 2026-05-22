@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-20
+> 更新時間：2026-05-22
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -15,6 +15,7 @@
 | `add_wallet_tables.sql` | 新增錢包系統三張表 + C_ORD_OrderList 兩個欄位 | ✅ 已執行 |
 | `add_line_binding.sql` | `C_MBR_MemberList` 新增 `LineUserID` / `FbName`；新增 `LineBindToken` 表 | ✅ 已執行（2026-05-20，staging + public 兩個 schema） |
 | `add_live_tables.sql` | 新增 `C_LIV_SessionList` / `C_LIV_ProductList`；`C_ORD_OrderList` 新增 `OrderSource` / `LiveSessionID` | ✅ 已執行（2026-05-20，staging + public 兩個 schema） |
+| `add_live_realtime_tables.sql` | 新增 `C_LIV_ActiveBidList` / `C_LIV_ProcessedCommentList`；`C_LIV_SessionList` 新增 `FbPageId` / `FbLiveVideoId`；`C_ORD_OrderList` 新增 `LiveCode` | ✅ 已執行（2026-05-22，staging + public 兩個 schema） |
 
 ---
 
@@ -99,6 +100,33 @@ WITH CHECK (
 | CreatedDate | timestamptz | YES | now() |
 | UpdatedDate | timestamptz | YES | now() |
 
+### C_LIV_ActiveBidList
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| SessionID | bigint | NO | — | FK → C_LIV_SessionList.ID |
+| Code | varchar | NO | — | 直播商品代碼（大寫）|
+| ProductName | varchar | YES | — | 快照 |
+| Status | varchar(20) | NO | 'open' | `open` / `closed` |
+| OpenedAt | timestamptz | NO | now() | |
+| ClosedAt | timestamptz | YES | — | 截標時間 |
+| CreatedDate | timestamptz | NO | now() | |
+
+> UNIQUE INDEX `idx_live_active_bid_open` ON (SessionID, Code) WHERE Status = 'open'（partial index 確保同一場次同一代碼不重複開標）
+
+### C_LIV_ProcessedCommentList
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| SessionID | bigint | NO | — | |
+| FbCommentId | varchar | NO | — | FB 留言 ID（全域唯一）|
+| FbUserId | varchar | YES | — | 留言者 FB 用戶 ID |
+| DedupKey | varchar | YES | — | `{CODE}\|{VariantID}` 同人同款去重；純紀錄型留言為 null |
+| CreatedDate | timestamptz | NO | now() | |
+
+> UNIQUE (SessionID, FbCommentId)（防止同則留言被重複處理）
+> 僅由 `live-bid-poll` Edge Function 以 service_role 讀寫，無公開 RLS policy。
+
 ### C_LIV_SessionList
 | 欄位 | 型別 | Nullable | Default | 備注 |
 |------|------|----------|---------|------|
@@ -107,6 +135,8 @@ WITH CHECK (
 | LiveDate | date | YES | — | |
 | Status | varchar(20) | NO | 'planned' | `planned` / `active` / `closed` |
 | Notes | text | YES | — | |
+| FbPageId | varchar | YES | — | 監控用粉專 ID（直播監控設定後儲存）|
+| FbLiveVideoId | varchar | YES | — | 目前直播影片 ID（直播監控設定後儲存）|
 | CreatedDate | timestamptz | YES | now() | |
 | UpdatedDate | timestamptz | YES | now() | |
 
@@ -253,6 +283,7 @@ WITH CHECK (
 | OrderNo | varchar | NO | — | 格式：`AW_YYYYMMDD_XXXXX`（一般）/ `LIV_YYYYMMDD_XXXXX`（直播）|
 | OrderSource | varchar(20) | YES | 'web' | `web` / `live` |
 | LiveSessionID | bigint | YES | — | FK → C_LIV_SessionList.ID（直播訂單才有值）|
+| LiveCode | varchar | YES | — | 直播商品代碼（直播訂單才有值，結標公告查詢用）|
 | CustomerName | varchar | NO | — | |
 | CustomerEmail | varchar | NO | — | |
 | CustomerPhone | varchar | YES | — | |
@@ -740,6 +771,16 @@ WITH CHECK (
 | members can read own topup | authenticated | SELECT | MemberID = auth.uid() |
 
 > INSERT/UPDATE/DELETE 僅由 Edge Functions 使用 service_role 執行（繞過 RLS），無公開寫入政策。
+
+### C_LIV_ActiveBidList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| live_active_bid_staff_all | authenticated | ALL | staging.is_staff()（任何啟用的管理員）|
+
+> INSERT/UPDATE 主要由 `live-bid-poll` Edge Function 以 service_role 執行（繞過 RLS）。
+
+### C_LIV_ProcessedCommentList
+> 無公開 policy；僅由 `live-bid-poll` Edge Function 以 service_role（繞過 RLS）讀寫。已啟用 RLS（`ENABLE ROW LEVEL SECURITY`）。
 
 ### C_LIV_SessionList
 | Policy | Role | CMD | 條件 |

@@ -29,7 +29,7 @@
 | 品牌故事 | `/brand-story` | 三段式品牌敘事（靜態） |
 | 聯絡我們 | `/contact` | 聯絡資訊 + 表單（靜態） |
 | 直播場次管理 | `/admin/live` | 直播場次列表（名稱/日期/狀態）；新增場次 Modal（名稱/日期/狀態/備注）；點場次進入詳情 |
-| 直播場次詳情 | `/admin/live/:id` | 場次資訊（可編輯）；Tab 1 **商品對照表**：新增/編輯/刪除（代碼/顏色/尺寸/直播特價，內建 Variant 搜尋 dropdown）；Tab 2 **留言匯入**：貼入 FB 留言文字→客戶端解析（①過濾雜訊＋`作者`回覆整塊跳過 ②分組成 block ③倒序處理舊留言優先扣庫存 ④一則留言含多筆商品→整個跳過並顯示黃色警告 ⑤跨留言重複→⚠️標記）→預覽確認→呼叫 `live-import`→顯示建單結果（成功/庫存不足/找不到會員）+待手動通知名單 ⚠️ 待測試 |
+| 直播場次詳情 | `/admin/live/:id` | 場次資訊（可編輯）；Tab 1 **商品對照表**：新增/編輯/刪除（代碼/顏色/尺寸/直播特價，內建 Variant 搜尋 dropdown）；Tab 2 **留言匯入（直播結束後用）**：直播結束後小編手動複製 FB 貼文留言文字貼入→客戶端解析（①過濾雜訊＋`作者`回覆整塊跳過 ②分組成 block ③倒序處理舊留言優先扣庫存 ④一則留言含多筆商品→整個跳過並顯示黃色警告 ⑤跨留言重複→⚠️標記）→預覽確認→呼叫 `live-import`→顯示建單結果（成功/庫存不足/找不到會員）+待手動通知名單 ⚠️ 待測試。**⚠️ 注意：此 Tab 是直播結束後的手動批次匯入，與直播進行中的 FB API 即時讀取留言是完全不同的功能（後者見 toAdd.md 🟢 第 6 項，尚未開發）** |
 | 錢包 | `/wallet` | 前台錢包頁面（需登入）；顯示目前餘額（深色漸層卡片）；快速選擇金額按鈕（100/300/500/1000/3000）或自訂金額；發票設定（5種：紙本/手機條碼/自然人憑證/捐贈愛心碼/公司戶）；前往藍新付款；交易紀錄列表（類型/金額/前後餘額/時間）；付款成功後輪詢餘額直到入帳（最多20秒每2秒一次） |
 | 登入/註冊 | `/login` | 「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用，`#1877F2`）；Email 登入/註冊 Tab、忘記密碼；FB OAuth redirect 目標存 localStorage（防 LINE in-app browser 跨頁清空）；FB OAuth ✅ 測試成功（2026-05-20） |
 | 重設密碼 | `/reset-password` | 密碼重設表單 |
@@ -97,6 +97,7 @@
 | `line-bind` | ✅ 需要 | 前台呼叫，完成 LINE 帳號綁定；驗證 JWT（取得 UserID）；驗證 token（存在、未過期、未使用）；upsert `LineUserID` 至 `C_MBR_MemberList`（by UserID，避免無記錄時 update 不生效）；標記 Token.UsedAt；Secrets：`DB_SCHEMA` |
 | `line-notify` | ✅ 需要 | 管理員呼叫；POST `{ lineUserId, message }`；驗證 IsActive 管理員身份；發 LINE Push API；供未來出貨通知等場景重用 |
 | `live-import` | ✅ 需要 | 直播留言批次建單；POST `{ sessionId, items: [{ livProductId, fbName, qty }] }`；管理員身份驗證；逐筆：查 `C_LIV_ProductList`→比對 `C_MBR_MemberList.FbName`→取預設地址（`C_MBR_MemberAddressList`）→`decrement_stock` RPC→建 `C_ORD_OrderList`（OrderSource='live', OrderNo=`LIV_YYYYMMDD_XXXXX`）+ `C_ORD_OrderItemList`→有 `LineUserID` 則 LINE Push 付款連結；回傳每筆 status（success/no_stock/no_member/error）|
+| `live-bid-poll` | ✅ 需要 | **直播進行中** FB 即時搶標；支援兩個 action：①`poll`（輪詢）：呼叫 FB Graph API 取新留言 → 偵測粉專「起標線」留言自動開標（寫 `C_LIV_ActiveBidList`）→ 消費者留言 FIFO 去重建單（`decrement_stock` → `C_ORD_OrderList` + `C_ORD_OrderItemList`）→ 所有 variant 庫存歸零時自動呼叫 FB API 發結標線+結標公告 → LINE 通知得標者；②`manual_close`：管理員手動截標，發結標線+結標公告；去重機制：`C_LIV_ProcessedCommentList`（FbCommentId 防跨輪詢重複、FbUserId+DedupKey 防同人同款重複下單）；需 FB App 權限 `pages_read_engagement`+`pages_manage_engagement` ⚠️ 待上線測試 |
 
 ---
 

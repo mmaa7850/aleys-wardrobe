@@ -15,17 +15,41 @@ originSessionId: 4a6c0d20-125e-4c36-9852-4d6bbf7d49bb
 
 **狀態：⏳ 等待使用者操作**
 
-使用者需要：
-1. 去 https://developers.facebook.com 用**自己的 FB 帳號**登入並開啟開發者模式
-2. 建立 App（名稱：Aley's Wardrobe，類型：Facebook Login）
-3. 在 Facebook Login → Settings 填入 Valid OAuth Redirect URI：
+### Step 1：建立 FB 應用程式（已進行中）
+1. 前往 https://developers.facebook.com，用自己的 FB 帳號登入並完成開發者驗證
+2. 建立 App：
+   - 用途選「其他」→「商業」→ **管理粉絲專頁的所有內容**（此 use case 包含 `pages_read_engagement`）
+   - App 名稱：Aley's Wardrobe
+3. App 建立後，左側選單點「新增產品」→ 加入 **Facebook Login**
+4. 進入 **Facebook Login → 設定**，在「有效的 OAuth 重新導向 URI」填入：
    ```
    https://xyqznatwbfuscocycqtb.supabase.co/auth/v1/callback
    ```
-4. 從 App Settings → Basic 複製 **App ID** 和 **App Secret**
-5. 把這兩個值交給開發者，填入 Supabase Dashboard → Authentication → Providers → Facebook
+5. 從 **應用程式設定 → 基本資料** 複製 **應用程式編號（App ID）** 和 **應用程式密鑰（App Secret）**
 
-**注意：** 目前代碼已完成（`provider: "facebook"`），只差 Supabase 端的 App ID / Secret 填入就能啟用。
+### Step 2：填入 Supabase（⚠️ 不是 Edge Functions Secrets）
+1. 開啟 Supabase Dashboard → 左側選單 **Authentication** → 上方 tab **Providers**
+2. 找到 **Facebook**，展開
+3. 開啟 **Enable sign in with Facebook** 開關
+4. 填入 App ID 和 App Secret
+5. **開啟 Allow users without an email**（部分 FB 帳號沒有綁定 email，不開啟這些用戶會登入失敗）
+6. 儲存後，Supabase 會顯示 Callback URL（格式：`https://xyqznatwbfuscocycqtb.supabase.co/auth/v1/callback`）
+   - 確認與 Step 1 填入的 URI 一致即可
+
+### Step 3：FB App Review（上線前必須完成）
+- 開發模式下可供自己測試，不需 App Review
+- 正式上線前需提交審核以下**兩個**權限（同一個 App，同一次審核提交）：
+  - `pages_read_engagement`：讀取粉絲專頁直播留言（搶標入單用）
+  - `pages_manage_engagement`：以系統身份在直播中發布結標線、結標公告
+- **審核影片需展示以下流程：**
+  1. 管理後台連接 FB 帳號，選擇粉絲專頁，偵測並填入直播影片 ID
+  2. 開始監控後，系統即時讀取消費者留言並自動建立訂單
+  3. 庫存售完時，系統自動在直播留言發出「`======== 結標線 ========`」
+  4. 系統緊接著發出結標公告（格式：`結標公告：第 Q80 標 [商品名] $[價格] 客人甲x1 客人乙x1`）
+  5. 管理員也可點「手動截標」觸發上述第 3、4 步
+- 詳細審核流程請參考 `fb_app_review.md`
+
+**注意：** 目前程式碼已完成（`provider: "facebook"`），只差 Supabase 端的 App ID / Secret 填入就能啟用 FB 登入功能。
 
 ---
 

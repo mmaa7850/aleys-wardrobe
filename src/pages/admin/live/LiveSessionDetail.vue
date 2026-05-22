@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Modal } from 'bootstrap'
 import { db } from '@/lib/db'
@@ -45,6 +45,239 @@ let _browseTimer = null
 
 // ── Tab ───────────────────────────────────────────────────
 const activeTab = ref('products')
+
+// ── 直播監控（FB 即時搶標）────────────────────────────────
+const fbPages        = ref([])          // 管理的粉專列表
+const selPageIdx     = ref(0)           // 選中的粉專 index
+const pageToken      = ref('')          // Page Access Token
+const fbPageId       = ref('')          // Page ID
+const videoId        = ref('')          // Live Video ID
+const detectingVideo = ref(false)
+const monitorStatus  = ref('idle')      // idle | connecting | live | error
+const monitorError   = ref('')
+const nextSince      = ref(null)
+const activeLiveBids  = ref([])          // 目前開標中的商品
+const recentOrders    = ref([])          // 最近入單記錄（最新 50 筆）
+const startingBidCode = ref('')          // 正在起標中的商品代碼（loading 狀態用）
+let   _pollTimer      = null
+
+// 連接 FB：用 provider_token 取粉專列表
+async function connectFb() {
+  monitorError.value = ''
+  monitorStatus.value = 'connecting'
+  try {
+    const { data: { session: authSess } } = await supabase.auth.getSession()
+    const userToken = authSess?.provider_token
+    if (!userToken) {
+      monitorError.value = '找不到 FB Token，請重新以 Facebook 登入（需授權粉專管理權限）'
+      monitorStatus.value = 'error'
+      return
+    }
+    const res  = await fetch(`https://graph.facebook.com/me/accounts?access_token=${userToken}&fields=id,name,access_token`)
+    const data = await res.json()
+    if (data.error) throw new Error(data.error.message)
+    fbPages.value   = data.data ?? []
+    if (!fbPages.value.length) {
+      monitorError.value = '此帳號沒有管理任何粉絲專頁'
+      monitorStatus.value = 'error'
+      return
+    }
+    selectPage(0)
+    monitorStatus.value = 'idle'
+  } catch (e) {
+    monitorError.value = String(e)
+    monitorStatus.value = 'error'
+  }
+}
+
+function selectPage(idx) {
+  selPageIdx.value = idx
+  const page = fbPages.value[idx]
+  if (page) {
+    pageToken.value = page.access_token
+    fbPageId.value  = page.id
+    videoId.value   = session.value?.FbLiveVideoId ?? ''
+  }
+}
+
+// 自動偵測目前直播影片
+async function detectVideo() {
+  if (!pageToken.value || !fbPageId.value) return
+  detectingVideo.value = true
+  monitorError.value   = ''
+  try {
+    const res  = await fetch(`https://graph.facebook.com/${fbPageId.value}/live_videos?status=LIVE&fields=id,title&access_token=${pageToken.value}`)
+    const data = await res.json()
+    if (data.error) throw new Error(data.error.message)
+    const live = data.data?.[0]
+    if (!live) { monitorError.value = '目前沒有進行中的直播'; return }
+    videoId.value = live.id
+  } catch (e) {
+    monitorError.value = String(e)
+  } finally {
+    detectingVideo.value = false
+  }
+}
+
+// 開始監控
+async function startMonitoring() {
+  if (!pageToken.value || !fbPageId.value || !videoId.value) {
+    monitorError.value = '請先連接 FB 並確認直播影片 ID'
+    return
+  }
+  monitorError.value = ''
+  monitorStatus.value = 'live'
+  nextSince.value = null
+
+  // 儲存 FbPageId + FbLiveVideoId 到場次
+  await db.from('C_LIV_SessionList').update({
+    FbPageId:      fbPageId.value,
+    FbLiveVideoId: videoId.value,
+  }).eq('ID', sessionId)
+
+  // 立即執行一次，之後每 8 秒輪詢
+  await pollOnce()
+  _pollTimer = setInterval(pollOnce, 8000)
+}
+
+function stopMonitoring() {
+  clearInterval(_pollTimer)
+  _pollTimer = null
+  monitorStatus.value = 'idle'
+}
+
+async function pollOnce() {
+  try {
+    const { data: { session: authSess } } = await supabase.auth.getSession()
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/live-bid-poll`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authSess?.access_token}`,
+        },
+        body: JSON.stringify({
+          action:           'poll',
+          sessionId,
+          pageAccessToken:  pageToken.value,
+          liveVideoId:      videoId.value,
+          pageId:           fbPageId.value,
+          since:            nextSince.value,
+        }),
+      }
+    )
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+
+    nextSince.value = data.nextSince
+
+    // 更新開標中商品
+    for (const bid of (data.newActiveBids ?? [])) {
+      if (!activeLiveBids.value.find(b => b.Code === bid.Code)) {
+        activeLiveBids.value.push(bid)
+      }
+    }
+    for (const closed of (data.closedBids ?? [])) {
+      activeLiveBids.value = activeLiveBids.value.filter(b => b.Code !== closed.code)
+    }
+
+    // 新增入單記錄（最多保留 100 筆）
+    for (const order of (data.orders ?? [])) {
+      recentOrders.value.unshift({ ...order, ts: new Date().toLocaleTimeString('zh-TW') })
+    }
+    if (recentOrders.value.length > 100) recentOrders.value.splice(100)
+
+  } catch (e) {
+    console.error('[pollOnce]', e)
+    monitorError.value = `輪詢失敗：${String(e)}`
+  }
+}
+
+// 手動截標
+async function manualCloseBid(bid) {
+  if (!confirm(`確定手動截標「${bid.Code} ${bid.ProductName ?? ''}」？系統會自動在 FB 發送結標線與結標公告。`)) return
+  try {
+    const { data: { session: authSess } } = await supabase.auth.getSession()
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/live-bid-poll`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authSess?.access_token}`,
+        },
+        body: JSON.stringify({
+          action:          'manual_close',
+          sessionId,
+          pageAccessToken: pageToken.value,
+          liveVideoId:     videoId.value,
+          pageId:          fbPageId.value,
+          code:            bid.Code,
+        }),
+      }
+    )
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    activeLiveBids.value = activeLiveBids.value.filter(b => b.Code !== bid.Code)
+    recentOrders.value.unshift({ code: bid.Code, status: 'closed_manual', ts: new Date().toLocaleTimeString('zh-TW') })
+  } catch (e) {
+    alert(`截標失敗：${String(e)}`)
+  }
+}
+
+// 起標（從商品表直接點按鈕，由系統在 FB 發出起標線）
+function isFirstOfCode(code, idx) {
+  return products.value.findIndex(p => p.Code === code) === idx
+}
+
+async function startBid(code, productName) {
+  if (monitorStatus.value !== 'live') {
+    alert('請先在「直播監控」Tab 開始監控，才能使用起標功能')
+    return
+  }
+  if (!confirm(`確定對「${code} ${productName}」起標？系統將在 FB 直播留言發出起標線。`)) return
+  startingBidCode.value = code
+  try {
+    const { data: { session: authSess } } = await supabase.auth.getSession()
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/live-bid-poll`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authSess?.access_token}`,
+        },
+        body: JSON.stringify({
+          action:          'start_bid',
+          sessionId,
+          pageAccessToken: pageToken.value,
+          liveVideoId:     videoId.value,
+          pageId:          fbPageId.value,
+          code,
+        }),
+      }
+    )
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    if (!activeLiveBids.value.find(b => b.Code === data.bid.Code)) {
+      activeLiveBids.value.push(data.bid)
+    }
+  } catch (e) {
+    alert(`起標失敗：${String(e)}`)
+  } finally {
+    startingBidCode.value = ''
+  }
+}
+
+// 入單狀態顯示
+const ORDER_STATUS = {
+  success:      { label: '✅ 建單成功', cls: 'text-success' },
+  no_stock:     { label: '❌ 庫存不足', cls: 'text-danger'  },
+  no_member:    { label: '⚠️ 找不到會員', cls: 'text-warning fw-semibold' },
+  error:        { label: '❌ 錯誤', cls: 'text-danger'      },
+  closed_manual:{ label: '🔒 手動截標', cls: 'text-muted'   },
+}
 
 // ── 留言匯入 ──────────────────────────────────────────────
 const rawText            = ref('')
@@ -459,6 +692,12 @@ onMounted(async () => {
   await loadSession()
   await loadProducts()
   await loadCategories()
+  // 如果場次已儲存直播影片 ID，預先填入
+  if (session.value?.FbLiveVideoId) videoId.value = session.value.FbLiveVideoId
+})
+
+onUnmounted(() => {
+  stopMonitoring()
 })
 </script>
 
@@ -564,6 +803,18 @@ onMounted(async () => {
             @click="activeTab = 'import'"
           >
             留言匯入
+            <span class="badge bg-secondary ms-1" style="font-size:10px;">直播後</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button
+            class="nav-link d-flex align-items-center gap-1"
+            :class="{ active: activeTab === 'live' }"
+            @click="activeTab = 'live'"
+          >
+            直播監控
+            <span v-if="monitorStatus === 'live'" class="badge bg-danger ms-1" style="font-size:10px; animation: pulse 1.5s infinite;">● 直播中</span>
+            <span v-else class="badge bg-secondary ms-1" style="font-size:10px;">直播中用</span>
           </button>
         </li>
       </ul>
@@ -597,13 +848,30 @@ onMounted(async () => {
                 <tr v-else-if="!products.length">
                   <td colspan="6" class="text-center py-3" style="color:#a08060;">尚未建立商品對照，請點右上角「新增商品」</td>
                 </tr>
-                <tr v-for="p in products" :key="p.ID">
+                <tr v-for="(p, pIdx) in products" :key="p.ID">
                   <td><code style="font-size:13px;">{{ p.Code }}</code></td>
                   <td>{{ p.ColorName }}</td>
                   <td>{{ p.SizeName }}</td>
                   <td>{{ p.ProductName }}</td>
                   <td>NT${{ p.LivePrice.toLocaleString() }}</td>
-                  <td>
+                  <td style="white-space:nowrap;">
+                    <!-- 起標按鈕：每個 Code 只在第一列顯示 -->
+                    <template v-if="isFirstOfCode(p.Code, pIdx)">
+                      <span
+                        v-if="activeLiveBids.find(b => b.Code === p.Code)"
+                        class="badge bg-success me-1"
+                        style="font-size:11px; vertical-align:middle;"
+                      >● 開標中</span>
+                      <button
+                        v-else
+                        class="btn btn-sm btn-outline-success me-1"
+                        :disabled="monitorStatus !== 'live' || startingBidCode === p.Code"
+                        :title="monitorStatus !== 'live' ? '請先在「直播監控」Tab 開始監控' : `起標 ${p.Code}`"
+                        @click="startBid(p.Code, p.ProductName)"
+                      >
+                        {{ startingBidCode === p.Code ? '起標中...' : '▶ 起標' }}
+                      </button>
+                    </template>
                     <button class="btn btn-sm btn-outline-secondary me-1" @click="openEditProduct(p)">編輯</button>
                     <button class="btn btn-sm btn-outline-danger" @click="deleteProduct(p.ID)">刪除</button>
                   </td>
@@ -818,6 +1086,125 @@ onMounted(async () => {
           </div>
         </template>
       </div>
+
+      <!-- ════ Tab 3：直播監控 ════ -->
+      <div v-show="activeTab === 'live'">
+
+        <!-- ① FB 連接區 -->
+        <div class="card mb-3">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <span>FB 連接設定</span>
+            <button class="btn btn-sm btn-outline-primary" @click="connectFb" :disabled="monitorStatus === 'live'">
+              {{ fbPages.length ? '重新連接' : '連接 FB 帳號' }}
+            </button>
+          </div>
+          <div class="card-body">
+            <div v-if="monitorError" class="alert alert-danger py-2 mb-3" style="font-size:13px;">{{ monitorError }}</div>
+
+            <!-- 選擇粉專 -->
+            <div v-if="fbPages.length" class="row g-3 align-items-end">
+              <div class="col-sm-4">
+                <label class="form-label" style="font-size:12px;">粉絲專頁</label>
+                <select class="form-select form-select-sm" :value="selPageIdx" @change="selectPage(Number($event.target.value))" :disabled="monitorStatus === 'live'">
+                  <option v-for="(p, i) in fbPages" :key="p.id" :value="i">{{ p.name }}</option>
+                </select>
+              </div>
+              <div class="col-sm-5">
+                <label class="form-label" style="font-size:12px;">直播影片 ID</label>
+                <div class="input-group input-group-sm">
+                  <input v-model="videoId" class="form-control" placeholder="自動偵測或手動貼上" :disabled="monitorStatus === 'live'" />
+                  <button class="btn btn-outline-secondary" @click="detectVideo" :disabled="detectingVideo || monitorStatus === 'live'">
+                    {{ detectingVideo ? '偵測中...' : '自動偵測' }}
+                  </button>
+                </div>
+              </div>
+              <div class="col-sm-3">
+                <button
+                  v-if="monitorStatus !== 'live'"
+                  class="btn btn-success btn-sm w-100"
+                  :disabled="!videoId"
+                  @click="startMonitoring"
+                >
+                  ▶ 開始監控
+                </button>
+                <button v-else class="btn btn-danger btn-sm w-100" @click="stopMonitoring">
+                  ■ 停止監控
+                </button>
+              </div>
+            </div>
+
+            <p v-if="!fbPages.length" class="text-muted mb-0" style="font-size:12.5px;">
+              點「連接 FB 帳號」後選擇要監控的粉絲專頁，再輸入或自動偵測直播影片 ID。
+            </p>
+          </div>
+        </div>
+
+        <!-- 監控中才顯示以下區塊 -->
+        <template v-if="monitorStatus === 'live' || activeLiveBids.length || recentOrders.length">
+
+          <!-- ② 開標中商品 -->
+          <div class="mb-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <span style="font-size:13px; font-weight:600; color:#3d2e1e;">開標中商品</span>
+              <span v-if="monitorStatus === 'live'" class="badge bg-danger" style="font-size:11px; animation: pulse 1.5s infinite;">● 輪詢中（每 8 秒）</span>
+            </div>
+            <div v-if="!activeLiveBids.length" class="text-muted" style="font-size:13px;">
+              尚無開標中的商品。當系統偵測到粉專在直播中貼出「起標線」留言時，商品會自動出現在這裡。
+            </div>
+            <div v-for="bid in activeLiveBids" :key="bid.Code" class="card mb-2" style="border-left: 3px solid #28a745;">
+              <div class="card-body py-2 d-flex align-items-center justify-content-between">
+                <div>
+                  <code style="font-size:16px; color:#3d2e1e;">{{ bid.Code }}</code>
+                  <span class="ms-2 text-muted" style="font-size:13px;">{{ bid.ProductName }}</span>
+                  <span class="badge bg-success ms-2" style="font-size:10px;">開標中</span>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" @click="manualCloseBid(bid)" :disabled="monitorStatus !== 'live'">
+                  手動截標
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ③ 即時入單記錄 -->
+          <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <span>即時入單記錄</span>
+              <button class="btn btn-sm btn-outline-secondary" @click="recentOrders = []">清除</button>
+            </div>
+            <div v-if="!recentOrders.length" class="card-body text-muted" style="font-size:13px;">
+              尚無入單紀錄
+            </div>
+            <div v-else class="table-responsive">
+              <table class="table table-sm mb-0" style="font-size:13px;">
+                <thead>
+                  <tr>
+                    <th style="width:80px;">時間</th>
+                    <th style="width:60px;">代碼</th>
+                    <th>FB 名稱</th>
+                    <th>樣式</th>
+                    <th>狀態</th>
+                    <th>訂單號</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="(o, i) in recentOrders" :key="i">
+                    <td class="text-muted">{{ o.ts }}</td>
+                    <td><code>{{ o.code }}</code></td>
+                    <td>{{ o.fbName || '–' }}</td>
+                    <td>{{ o.style || '–' }}</td>
+                    <td :class="ORDER_STATUS[o.status]?.cls || 'text-muted'">
+                      {{ ORDER_STATUS[o.status]?.label || o.status }}
+                    </td>
+                    <td style="font-size:11px; font-family:monospace;">{{ o.orderNo || '–' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </template>
+      </div>
+
     </template>
 
     <!-- ════ 商品對照 Modal ════ -->
@@ -989,3 +1376,10 @@ onMounted(async () => {
 
   </div>
 </template>
+
+<style scoped>
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+</style>
