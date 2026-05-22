@@ -14,8 +14,8 @@
 | 首頁 | `/` | Hero 區塊（左側文字 + 右側裝飾框）、跑馬燈 Ticker、**動態 Banner 橫幅**（`home-banner`，Ticker 下方全寬，多張輪播）、最新上架 8 件商品卡片、探索風格分類卡、品牌故事；管理員可見 FAB 快速進入後台 |
 | 商品列表 | `/products` | 分類篩選 + 關鍵字搜尋、商品卡片（圖片/影片、售價/原價劃線/SALE badge）、Hover 顯示「查看商品」 |
 | 商品詳情 | `/products/:id` | 圖片/影片 Gallery（主圖 + 縮圖列）、顏色→尺寸選擇（依庫存過濾）、**數量選擇器**（現貨上限卡庫存；預購上限 99）、商品描述/尺寸規格 Tab；**預購模式**：`IsPreOrder=true` 且所選 variant 庫存歸零時顯示預購 badge + 預計出貨日 + 說明，按鈕改「立即預購」，數量選擇器仍顯示；加入購物車、收藏按鈕 |
-| 購物車 | `/cart` | 品項列表（**勾選欄**（僅非預購品項）、圖、名稱、規格、**預購預計出貨日**、**數量 ±**（**僅預購品項可調整**，非預購品項兩顆按鈕均 disabled）、**刪除**（**僅預購品項顯示刪除按鈕**，現貨/直播入單/小編手動入單不顯示））；預購品項不顯示勾選框、不計入合計；**已選取合計金額**；前往結帳按鈕（無勾選時 disabled）；`cart.initSelection()` 在載入後自動勾選所有非預購品項 |
-| 結帳 | `/checkout` | 僅結算購物車中**已勾選品項**（`cart.selectedItems`）；自動從會員資料填入姓名/電話；**配送方式**從 DB 動態載入，超商取貨（`cvscom`）/ 宅配到府（`home`）驅動不同表單欄位；**手動優惠碼**輸入驗證；**滿額自動折抵**（`IsAutoApply=true`，自動套用最高折扣，距下一門檻進度提示）；**錢包折抵**：「使用錢包折抵」選項（顯示餘額、折抵金額、實付金額）；全錢包支付不走藍新直接建立已付款訂單；**電子發票設定**（5 種：紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編，各有格式驗證）；金額明細（小計+運費-折扣-錢包折抵）；送出後呼叫 `create-payment` Edge Function，自動 submit 藍新付款表單（或全錢包直接完成）；成功後僅移除已勾選品項 |
+| 購物車 | `/cart` | 品項列表（**現貨商品前顯示 🔒 鎖頭圖示**（已扣庫存，不可取消選取）；**預購商品前顯示勾選框**（可決定是否一起結帳）；圖、名稱、規格、**預購預計出貨日**、**數量 ±**（**僅預購品項可調整**，非預購品項兩顆按鈕均 disabled）、**刪除**（**僅預購品項顯示刪除按鈕**，現貨/直播入單/小編手動入單不顯示））；**已選取合計金額**；前往結帳按鈕（無勾選時 disabled）；`cart.initSelection()` 在載入後自動全選所有品項 |
+| 結帳 | `/checkout` | 僅結算購物車中**已勾選品項**（`cart.selectedItems`）；自動從會員資料填入姓名/電話；**配送方式**從 DB 動態載入，超商取貨（`cvscom`）/ 宅配到府（`home`）驅動不同表單欄位；**手動優惠碼**輸入驗證；**滿額自動折抵**（`IsAutoApply=true`，自動套用最高折扣，距下一門檻進度提示）；**錢包折抵**：「使用錢包折抵」選項（顯示餘額、折抵金額、實付金額）；全錢包支付不走藍新直接建立已付款訂單；**電子發票設定**（5 種：紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編，各有格式驗證，**驗證錯誤訊息顯示在該發票類型的輸入框下方**）；金額明細（小計+運費-折扣-錢包折抵）；送出後呼叫 `create-payment` Edge Function，自動 submit 藍新付款表單（或全錢包直接完成）；成功後僅移除已勾選品項 |
 | 優惠券專區 | `/coupons` | 僅一般會員可見（管理員導首頁）；分兩區：**滿額自動折抵**（金色 badge、無需輸入）、**優惠碼**（顯示代碼 + 一鍵複製）；從 DB 動態載入有效期內且 `IsActive=true` 的優惠券 |
 | 結帳成功 | `/order-success/:orderNo` | 成功訊息、訂單編號、前往訂單詳情 / 繼續購物 |
 | 訂單紀錄 | `/orders` | 完整訂單列表（依建立時間倒序）；四色付款狀態 badge（待付款/已付款/付款失敗/已退款）；桌面版表格 header，行動版簡化雙列；空清單提示「去逛逛」 |
@@ -59,7 +59,7 @@
 | 訂單狀態管理 | `/admin/orders/setstatus` | CanManageOrders | 管理訂單狀態選項（`S_ORD_StatusList`） |
 | 優惠券設定 | `/admin/marketing/setcoupons` | CanManageMarketing | 建立/管理優惠券（優惠碼、折扣金額、最低消費門檻、`IsAutoApply`、有效期、使用次數） |
 | Banner 設定 | `/admin/marketing/setbanners` | CanManageMarketing | 建立/管理 Banner（`S_MKT_BannerList`）；**圖片直接上傳** Supabase Storage（`banners` bucket）或貼外部 URL；**顯示位置**：`home-hero`（首頁 Hero 裝飾框內，建議 3:4）/ `home-banner`（Ticker 下方全寬，建議 16:5）；日期排程；列表快速開關顯示/隱藏；刪除同步移除 Storage 檔案 |
-| 會員列表 | `/admin/members` | CanManageMembers | 全部一般會員（排除管理員帳號）、搜尋/等級篩選、可直接切換會員等級 |
+| 會員列表 | `/admin/members` | CanManageMembers | 全部一般會員（排除管理員帳號）、搜尋（姓名/FB名稱/Email/電話）/等級篩選、可直接切換會員等級；**編輯 Modal**：點「編輯」按鈕可修改姓名、電話、FB名稱（`FbName`，供直播留言比對） |
 | 會員等級設定 | `/admin/members/levels` | CanManageMembers | 管理會員等級（`S_MBR_MemberLevelList`） |
 | **錢包管理** | `/admin/wallet` | CanManageMembers | 管理員錢包管理；搜尋並選擇會員；查看餘額與交易紀錄；手動調整餘額（需填備注） |
 | 付款方式設定 | `/admin/settings/setpaymethods` | CanManageSettings | 管理付款方式（`S_PAY_PayMethodList`） |
@@ -67,7 +67,7 @@
 | 系統設定分類 | `/admin/settings/setconfigcategories` | CanManageSettings | 管理設定分類（`S_SYS_ConfigCategoryList`） |
 | 系統設定 | `/admin/settings/setconfig` | CanManageSettings | 全站 Key-Value 參數（`S_SYS_Config`）；前台透過 `useSiteConfigStore` 讀取；已實作：`announcement`（公告欄）、`maintenance_mode`、`payment_disabled` |
 | 管理者帳號 | `/admin/settings/admin-users` | IsAdmin（超管）| 管理後台帳號與細項權限（`S_SYS_AdminUserList`）；僅超管可進入 |
-| **報表 — 銷售總覽** | `/admin/reports/sales` | 全部 | 今日/本週/本月/自訂區間切換；4 張 stat card（已付款營收、訂單數、客單價、退款金額）；低庫存警示卡片；每日已付款營收折線圖（Chart.js） |
+| **報表 — 銷售總覽** | `/admin/reports/sales` | 全部 | 今日/本週/本月/自訂區間切換；5 張 stat card（已付款營收、訂單數、客單價、退款金額、**估算藍新手續費**（信用卡 2.8%、ATM min(1%, NT$20)，全錢包付款不計）；低庫存警示卡片；每日已付款營收折線圖（Chart.js） |
 | **報表 — 商品排行** | `/admin/reports/products` | 全部 | 已付款訂單統計；依銷售金額或數量排序；時間區間可選（本週/本月/近3月/自訂）；前3名 🥇🥈🥉 |
 | **報表 — 優惠券效益** | `/admin/reports/coupons` | 全部 | 各券：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃；手動碼 vs 自動折抵分類顯示 |
 | **報表 — 訂單狀態分佈** | `/admin/reports/orders` | 全部 | 全部訂單甜甜圈圖（付款狀態4種：待付款/已付款/付款失敗/已退款）；佔比表格；點擊跳訂單列表 |

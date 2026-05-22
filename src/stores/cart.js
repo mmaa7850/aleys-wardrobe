@@ -278,10 +278,14 @@ export const useCartStore = defineStore('cart', {
     },
 
     initSelection() {
-      this.selectedItemIds = this.items.filter(i => !i.isPreOrder).map(i => i.id)
+      // 非預購商品永遠選取（已扣庫存），預購商品預設也全選但可取消
+      this.selectedItemIds = this.items.map(i => i.id)
     },
 
     toggleSelection(id) {
+      // 只允許預購商品切換選取狀態
+      const item = this.items.find(i => i.id === id)
+      if (!item || !item.isPreOrder) return
       const idx = this.selectedItemIds.indexOf(id)
       if (idx >= 0) this.selectedItemIds.splice(idx, 1)
       else this.selectedItemIds.push(id)

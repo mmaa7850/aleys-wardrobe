@@ -60,12 +60,22 @@ onMounted(async () => {
           v-for="item in cart.items"
           :key="item.id"
           class="cart-item"
-          :class="{ 'cart-item--unchecked': !item.isPreOrder && !cart.selectedItemIds.includes(item.id) }"
+          :class="{ 'cart-item--unchecked': item.isPreOrder && !cart.selectedItemIds.includes(item.id) }"
         >
-          <!-- Checkbox (現貨才有) -->
+          <!-- 現貨：鎖頭（不可取消）；預購：勾選框（可選擇本次是否結帳） -->
           <div class="cart-item__check">
-            <input
+            <svg
               v-if="!item.isPreOrder"
+              class="cart-item__lock"
+              width="13" height="13" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              title="現貨商品已鎖定，無法取消"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+            <input
+              v-else
               type="checkbox"
               class="cart-item__checkbox"
               :checked="cart.selectedItemIds.includes(item.id)"
@@ -316,6 +326,11 @@ onMounted(async () => {
   height: 15px;
   accent-color: var(--fe-text);
   cursor: pointer;
+}
+
+.cart-item__lock {
+  color: var(--fe-muted);
+  opacity: 0.45;
 }
 
 /* Item image */

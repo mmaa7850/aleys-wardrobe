@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-20（下午）
+> 更新時間：2026-05-22
 
 ---
 
@@ -97,6 +97,11 @@
 - **買衣服付款後自動開發票**：`payment-notify` 付款成功後自動呼叫 ezPay 開立發票；支援所有載具類型；NewebpayAmt=0（全錢包）跳過 ⚠️ 待測試
 - **退款入錢包**：新增 `wallet-refund` Edge Function；後台訂單 Modal 新增「退款入錢包」操作區塊；全額退款（FinalAmount − ShippingFee）或部分退款（指定金額）；退款後入會員錢包，不走藍新退款 API，不作廢發票 ⚠️ 待測試
 - **庫存扣除時機調整**：改為加入購物車時立即扣庫存（`decrement_stock` RPC，FOR UPDATE 原子性）；增加數量扣差量、減少數量還差量；DB 寫入失敗自動回補；`create-payment` 移除結帳前庫存檢查；`payment-notify` 移除付款後庫存扣除；migration：`cart_stock_functions.sql`（`public` + `staging` schema）
+- **購物車 UX 改善（鎖頭 + 勾選框）**：現貨商品前改顯示 🔒 鎖頭 SVG 圖示（已扣庫存，不可取消）；預購商品前顯示可勾選 checkbox（可選擇是否一起結帳）；`cart.initSelection()` 改為全選所有品項；`cart.toggleSelection()` 僅允許預購商品切換
+- **結帳發票錯誤訊息位置改善**：發票格式驗證失敗時，錯誤訊息改顯示在選定發票類型的輸入框下方（而非頁面底部），用 `invoiceError` ref 分開管理
+- **後台會員列表編輯 Modal**：新增「編輯」按鈕，小編可透過 Modal 填入會員姓名、電話、FB 名稱（`FbName`，直播留言比對用）；搜尋範圍擴充至 FB 名稱
+- **藍新手續費試算（銷售報表）**：銷售總覽新增「估算藍新手續費」stat card；信用卡/LINE Pay 2.8%、ATM min(1%, NT$20)；全錢包付款（NewebpayAmt=0）不計
+- **LINE Pay 支援**：`create-payment` Edge Function 新增 `LINEPAY: 1` 參數，藍新付款頁面顯示 LINE Pay 選項（需在 Supabase Dashboard 重新部署 Edge Function）
 - **FB 帳號登入（Facebook OAuth）**：登入頁「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用）；FB OAuth 回調（`/auth/callback`）整合；首次 FB 登入自動建立 `C_MBR_MemberList` 最小記錄（upsert by UserID）；`FbName`（`user.user_metadata.full_name`）自動存入會員資料，供直播留言比對 ✅ 測試成功（2026-05-20）
 - **直播代建訂單工具**：後台直播場次管理（`/admin/live`）+ 場次詳情（`/admin/live/:id`）；商品對照表（代碼/顏色/尺寸 → VariantID + 直播特價）；FB 留言文字貼入 → 客戶端解析（見解析規則）→ 預覽確認 → `live-import` Edge Function 批次建單（比對 FbName 取會員資料 + 預設地址、扣庫存、建 `LIV_YYYYMMDD_XXXXX` 訂單）→ 有 LINE 綁定自動推播付款連結，無綁定列入「待手動通知名單」 ✅ 已完成（2026-05-20）⚠️ 待測試
 - **LINE OA 帳號綁定系統**：消費者加入 LINE OA → `line-webhook` 收 Follow 事件 → 產生一次性 UUID Token（存 `LineBindToken` 表）→ LINE Push 傳送綁定連結 → 消費者點連結到 `/bind-line?token=xxx` → 未登入跳 `/login`（redirect 存 localStorage）→ FB 登入完成回 `/auth/callback` → 讀 localStorage 跳回 `/bind-line` → `line-bind` 驗證 token → upsert `LineUserID` 至 `C_MBR_MemberList`；AccountView 顯示 LINE 綁定狀態（已綁定 / 尚未綁定）；封鎖 LINE OA → 清除 `LineUserID` ✅ 測試成功（2026-05-20）

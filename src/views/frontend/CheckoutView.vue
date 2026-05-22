@@ -28,6 +28,7 @@ const customerNote = ref('')
 
 const isSubmitting = ref(false)
 const errorMsg = ref('')
+const invoiceError = ref('')
 
 // ── Invoice preference ────────────────────────────────
 const invoiceCarrierType = ref('')   // ''=紙本 / '0'=手機條碼 / '1'=自然人憑證 / 'D'=捐贈 / 'B2B'=公司戶
@@ -179,6 +180,7 @@ onMounted(async () => {
 
 async function submitOrder() {
   errorMsg.value = ''
+  invoiceError.value = ''
 
   if (!recipientName.value.trim()) {
     errorMsg.value = '請填寫收件人姓名'
@@ -201,23 +203,23 @@ async function submitOrder() {
     return
   }
   if (invoiceCarrierType.value === '0' && !/^\/[A-Z0-9+\-.]{7}$/.test(invoiceCarrierNum.value)) {
-    errorMsg.value = '手機條碼格式錯誤，應為 /XXXXXXX（斜線開頭共 8 碼）'
+    invoiceError.value = '手機條碼格式錯誤，應為 /XXXXXXX（斜線開頭共 8 碼）'
     return
   }
   if (invoiceCarrierType.value === '1' && !/^[A-Z]{2}\d{14}$/.test(invoiceCarrierNum.value)) {
-    errorMsg.value = '自然人憑證格式錯誤，應為 2 碼大寫英文 + 14 碼數字'
+    invoiceError.value = '自然人憑證格式錯誤，應為 2 碼大寫英文 + 14 碼數字'
     return
   }
   if (invoiceCarrierType.value === 'D' && !/^\d{3,7}$/.test(invoiceLoveCode.value)) {
-    errorMsg.value = '捐贈碼格式錯誤，應為 3~7 碼數字'
+    invoiceError.value = '捐贈碼格式錯誤，應為 3~7 碼數字'
     return
   }
   if (invoiceCarrierType.value === 'B2B' && !/^\d{8}$/.test(invoiceBuyerUBN.value)) {
-    errorMsg.value = '統一編號格式錯誤，應為 8 碼數字'
+    invoiceError.value = '統一編號格式錯誤，應為 8 碼數字'
     return
   }
   if (invoiceCarrierType.value === 'B2B' && !invoiceBuyerName.value.trim()) {
-    errorMsg.value = '請填寫公司名稱'
+    invoiceError.value = '請填寫公司名稱'
     return
   }
 
@@ -451,6 +453,7 @@ async function submitOrder() {
               placeholder="/XXXXXXX（斜線開頭，共 8 碼大寫英數）"
               maxlength="8"
             />
+            <p v-if="invoiceError" class="co-invoice-error">{{ invoiceError }}</p>
           </div>
 
           <label class="co-invoice-opt" :class="{ 'co-invoice-opt--active': invoiceCarrierType === '1' }">
@@ -465,6 +468,7 @@ async function submitOrder() {
               placeholder="2 碼大寫英文 + 14 碼數字，共 16 碼"
               maxlength="16"
             />
+            <p v-if="invoiceError" class="co-invoice-error">{{ invoiceError }}</p>
           </div>
 
           <label class="co-invoice-opt" :class="{ 'co-invoice-opt--active': invoiceCarrierType === 'D' }">
@@ -479,6 +483,7 @@ async function submitOrder() {
               placeholder="捐贈碼（3~7 碼數字）"
               maxlength="7"
             />
+            <p v-if="invoiceError" class="co-invoice-error">{{ invoiceError }}</p>
           </div>
 
           <label class="co-invoice-opt" :class="{ 'co-invoice-opt--active': invoiceCarrierType === 'B2B' }">
@@ -499,6 +504,7 @@ async function submitOrder() {
               class="co-input co-invoice-input"
               placeholder="公司名稱"
             />
+            <p v-if="invoiceError" class="co-invoice-error">{{ invoiceError }}</p>
           </div>
         </div>
 
@@ -925,6 +931,12 @@ async function submitOrder() {
 .co-invoice-b2b { gap: 8px; }
 
 .co-invoice-input { height: 40px; font-size: 13px; }
+
+.co-invoice-error {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #DC2626;
+}
 
 /* 錢包付款 */
 .co-wallet { display: flex; flex-direction: column; gap: 10px; }
