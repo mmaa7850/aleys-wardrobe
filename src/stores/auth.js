@@ -101,8 +101,7 @@ export const useAuthStore = defineStore("auth", {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "facebook",
         options: {
-          // pages_read_engagement / pages_manage_engagement 需 FB App Review 通過才能加
-          // 消費者登入只需要基本 public_profile + email，不請求粉專權限
+          scopes: 'email,public_profile',
           redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
