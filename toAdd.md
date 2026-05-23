@@ -106,7 +106,7 @@
 - **直播代建訂單工具**：後台直播場次管理（`/admin/live`）+ 場次詳情（`/admin/live/:id`）；商品對照表（代碼/顏色/尺寸 → VariantID + 直播特價）；FB 留言文字貼入 → 客戶端解析（見解析規則）→ 預覽確認 → `live-import` Edge Function 批次建單（比對 FbName 取會員資料 + 預設地址、扣庫存、建 `LIV_YYYYMMDD_XXXXX` 訂單）→ 有 LINE 綁定自動推播付款連結，無綁定列入「待手動通知名單」 ✅ 已完成（2026-05-20）⚠️ 待測試
 - **直播留言解析包色支援**：留言格式 `AA包色M+1` → 展開為該代碼+尺寸所有顏色各 1 件；`live-bid-poll` 即時模式同步支援包色；去重 key 改為 `code|colorName|sizeName` 防止包色展開後重複建單 ✅ 已完成（2026-05-23）⚠️ 待測試
 - **購物車來源追蹤**：`C_CART_CartItemList` 新增 `Source varchar(20) DEFAULT 'web'`、`LiveSessionID bigint`、`IsReward boolean`、`RewardAmt integer`；`ProductID`/`VariantID` 允許 NULL（購物金項目）；`cart.addItem()` 支援 `{source, liveSessionId}` 選項；`_loadItems()` 處理購物金項目（`unitPrice=-RewardAmt`、`productName='購物金'`）；新增 `cart.addReward(amt)` 方法；`canCheckout` getter（selectedTotal > 0） ✅ 已完成（2026-05-23）⚠️ 待測試
-- **週一銷單機制（pg_cron）**：每週日 16:00 UTC（台灣週一 00:00）自動取消所有 PaymentStatus IN ('pending','payment_failed') 訂單、回補庫存、刪除購物車中 IsReward=true 的購物金；migration：`setup_weekly_cron.sql` ⚠️ 尚未執行
+- **週一銷單機制（pg_cron）**：每週日 16:00 UTC（台灣週一 00:00）自動取消所有 PaymentStatus IN ('pending','payment_failed') 訂單、回補庫存、刪除購物車中 IsReward=true 的購物金；migration：`setup_weekly_cron.sql` ✅ 已執行（2026-05-23，jobid 1+2 已確認 active）
 - **待結清單後台頁面**：`/admin/orders/pending`；按會員彙整未付款訂單（筆數 + 金額合計）；顯示 LINE 綁定狀態；「LINE 提醒」按鈕一鍵推播催付通知；顯示下次銷單時間倒數 ✅ 已完成（2026-05-23）⚠️ 待測試
 - **LINE OA 帳號綁定系統**：消費者加入 LINE OA → `line-webhook` 收 Follow 事件 → 產生一次性 UUID Token（存 `LineBindToken` 表）→ LINE Push 傳送綁定連結 → 消費者點連結到 `/bind-line?token=xxx` → 未登入跳 `/login`（redirect 存 localStorage）→ FB 登入完成回 `/auth/callback` → 讀 localStorage 跳回 `/bind-line` → `line-bind` 驗證 token → upsert `LineUserID` 至 `C_MBR_MemberList`；AccountView 顯示 LINE 綁定狀態（已綁定 / 尚未綁定）；封鎖 LINE OA → 清除 `LineUserID` ✅ 測試成功（2026-05-20）
 
@@ -142,8 +142,8 @@
 
 **執行前需先執行 SQL：**
 ```
-supabase/migrations/add_cart_features.sql      -- C_CART_CartItemList 新增欄位
-supabase/migrations/setup_weekly_cron.sql      -- pg_cron 週銷單（Supabase Dashboard 執行）
+supabase/migrations/add_cart_features.sql      -- ✅ 已執行（2026-05-23）
+supabase/migrations/setup_weekly_cron.sql      -- ✅ 已執行（2026-05-23）
 ```
 
 **待測試項目：**

@@ -96,7 +96,7 @@ WITH CHECK (
 | IsReward | boolean | NO | false | 購物金項目 = true |
 | RewardAmt | integer | YES | — | 購物金金額（IsReward=true 時使用）|
 
-> **migration**：`add_cart_features.sql` ⚠️ 尚未執行
+> **migration**：`add_cart_features.sql` ✅ 已執行（2026-05-23）
 
 ### C_CART_CartList
 | 欄位 | 型別 | Nullable | Default |
