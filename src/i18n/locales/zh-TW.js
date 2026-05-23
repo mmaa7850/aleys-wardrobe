@@ -17,6 +17,7 @@ export default {
       sizes: "尺寸",
       orders: "訂單",
       orderList: "訂單列表",
+      pendingList: "待結清單",
       status: "訂單狀態",
       inventory: "庫存",
       stockOverview: "庫存總覽",

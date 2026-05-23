@@ -17,6 +17,7 @@ export default {
       sizes: "Sizes",
       orders: "Orders",
       orderList: "Order List",
+      pendingList: "Pending List",
       status: "Order Status",
       inventory: "Inventory",
       stockOverview: "Stock Overview",

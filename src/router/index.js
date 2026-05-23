@@ -112,6 +112,11 @@ const router = createRouter({
           name: "admin-orders-setstatus",
           component: () => import("@/pages/admin/orders/SetStatus.vue"),
         },
+        {
+          path: "orders/pending",
+          name: "admin-orders-pending",
+          component: () => import("@/pages/admin/orders/PendingList.vue"),
+        },
 
         // Reports
         { path: "reports/sales",      name: "admin-reports-sales",      component: () => import("@/pages/admin/reports/SalesDashboard.vue") },

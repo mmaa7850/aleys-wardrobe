@@ -20,6 +20,13 @@ export const useCartStore = defineStore('cart', {
     selectedTotal: (state) => state.items
       .filter(i => state.selectedItemIds.includes(i.id))
       .reduce((sum, i) => sum + i.unitPrice * i.qty, 0),
+    // 購物金導致金額為負時不允許結帳
+    canCheckout: (state) => {
+      const total = state.items
+        .filter(i => state.selectedItemIds.includes(i.id))
+        .reduce((sum, i) => sum + i.unitPrice * i.qty, 0)
+      return total > 0
+    },
   },
 
   actions: {
@@ -115,7 +122,7 @@ export const useCartStore = defineStore('cart', {
       // Fetch raw cart items
       const { data: rawItems, error } = await db
         .from('C_CART_CartItemList')
-        .select('ID, ProductID, VariantID, Qty')
+        .select('ID, ProductID, VariantID, Qty, Source, LiveSessionID, IsReward, RewardAmt')
         .eq('CartID', this.cartId)
 
       if (error) throw error
@@ -124,8 +131,35 @@ export const useCartStore = defineStore('cart', {
         return
       }
 
-      const productIds = [...new Set(rawItems.map(i => i.ProductID))]
-      const variantIds = [...new Set(rawItems.map(i => i.VariantID))]
+      // 購物金項目不需要查商品資料
+      const rewardItems = rawItems.filter(i => i.IsReward)
+      const productItems = rawItems.filter(i => !i.IsReward)
+
+      if (!productItems.length) {
+        this.items = rewardItems.map(item => ({
+          id:            item.ID,
+          productId:     null,
+          variantId:     null,
+          qty:           1,
+          productName:   '購物金',
+          unitPrice:     -(item.RewardAmt ?? 0),
+          colorName:     '',
+          sizeName:      '',
+          stockQty:      Infinity,
+          isPreOrder:    false,
+          preOrderShipDate: null,
+          imgUrl:        null,
+          imgType:       'image',
+          isReward:      true,
+          rewardAmt:     item.RewardAmt ?? 0,
+          source:        item.Source ?? 'web',
+          liveSessionId: item.LiveSessionID ?? null,
+        }))
+        return
+      }
+
+      const productIds = [...new Set(productItems.map(i => i.ProductID).filter(Boolean))]
+      const variantIds = [...new Set(productItems.map(i => i.VariantID).filter(Boolean))]
 
       // Parallel fetches
       const [
@@ -173,33 +207,59 @@ export const useCartStore = defineStore('cart', {
         }
       }
 
-      this.items = rawItems.map(item => {
+      const mappedProductItems = productItems.map(item => {
         const product = productMap[item.ProductID] || {}
         const variant = variantMap[item.VariantID] || {}
         const media = getThumb(product)
 
         return {
-          id: item.ID,
-          productId: item.ProductID,
-          variantId: item.VariantID,
-          qty: item.Qty,
-          productName: product.ProductName || '',
-          unitPrice: product.Price || 0,
-          colorName: colorMap[variant.ColorID] || '',
-          sizeName: sizeMap[variant.SizeID] || '',
-          stockQty: variant.StockQty ?? 0,
-          isPreOrder: !!(product.IsPreOrder) && (variant.StockQty ?? 0) <= 0,
+          id:            item.ID,
+          productId:     item.ProductID,
+          variantId:     item.VariantID,
+          qty:           item.Qty,
+          productName:   product.ProductName || '',
+          unitPrice:     product.Price || 0,
+          colorName:     colorMap[variant.ColorID] || '',
+          sizeName:      sizeMap[variant.SizeID] || '',
+          stockQty:      variant.StockQty ?? 0,
+          isPreOrder:    !!(product.IsPreOrder) && (variant.StockQty ?? 0) <= 0,
           preOrderShipDate: product.PreOrderShipDate || null,
-          imgUrl: media?.url || null,
-          imgType: media?.type || 'image',
+          imgUrl:        media?.url || null,
+          imgType:       media?.type || 'image',
+          isReward:      false,
+          rewardAmt:     0,
+          source:        item.Source ?? 'web',
+          liveSessionId: item.LiveSessionID ?? null,
         }
       })
+
+      const mappedRewardItems = rewardItems.map(item => ({
+        id:            item.ID,
+        productId:     null,
+        variantId:     null,
+        qty:           1,
+        productName:   '購物金',
+        unitPrice:     -(item.RewardAmt ?? 0),
+        colorName:     '',
+        sizeName:      '',
+        stockQty:      Infinity,
+        isPreOrder:    false,
+        preOrderShipDate: null,
+        imgUrl:        null,
+        imgType:       'image',
+        isReward:      true,
+        rewardAmt:     item.RewardAmt ?? 0,
+        source:        item.Source ?? 'reward',
+        liveSessionId: item.LiveSessionID ?? null,
+      }))
+
+      this.items = [...mappedProductItems, ...mappedRewardItems]
     },
 
-    async addItem(productId, variantId, qty = 1) {
+    async addItem(productId, variantId, qty = 1, { source = 'web', liveSessionId = null } = {}) {
       if (!this.cartId) await this.fetchCart()
 
-      const existing = this.items.find(i => i.variantId === variantId)
+      const existing = this.items.find(i => i.variantId === variantId && !i.isReward)
       if (existing) {
         await this.updateQty(existing.id, existing.qty + qty)
         return
@@ -221,9 +281,12 @@ export const useCartStore = defineStore('cart', {
         if (!ok) throw new Error('庫存不足，無法加入購物車')
       }
 
+      const row = { CartID: this.cartId, ProductID: productId, VariantID: variantId, Qty: qty, Source: source }
+      if (liveSessionId) row.LiveSessionID = liveSessionId
+
       const { error } = await db
         .from('C_CART_CartItemList')
-        .insert({ CartID: this.cartId, ProductID: productId, VariantID: variantId, Qty: qty })
+        .insert(row)
         .select('ID')
         .single()
 
@@ -233,6 +296,22 @@ export const useCartStore = defineStore('cart', {
         throw error
       }
 
+      await this._loadItems()
+    },
+
+    // 新增購物金項目（IsReward = true，無商品）
+    async addReward(rewardAmt) {
+      if (!this.cartId) await this.fetchCart()
+
+      // 同一購物車只允許一筆購物金
+      const existing = this.items.find(i => i.isReward)
+      if (existing) return  // 已有購物金，不重複加
+
+      const { error } = await db
+        .from('C_CART_CartItemList')
+        .insert({ CartID: this.cartId, IsReward: true, RewardAmt: rewardAmt, Qty: 1, Source: 'reward' })
+
+      if (error) throw error
       await this._loadItems()
     },
 

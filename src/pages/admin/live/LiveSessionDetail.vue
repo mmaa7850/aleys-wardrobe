@@ -537,6 +537,7 @@ const NOISE_RE = [
   /^\d+(天|小時|分鐘|秒)/,
   /^·?\s*\d+(天|小時)/,
 ]
+// 一般格式：AA藍M+1；包色格式：AA包色M+1
 const PRODUCT_RE = /^([A-Za-z]+\d+)([一-鿿]+)([A-Za-z]+)\+(\d+)$/
 
 function parseRawText() {
@@ -595,16 +596,60 @@ function parseRawText() {
     const m = line.match(PRODUCT_RE)
     if (!m) continue
     const [, code, colorName, sizeName, qtyStr] = m
-    const key = `${code.toUpperCase()}|${colorName}|${sizeName.toUpperCase()}`
+    const codeU = code.toUpperCase()
+    const sizeU = sizeName.toUpperCase()
+
+    // ── 包色：展開為每個顏色各 1 件 ──────────────────────────
+    if (colorName === '包色') {
+      const bundleProds = products.value.filter(
+        p => p.Code.toUpperCase() === codeU && p.SizeName.toUpperCase() === sizeU
+      )
+      for (const bp of bundleProds) {
+        parsed.push({
+          _id:         Math.random().toString(36).slice(2),
+          fbName:      block.name,
+          rawLine:     line,
+          code:        codeU,
+          colorName:   bp.ColorName,
+          sizeName:    sizeU,
+          qty:         1,
+          livProduct:  bp,
+          isBundle:    true,
+          selected:    true,
+          isDuplicate: false,
+        })
+      }
+      // 找不到任何顏色 → 當作 null
+      if (!bundleProds.length) {
+        parsed.push({
+          _id:         Math.random().toString(36).slice(2),
+          fbName:      block.name,
+          rawLine:     line,
+          code:        codeU,
+          colorName:   '包色',
+          sizeName:    sizeU,
+          qty:         Number(qtyStr),
+          livProduct:  null,
+          isBundle:    true,
+          selected:    true,
+          isDuplicate: false,
+        })
+      }
+      continue
+    }
+
+    // ── 一般單色 ──────────────────────────────────────────────
+    const key = `${codeU}|${colorName}|${sizeU}`
     parsed.push({
       _id:         Math.random().toString(36).slice(2),
       fbName:      block.name,
       rawLine:     line,
-      code:        code.toUpperCase(),
+      code:        codeU,
       colorName,
-      sizeName:    sizeName.toUpperCase(),
+      sizeName:    sizeU,
       qty:         Number(qtyStr),
       livProduct:  productMap.value.get(key) ?? null,
+      isBundle:    false,
       selected:    true,
       isDuplicate: false,
     })
@@ -617,14 +662,16 @@ function parseRawText() {
     return
   }
 
-  // ── Step 5：標記跨留言重複（同人同代碼留了兩次）─────────
+  // ── Step 5：標記跨留言重複（同人同代碼+顏色+尺寸已出現過）
   const cnt = {}
   for (const item of parsed) {
-    const k = `${item.fbName}|${item.code}`
+    // 包色展開的各色視為不同 key，用 colorName 區分
+    const k = `${item.fbName}|${item.code}|${item.colorName}|${item.sizeName}`
     cnt[k] = (cnt[k] || 0) + 1
   }
   for (const item of parsed) {
-    item.isDuplicate = (cnt[`${item.fbName}|${item.code}`] || 0) > 1
+    const k = `${item.fbName}|${item.code}|${item.colorName}|${item.sizeName}`
+    item.isDuplicate = (cnt[k] || 0) > 1
   }
 
   parsedItems.value = parsed

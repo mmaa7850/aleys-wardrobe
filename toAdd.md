@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-22
+> 更新時間：2026-05-23
 
 ---
 
@@ -104,6 +104,10 @@
 - **LINE Pay 支援**：`create-payment` Edge Function 新增 `LINEPAY: 1` 參數，藍新付款頁面顯示 LINE Pay 選項（需在 Supabase Dashboard 重新部署 Edge Function）
 - **FB 帳號登入（Facebook OAuth）**：登入頁「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用）；FB OAuth 回調（`/auth/callback`）整合；首次 FB 登入自動建立 `C_MBR_MemberList` 最小記錄（upsert by UserID）；`FbName`（`user.user_metadata.full_name`）自動存入會員資料，供直播留言比對 ✅ 測試成功（2026-05-20）
 - **直播代建訂單工具**：後台直播場次管理（`/admin/live`）+ 場次詳情（`/admin/live/:id`）；商品對照表（代碼/顏色/尺寸 → VariantID + 直播特價）；FB 留言文字貼入 → 客戶端解析（見解析規則）→ 預覽確認 → `live-import` Edge Function 批次建單（比對 FbName 取會員資料 + 預設地址、扣庫存、建 `LIV_YYYYMMDD_XXXXX` 訂單）→ 有 LINE 綁定自動推播付款連結，無綁定列入「待手動通知名單」 ✅ 已完成（2026-05-20）⚠️ 待測試
+- **直播留言解析包色支援**：留言格式 `AA包色M+1` → 展開為該代碼+尺寸所有顏色各 1 件；`live-bid-poll` 即時模式同步支援包色；去重 key 改為 `code|colorName|sizeName` 防止包色展開後重複建單 ✅ 已完成（2026-05-23）⚠️ 待測試
+- **購物車來源追蹤**：`C_CART_CartItemList` 新增 `Source varchar(20) DEFAULT 'web'`、`LiveSessionID bigint`、`IsReward boolean`、`RewardAmt integer`；`ProductID`/`VariantID` 允許 NULL（購物金項目）；`cart.addItem()` 支援 `{source, liveSessionId}` 選項；`_loadItems()` 處理購物金項目（`unitPrice=-RewardAmt`、`productName='購物金'`）；新增 `cart.addReward(amt)` 方法；`canCheckout` getter（selectedTotal > 0） ✅ 已完成（2026-05-23）⚠️ 待測試
+- **週一銷單機制（pg_cron）**：每週日 16:00 UTC（台灣週一 00:00）自動取消所有 PaymentStatus IN ('pending','payment_failed') 訂單、回補庫存、刪除購物車中 IsReward=true 的購物金；migration：`setup_weekly_cron.sql` ⚠️ 尚未執行
+- **待結清單後台頁面**：`/admin/orders/pending`；按會員彙整未付款訂單（筆數 + 金額合計）；顯示 LINE 綁定狀態；「LINE 提醒」按鈕一鍵推播催付通知；顯示下次銷單時間倒數 ✅ 已完成（2026-05-23）⚠️ 待測試
 - **LINE OA 帳號綁定系統**：消費者加入 LINE OA → `line-webhook` 收 Follow 事件 → 產生一次性 UUID Token（存 `LineBindToken` 表）→ LINE Push 傳送綁定連結 → 消費者點連結到 `/bind-line?token=xxx` → 未登入跳 `/login`（redirect 存 localStorage）→ FB 登入完成回 `/auth/callback` → 讀 localStorage 跳回 `/bind-line` → `line-bind` 驗證 token → upsert `LineUserID` 至 `C_MBR_MemberList`；AccountView 顯示 LINE 綁定狀態（已綁定 / 尚未綁定）；封鎖 LINE OA → 清除 `LineUserID` ✅ 測試成功（2026-05-20）
 
 ---
@@ -127,6 +131,31 @@
 | 7 | 庫存不足 → no_stock | 建單結果顯示「庫存不足」 |
 | 8 | 成功建單 + 有 LINE 綁定 → LINE Push | 客人收到付款連結 |
 | 9 | 成功建單 + 無 LINE 綁定 → 手動通知名單 | 頁面顯示待手動通知清單 |
+| 10 | **包色**：`AA包色M+1` → 展開為所有顏色各 1 件預覽 | 預覽顯示多行，各顏色獨立一行 |
+| 11 | **包色去重**：同人同代碼包色再留一次 → 重複標記 | 各色分別標黃 ⚠️ |
+
+---
+
+### 待結清單 + 週銷單機制
+
+**程式已完成，需要執行 migration 並測試。**
+
+**執行前需先執行 SQL：**
+```
+supabase/migrations/add_cart_features.sql      -- C_CART_CartItemList 新增欄位
+supabase/migrations/setup_weekly_cron.sql      -- pg_cron 週銷單（Supabase Dashboard 執行）
+```
+
+**待測試項目：**
+
+| # | 測試項目 | 預期結果 |
+|---|---------|---------|
+| 1 | 後台側欄「待結清單」出現在訂單區段 | 路由 `/admin/orders/pending` 正常顯示 |
+| 2 | 有未付款訂單的會員列在清單中 | 姓名、筆數、金額、LINE 狀態正確 |
+| 3 | 點「LINE 提醒」 → 有 LINE 的會員收到 Push | LINE 收到催付訊息 |
+| 4 | 無 LINE 綁定的會員 → 顯示「無法通知」（灰字） | 無法通知按鈕不出現 |
+| 5 | 購物車加入購物金（`cart.addReward(100)`）→ `_loadItems` 顯示 -100 元 | 購物車多一行「購物金 -$100」 |
+| 6 | `selectedTotal` < 0 → 結帳按鈕 disabled（`canCheckout === false`） | 無法結帳 |
 
 ---
 
@@ -459,7 +488,22 @@ CreatedDate     timestamptz
 
 ---
 
-### 7. 分批出貨
+### 7. 直播封鎖機制（TODO）
+
+**尚未開發，標記為未來待辦。**
+
+直播中被小編封鎖的顧客，下次直播留言時系統自動跳過（不建單）。
+
+**設計草案（未確認）：**
+- `C_MBR_MemberList` 新增 `IsLiveBlocked boolean`（或另建黑名單表）
+- `live-bid-poll` 建單前查黑名單，被封鎖的 FB User ID 直接跳過
+- `live-import`（貼文留言匯入版）同步過濾被封鎖的 FbName
+
+> **⏸ 暫緩**：等直播功能測試穩定後再評估是否需要此機制。
+
+---
+
+### 9. 分批出貨
 
 單筆訂單中部分商品先到貨、部分延後，需拆分出貨記錄與通知。
 
@@ -470,7 +514,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 8. 訂單取消流程
+### 10. 訂單取消流程
 
 目前系統沒有「取消訂單」功能，只有「退款」。
 
@@ -485,7 +529,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 9. 訂單通知信
+### 11. 訂單通知信
 
 目前下單、付款成功、出貨，客人都**不會收到任何通知**。
 

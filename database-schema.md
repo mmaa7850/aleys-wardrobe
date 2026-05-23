@@ -83,14 +83,20 @@ WITH CHECK (
 ## Tables
 
 ### C_CART_CartItemList
-| 欄位 | 型別 | Nullable | Default |
-|------|------|----------|---------|
-| ID | bigint | NO | — |
-| CartID | bigint | NO | — |
-| ProductID | bigint | NO | — |
-| VariantID | bigint | NO | — |
-| Qty | integer | YES | 1 |
-| AddedAt | timestamptz | YES | now() |
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| CartID | bigint | NO | — | |
+| ProductID | bigint | YES | — | 購物金項目為 NULL |
+| VariantID | bigint | YES | — | 購物金項目為 NULL |
+| Qty | integer | YES | 1 | |
+| AddedAt | timestamptz | YES | now() | |
+| Source | varchar(20) | YES | 'web' | 'web' / 'live' / 'manual' / 'reward' |
+| LiveSessionID | bigint | YES | — | 直播來源時填入場次 ID |
+| IsReward | boolean | NO | false | 購物金項目 = true |
+| RewardAmt | integer | YES | — | 購物金金額（IsReward=true 時使用）|
+
+> **migration**：`add_cart_features.sql` ⚠️ 尚未執行
 
 ### C_CART_CartList
 | 欄位 | 型別 | Nullable | Default |

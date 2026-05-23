@@ -29,7 +29,8 @@
 | 品牌故事 | `/brand-story` | 三段式品牌敘事（靜態） |
 | 聯絡我們 | `/contact` | 聯絡資訊 + 表單（靜態） |
 | 直播場次管理 | `/admin/live` | 直播場次列表（名稱/日期/狀態）；新增場次 Modal（名稱/日期/狀態/備注）；點場次進入詳情 |
-| 直播場次詳情 | `/admin/live/:id` | 場次資訊（可編輯）；Tab 1 **商品對照表**：新增/編輯/刪除（代碼/顏色/尺寸/直播特價，內建 Variant 搜尋 dropdown）；Tab 2 **留言匯入（直播結束後用）**：直播結束後小編手動複製 FB 貼文留言文字貼入→客戶端解析（①過濾雜訊＋`作者`回覆整塊跳過 ②分組成 block ③倒序處理舊留言優先扣庫存 ④一則留言含多筆商品→整個跳過並顯示黃色警告 ⑤跨留言重複→⚠️標記）→預覽確認→呼叫 `live-import`→顯示建單結果（成功/庫存不足/找不到會員）+待手動通知名單 ⚠️ 待測試。**⚠️ 注意：此 Tab 是直播結束後的手動批次匯入，與直播進行中的 FB API 即時讀取留言是完全不同的功能（後者見 toAdd.md 🟢 第 6 項，尚未開發）** |
+| 直播場次詳情 | `/admin/live/:id` | 場次資訊（可編輯）；Tab 1 **商品對照表**：新增/編輯/刪除（代碼/顏色/尺寸/直播特價，內建 Variant 搜尋 dropdown）；Tab 2 **留言匯入（直播結束後用）**：直播結束後小編手動複製 FB 貼文留言文字貼入→客戶端解析（①過濾雜訊＋`作者`回覆整塊跳過 ②分組成 block ③倒序處理舊留言優先扣庫存 ④一則留言含多筆商品→整個跳過並顯示黃色警告 ⑤跨留言重複→⚠️標記 ⑥**包色**：`AA包色M+1` 展開為所有顏色各 1 件）→預覽確認→呼叫 `live-import`→顯示建單結果（成功/庫存不足/找不到會員）+待手動通知名單 ⚠️ 待測試。**⚠️ 注意：此 Tab 是直播結束後的手動批次匯入，與直播進行中的 FB API 即時讀取留言是完全不同的功能（後者見 toAdd.md 🟢 第 6 項，尚未開發）** |
+| 待結清單 | `/admin/orders/pending` | 按會員彙整所有 PaymentStatus IN ('pending','payment_failed') 訂單；顯示 LINE 綁定狀態、筆數、未付金額合計、最新訂單時間；「LINE 提醒」按鈕一鍵推播催付通知（透過 `line-notify`）；頁面頂部顯示下次自動銷單時間（每週一 00:00 台灣）⚠️ 待測試 |
 | 錢包 | `/wallet` | 前台錢包頁面（需登入）；顯示目前餘額（深色漸層卡片）；快速選擇金額按鈕（100/300/500/1000/3000）或自訂金額；發票設定（5種：紙本/手機條碼/自然人憑證/捐贈愛心碼/公司戶）；前往藍新付款；交易紀錄列表（類型/金額/前後餘額/時間）；付款成功後輪詢餘額直到入帳（最多20秒每2秒一次） |
 | 登入/註冊 | `/login` | 「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用，`#1877F2`）；Email 登入/註冊 Tab、忘記密碼；FB OAuth redirect 目標存 localStorage（防 LINE in-app browser 跨頁清空）；FB OAuth ✅ 測試成功（2026-05-20） |
 | 重設密碼 | `/reset-password` | 密碼重設表單 |
@@ -97,7 +98,7 @@
 | `line-bind` | ✅ 需要 | 前台呼叫，完成 LINE 帳號綁定；驗證 JWT（取得 UserID）；驗證 token（存在、未過期、未使用）；upsert `LineUserID` 至 `C_MBR_MemberList`（by UserID，避免無記錄時 update 不生效）；標記 Token.UsedAt；Secrets：`DB_SCHEMA` |
 | `line-notify` | ✅ 需要 | 管理員呼叫；POST `{ lineUserId, message }`；驗證 IsActive 管理員身份；發 LINE Push API；供未來出貨通知等場景重用 |
 | `live-import` | ✅ 需要 | 直播留言批次建單；POST `{ sessionId, items: [{ livProductId, fbName, qty }] }`；管理員身份驗證；逐筆：查 `C_LIV_ProductList`→比對 `C_MBR_MemberList.FbName`→取預設地址（`C_MBR_MemberAddressList`）→`decrement_stock` RPC→建 `C_ORD_OrderList`（OrderSource='live', OrderNo=`LIV_YYYYMMDD_XXXXX`）+ `C_ORD_OrderItemList`→有 `LineUserID` 則 LINE Push 付款連結；回傳每筆 status（success/no_stock/no_member/error）|
-| `live-bid-poll` | ✅ 需要 | **直播進行中** FB 即時搶標；支援兩個 action：①`poll`（輪詢）：呼叫 FB Graph API 取新留言 → 偵測粉專「起標線」留言自動開標（寫 `C_LIV_ActiveBidList`）→ 消費者留言 FIFO 去重建單（`decrement_stock` → `C_ORD_OrderList` + `C_ORD_OrderItemList`）→ 所有 variant 庫存歸零時自動呼叫 FB API 發結標線+結標公告 → LINE 通知得標者；②`manual_close`：管理員手動截標，發結標線+結標公告；去重機制：`C_LIV_ProcessedCommentList`（FbCommentId 防跨輪詢重複、FbUserId+DedupKey 防同人同款重複下單）；需 FB App 權限 `pages_read_engagement`+`pages_manage_engagement` ⚠️ 待上線測試 |
+| `live-bid-poll` | ✅ 需要 | **直播進行中** FB 即時搶標；支援兩個 action：①`poll`（輪詢）：呼叫 FB Graph API 取新留言 → 偵測粉專「起標線」留言自動開標（寫 `C_LIV_ActiveBidList`）→ 消費者留言 FIFO 去重建單（`decrement_stock` → `C_ORD_OrderList` + `C_ORD_OrderItemList`）→ **包色支援**：留言含「包色」→ 展開為所有顏色各 1 件分別建單（內部 `createOrder` helper）→ 所有 variant 庫存歸零時自動呼叫 FB API 發結標線+結標公告 → LINE 通知得標者；②`manual_close`：管理員手動截標，發結標線+結標公告；去重機制：`C_LIV_ProcessedCommentList`（FbCommentId 防跨輪詢重複、FbUserId+DedupKey={code}\|{VariantID} 防同人同款重複下單）；需 FB App 權限 `pages_read_engagement`+`pages_manage_engagement` ⚠️ 待上線測試 |
 
 ---
 
@@ -106,7 +107,7 @@
 | Store | 說明 |
 |-------|------|
 | `auth.js` | 使用者 session、登入（Email / Facebook OAuth，`signInWithFacebook`，provider: "facebook"，redirectTo: `/auth/callback`）/登出/重設密碼；查 `S_SYS_AdminUserList` 取得 `isAdmin`/`isActive`/`permissions`（5 個 Can*）；getter `canEnterAdmin`（IsActive=true）、`canAccess(perm)`；FB OAuth redirect 目標由 `LoginView` 寫入 localStorage，`AuthCallbackView` 讀取 |
-| `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊；**品項預購判斷**：`IsPreOrder=true && variant.StockQty <= 0` 雙重條件，同一商品不同 variant 可各自獨立判斷現貨/預購；**庫存扣除時機**：`addItem` 時呼叫 `decrement_stock` RPC 原子性扣庫存（預購品不扣）；`updateQty` 增量時扣差量、減量時還差量；DB insert 失敗自動回補；`removeItem` 不還庫存（庫存已消費）；**選取狀態**：state `selectedItemIds`；getter `selectedItems`（已選品項）/ `selectedTotal`（已選合計）；action `initSelection()`（預設勾選所有非預購品項）/ `toggleSelection(id)` |
+| `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊；**品項預購判斷**：`IsPreOrder=true && variant.StockQty <= 0` 雙重條件；**庫存扣除時機**：`addItem` 時呼叫 `decrement_stock` RPC 原子性扣庫存（預購品不扣）；`updateQty` 增量時扣差量、減量時還差量；DB insert 失敗自動回補；**來源追蹤**：`addItem(productId, variantId, qty, {source, liveSessionId})` 選項，寫入 `Source`/`LiveSessionID`；**購物金支援**：`IsReward=true` 項目（無 ProductID/VariantID）；`addReward(amt)` 新增購物金項目（每車只允許一筆）；`_loadItems` 購物金項目顯示 `productName='購物金'`、`unitPrice=-RewardAmt`；**選取狀態**：state `selectedItemIds`；getter `selectedItems`/`selectedTotal`/`canCheckout`（selectedTotal > 0，防購物金導致負值結帳）；action `initSelection()`/`toggleSelection(id)` |
 | `wishlist.js` | 收藏清單 toggle（`C_MBR_WishList`）；`has(id)` 判斷是否收藏 |
 | `siteConfig.js` | 從 `S_SYS_Config` 一次性載入所有 Key-Value 設定（`loaded` 守衛防重複請求）；getter：`get(key)`、`announcement`、`maintenanceMode`、`paymentDisabled`；`FrontendLayout` 掛載時呼叫 `load()` |
 | `wallet.js` | 錢包餘額（balance）與交易紀錄（transactions）；fetchBalance（查 C_MBR_WalletList）；fetchTransactions（查 C_MBR_WalletTxList，最近50筆）；topup（呼叫 wallet-topup Edge Function，回傳藍新付款參數）；reset() |

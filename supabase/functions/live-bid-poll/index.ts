@@ -354,127 +354,143 @@ Deno.serve(async (req) => {
 
         // 找出對應規格
         const candidates = (livProducts ?? []).filter((p: any) => p.Code.toUpperCase() === code)
-        const livProduct = matchVariant(msg, candidates)
 
-        if (!livProduct) {
-          // 看得出來在搶這個 Code，但樣式解析不到 → 記錄但不建單
-          toMark.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: null })
-          handled = true
-          break
-        }
+        // ── 包色偵測：留言含「包色」→ 展開為所有顏色各 1 件 ──
+        const isBundle = msg.toUpperCase().replace(/\s+/g, '').includes('包色')
 
-        const dedupKey = `${code}|${livProduct.VariantID}`
+        // helper：建立單筆訂單並回補庫存（失敗時）
+        const createOrder = async (livProduct: any) => {
+          const dedupKey = `${code}|${livProduct.VariantID}`
 
-        // 去重：同人同款已下單
-        const { data: dupRow } = await db
-          .schema(dbSchema)
-          .from('C_LIV_ProcessedCommentList')
-          .select('ID')
-          .eq('SessionID', sessionId)
-          .eq('FbUserId', fbUserId)
-          .eq('DedupKey', dedupKey)
-          .maybeSingle()
+          // 去重：同人同款已下單
+          const { data: dupRow } = await db
+            .schema(dbSchema)
+            .from('C_LIV_ProcessedCommentList')
+            .select('ID')
+            .eq('SessionID', sessionId)
+            .eq('FbUserId', fbUserId)
+            .eq('DedupKey', dedupKey)
+            .maybeSingle()
+          if (dupRow) return { status: 'dup', dedupKey }
 
-        if (dupRow) {
-          toMark.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: dedupKey })
-          handled = true
-          break
-        }
+          // 找會員（by FbName）
+          const { data: member } = await db
+            .schema(dbSchema)
+            .from('C_MBR_MemberList')
+            .select('ID, LineUserID')
+            .eq('FbName', fbUserName)
+            .maybeSingle()
+          if (!member) return { status: 'no_member', dedupKey }
 
-        // 找會員（by FbName）
-        const { data: member } = await db
-          .schema(dbSchema)
-          .from('C_MBR_MemberList')
-          .select('ID, LineUserID')
-          .eq('FbName', fbUserName)
-          .maybeSingle()
-
-        if (!member) {
-          results.orders.push({ fbName: fbUserName, code, style: `${livProduct.ColorName ?? ''}${livProduct.SizeName ?? ''}`, status: 'no_member' })
-          toMark.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: dedupKey })
-          handled = true
-          break
-        }
-
-        // 扣庫存
-        const { data: stockOk } = await db.rpc('decrement_stock', {
-          p_variant_id: livProduct.VariantID,
-          p_qty: 1,
-        })
-
-        if (!stockOk) {
-          results.orders.push({ fbName: fbUserName, code, style: `${livProduct.ColorName ?? ''}${livProduct.SizeName ?? ''}`, status: 'no_stock' })
-          toMark.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: dedupKey })
-          handled = true
-          break
-        }
-
-        // 取 ProductID
-        const { data: variant } = await db
-          .schema(dbSchema)
-          .from('C_PRD_ProductVariantList')
-          .select('ProductID')
-          .eq('ID', livProduct.VariantID)
-          .maybeSingle()
-
-        // 建訂單
-        const now = new Date()
-        const pad = (n: number) => String(n).padStart(2, '0')
-        const datePart = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}`
-        const rand = Math.random().toString(36).slice(2, 7).toUpperCase()
-        const orderNo = `LIV_${datePart}_${rand}`
-
-        const { data: order, error: orderErr } = await db
-          .schema(dbSchema)
-          .from('C_ORD_OrderList')
-          .insert({
-            OrderNo:       orderNo,
-            MemberID:      member.ID,
-            OrderSource:   'live',
-            LiveSessionID: sessionId,
-            LiveCode:      code,
-            PaymentStatus: 'pending',
-            FinalAmount:   livProduct.LivePrice,
-            ShippingFee:   0,
+          // 扣庫存
+          const { data: stockOk } = await db.rpc('decrement_stock', {
+            p_variant_id: livProduct.VariantID, p_qty: 1,
           })
-          .select('ID')
-          .single()
+          if (!stockOk) return { status: 'no_stock', dedupKey }
 
-        if (orderErr || !order) {
-          await db.rpc('restore_stock', { p_variant_id: livProduct.VariantID, p_qty: 1 })
-          results.orders.push({ fbName: fbUserName, code, status: 'error', reason: orderErr?.message })
-          toMark.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: dedupKey })
-          handled = true
-          break
+          // 取 ProductID
+          const { data: variant } = await db
+            .schema(dbSchema)
+            .from('C_PRD_ProductVariantList')
+            .select('ProductID')
+            .eq('ID', livProduct.VariantID)
+            .maybeSingle()
+
+          // 建訂單
+          const now2 = new Date()
+          const pad2 = (n: number) => String(n).padStart(2, '0')
+          const datePart2 = `${now2.getFullYear()}${pad2(now2.getMonth() + 1)}${pad2(now2.getDate())}`
+          const rand2 = Math.random().toString(36).slice(2, 7).toUpperCase()
+          const orderNo2 = `LIV_${datePart2}_${rand2}`
+
+          const { data: order, error: orderErr } = await db
+            .schema(dbSchema)
+            .from('C_ORD_OrderList')
+            .insert({
+              OrderNo:       orderNo2,
+              MemberID:      member.ID,
+              OrderSource:   'live',
+              LiveSessionID: sessionId,
+              LiveCode:      code,
+              PaymentStatus: 'pending',
+              FinalAmount:   livProduct.LivePrice,
+              ShippingFee:   0,
+            })
+            .select('ID')
+            .single()
+
+          if (orderErr || !order) {
+            await db.rpc('restore_stock', { p_variant_id: livProduct.VariantID, p_qty: 1 })
+            return { status: 'error', dedupKey, reason: orderErr?.message }
+          }
+
+          await db.schema(dbSchema).from('C_ORD_OrderItemList').insert({
+            OrderID:   order.ID,
+            ProductID: variant?.ProductID ?? null,
+            VariantID: livProduct.VariantID,
+            Qty:       1,
+            UnitPrice: livProduct.LivePrice,
+          })
+
+          // LINE 通知
+          const lineToken = Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') ?? ''
+          const siteUrl   = Deno.env.get('SITE_URL') ?? ''
+          if (member.LineUserID && lineToken) {
+            const style2   = `${livProduct.ColorName ?? ''}${livProduct.SizeName ?? ''}`.trim()
+            const payUrl  = `${siteUrl}/orders/${orderNo2}`
+            const bundleTxt = isBundle ? '（包色）' : ''
+            const lineMsg = `🎉 恭喜搶到${bundleTxt}！\n${livProduct.ProductName}${style2 ? ` ${style2}` : ''}\n請在 24 小時內完成付款：\n${payUrl}`
+            await fetch('https://api.line.me/v2/bot/message/push', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${lineToken}` },
+              body: JSON.stringify({ to: member.LineUserID, messages: [{ type: 'text', text: lineMsg }] }),
+            }).catch(() => {/* 不讓 LINE 失敗影響建單流程 */})
+          }
+
+          return { status: 'success', dedupKey, orderNo: orderNo2 }
         }
 
-        await db.schema(dbSchema).from('C_ORD_OrderItemList').insert({
-          OrderID:   order.ID,
-          ProductID: variant?.ProductID ?? null,
-          VariantID: livProduct.VariantID,
-          Qty:       1,
-          UnitPrice: livProduct.LivePrice,
-        })
+        if (isBundle) {
+          // 包色：每個顏色各建一筆訂單
+          if (!candidates.length) {
+            toMark.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: null })
+            handled = true
+            break
+          }
+          const bundleMarks: any[] = []
+          for (const bp of candidates) {
+            const r = await createOrder(bp)
+            const style = `${bp.ColorName ?? ''}${bp.SizeName ?? ''}`.trim()
+            if (r.status === 'success') {
+              results.orders.push({ fbName: fbUserName, code, orderNo: r.orderNo, style, status: 'success', isBundle: true })
+            } else {
+              results.orders.push({ fbName: fbUserName, code, style, status: r.status, isBundle: true })
+            }
+            bundleMarks.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: r.dedupKey ?? null })
+          }
+          // 只記錄一筆 processed（FbCommentId 唯一，後續 upsert 合一）
+          toMark.push(bundleMarks[0])
+        } else {
+          // 一般單色
+          const livProduct = matchVariant(msg, candidates)
 
-        // LINE 通知
-        const lineToken = Deno.env.get('LINE_CHANNEL_ACCESS_TOKEN') ?? ''
-        const siteUrl   = Deno.env.get('SITE_URL') ?? ''
-        if (member.LineUserID && lineToken) {
-          const style   = `${livProduct.ColorName ?? ''}${livProduct.SizeName ?? ''}`.trim()
-          const payUrl  = `${siteUrl}/orders/${orderNo}`
-          const lineMsg = `🎉 恭喜搶到！\n${livProduct.ProductName}${style ? ` ${style}` : ''}\n請在 24 小時內完成付款：\n${payUrl}`
-          await fetch('https://api.line.me/v2/bot/message/push', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${lineToken}` },
-            body: JSON.stringify({ to: member.LineUserID, messages: [{ type: 'text', text: lineMsg }] }),
-          }).catch(() => {/* 不讓 LINE 失敗影響建單流程 */})
+          if (!livProduct) {
+            // 看得出來在搶這個 Code，但樣式解析不到 → 記錄但不建單
+            toMark.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: null })
+            handled = true
+            break
+          }
+
+          const r = await createOrder(livProduct)
+          const style = `${livProduct.ColorName ?? ''}${livProduct.SizeName ?? ''}`.trim()
+          if (r.status === 'success') {
+            results.orders.push({ fbName: fbUserName, code, orderNo: r.orderNo, style, status: 'success' })
+          } else {
+            results.orders.push({ fbName: fbUserName, code, style, status: r.status, reason: (r as any).reason })
+          }
+          toMark.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: r.dedupKey ?? null })
         }
 
-        const style = `${livProduct.ColorName ?? ''}${livProduct.SizeName ?? ''}`.trim()
-        results.orders.push({ fbName: fbUserName, code, orderNo, style, status: 'success' })
-
-        // 標記為已處理（帶 DedupKey 防止同人再搶同款）
-        toMark.push({ SessionID: sessionId, FbCommentId: comment.id, FbUserId: fbUserId, DedupKey: dedupKey })
         handled = true
 
         // ── 檢查此 Code 所有規格庫存是否都歸零 ─────────────────
