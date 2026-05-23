@@ -42,3 +42,4 @@ jobs:
           supabase functions deploy line-bind             --project-ref xyqznatwbfuscocycqtb
           supabase functions deploy line-notify           --project-ref xyqznatwbfuscocycqtb
           supabase functions deploy live-import           --project-ref xyqznatwbfuscocycqtb
+          supabase functions deploy live-bid-poll         --project-ref xyqznatwbfuscocycqtb
