@@ -119,7 +119,8 @@ const paymentForm = ref(null)
 const paymentParams = ref(null)
 
 function validatePhone(val) {
-  return /^[\d\-]+$/.test(val)
+  const digits = val.replace(/[\s\-]/g, '')
+  return /^0\d{8,9}$/.test(digits)
 }
 
 async function prefillFromProfile() {
@@ -196,7 +197,7 @@ async function submitOrder() {
   if (!recipientPhone.value.trim()) {
     phoneError.value = '請填寫收件人電話'; hasError = true
   } else if (!validatePhone(recipientPhone.value)) {
-    phoneError.value = '電話格式錯誤，請只輸入數字和連字號'; hasError = true
+    phoneError.value = '電話格式錯誤，請輸入台灣手機或市話（如 0912-345-678）'; hasError = true
   }
   if (isHome.value && !shippingAddress.value.trim()) {
     addressError.value = '請填寫收件地址'; hasError = true
