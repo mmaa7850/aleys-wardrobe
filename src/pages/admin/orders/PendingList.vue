@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 
 // ── State ────────────────────────────────────────────────
-const rows    = ref([])   // { memberId, fbName, email, hasLine, orderCount, totalAmount, latestAt, lineUserId }
+const rows    = ref([])   // { memberId, fbName, email, hasLine, itemCount, totalAmount, lineUserId }
 const loading = ref(false)
 const errMsg  = ref('')
 
@@ -14,9 +14,7 @@ const notifyStatus = ref({})
 // ── 下次銷單時間（下週一 00:00 台灣時間）────────────────
 const nextCancelDate = computed(() => {
   const now = new Date()
-  // 週幾（0=Sun, 1=Mon...）
   const day = now.getDay()
-  // 距離下週一的天數
   const daysUntilMon = day === 0 ? 1 : 8 - day
   const next = new Date(now)
   next.setDate(now.getDate() + daysUntilMon)
@@ -32,55 +30,89 @@ async function load() {
   loading.value = true
   errMsg.value  = ''
   try {
-    // 1. 取所有 pending / payment_failed 訂單
-    const { data: orders, error: ordErr } = await db
-      .from('C_ORD_OrderList')
-      .select('ID, CustomerEmail, CustomerName, FinalAmount, PaymentStatus, CreatedDate')
-      .in('PaymentStatus', ['pending', 'payment_failed'])
-      .order('CreatedDate', { ascending: false })
+    // 1. 取所有非購物金購物車明細
+    const { data: cartItems, error: ciErr } = await db
+      .from('C_CART_CartItemList')
+      .select('ID, CartID, ProductID, VariantID, Qty')
+      .eq('IsReward', false)
 
-    if (ordErr) throw ordErr
-    if (!orders?.length) { rows.value = []; return }
+    if (ciErr) throw ciErr
+    if (!cartItems?.length) { rows.value = []; return }
 
-    // 2. 取所有相關會員資料（by CustomerEmail）
-    const emails = [...new Set(orders.map(o => o.CustomerEmail).filter(Boolean))]
+    // 2. 取商品 + 變體資料（判斷是否預購、取單價）
+    const productIds = [...new Set(cartItems.map(i => i.ProductID).filter(Boolean))]
+    const variantIds = [...new Set(cartItems.map(i => i.VariantID).filter(Boolean))]
+
+    const [{ data: products }, { data: variants }] = await Promise.all([
+      db.from('C_PRD_ProductList').select('ID, Price, IsPreOrder').in('ID', productIds),
+      db.from('C_PRD_ProductVariantList').select('ID, StockQty').in('ID', variantIds),
+    ])
+
+    const productMap = Object.fromEntries((products ?? []).map(p => [p.ID, p]))
+    const variantMap = Object.fromEntries((variants ?? []).map(v => [v.ID, v]))
+
+    // 3. 篩選非預購商品（IsPreOrder=false 或仍有庫存）
+    const nonPreOrderItems = cartItems.filter(item => {
+      const product = productMap[item.ProductID]
+      const variant = variantMap[item.VariantID]
+      const isPreOrder = product?.IsPreOrder && (variant?.StockQty ?? 0) <= 0
+      return !isPreOrder
+    })
+
+    if (!nonPreOrderItems.length) { rows.value = []; return }
+
+    // 4. 取 CartList → MemberID
+    const cartIds = [...new Set(nonPreOrderItems.map(i => i.CartID))]
+    const { data: carts, error: cartErr } = await db
+      .from('C_CART_CartList')
+      .select('ID, MemberID')
+      .in('ID', cartIds)
+
+    if (cartErr) throw cartErr
+
+    const cartMap = Object.fromEntries((carts ?? []).map(c => [c.ID, c]))
+
+    // 5. 取會員資料
+    const memberIds = [...new Set((carts ?? []).map(c => c.MemberID).filter(Boolean))]
+    if (!memberIds.length) { rows.value = []; return }
+
     const { data: members, error: mbrErr } = await db
       .from('C_MBR_MemberList')
       .select('ID, FbName, Email, LineUserID')
-      .in('Email', emails)
+      .in('ID', memberIds)
 
     if (mbrErr) throw mbrErr
 
-    const memberMap = Object.fromEntries((members ?? []).map(m => [m.Email, m]))
+    const memberMap = Object.fromEntries((members ?? []).map(m => [m.ID, m]))
 
-    // 3. 依 CustomerEmail 彙整
+    // 6. 依會員彙整
     const grouped = {}
-    for (const ord of orders) {
-      const email = ord.CustomerEmail
-      if (!email) continue
-      const m = memberMap[email]
-      const key = email
-      if (!grouped[key]) {
-        grouped[key] = {
-          memberId:    m?.ID ?? null,
-          fbName:      m?.FbName || ord.CustomerName || '',
-          email:       email,
-          lineUserId:  m?.LineUserID || null,
-          hasLine:     !!m?.LineUserID,
-          orderCount:  0,
+    for (const item of nonPreOrderItems) {
+      const cart = cartMap[item.CartID]
+      if (!cart) continue
+      const mid = cart.MemberID
+      if (!mid) continue
+      const member = memberMap[mid]
+      if (!member) continue
+
+      const unitPrice = productMap[item.ProductID]?.Price ?? 0
+
+      if (!grouped[mid]) {
+        grouped[mid] = {
+          memberId:    mid,
+          fbName:      member.FbName || member.Email || '',
+          email:       member.Email  || '',
+          lineUserId:  member.LineUserID || null,
+          hasLine:     !!member.LineUserID,
+          itemCount:   0,
           totalAmount: 0,
-          latestAt:    null,
         }
       }
-      grouped[key].orderCount  += 1
-      grouped[key].totalAmount += ord.FinalAmount ?? 0
-      if (!grouped[key].latestAt || ord.CreatedDate > grouped[key].latestAt) {
-        grouped[key].latestAt = ord.CreatedDate
-      }
+      grouped[mid].itemCount   += item.Qty
+      grouped[mid].totalAmount += unitPrice * item.Qty
     }
 
     rows.value = Object.values(grouped)
-      .sort((a, b) => (b.latestAt ?? '').localeCompare(a.latestAt ?? ''))
   } catch (e) {
     errMsg.value = e.message
   } finally {
@@ -103,7 +135,7 @@ async function sendLineNotify(row) {
       },
       body: JSON.stringify({
         lineUserId: row.lineUserId,
-        message: `📢 提醒您，您有 ${row.orderCount} 筆訂單尚未完成付款，合計 NT$${row.totalAmount.toLocaleString()}。\n請於週一 00:00 銷單前完成付款，逾期訂單將自動取消。\n感謝您的支持！`,
+        message: `🛍️ 提醒您，購物車中有 ${row.itemCount} 件現貨商品尚未結帳，合計約 NT$${row.totalAmount.toLocaleString()}。\n庫存有限，建議盡快完成結帳！\n感謝您的支持 💕`,
       }),
     })
     if (!res.ok) throw new Error(await res.text())
@@ -112,16 +144,6 @@ async function sendLineNotify(row) {
     console.error('[PendingList] LINE notify error:', e)
     notifyStatus.value[row.memberId] = 'failed'
   }
-}
-
-// ── Format ────────────────────────────────────────────────
-function fmtDate(iso) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString('zh-TW', {
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-    timeZone: 'Asia/Taipei',
-  })
 }
 
 onMounted(load)
@@ -135,7 +157,7 @@ onMounted(load)
       <div>
         <h5 class="fw-semibold mb-1" style="color:#1a1714;">待結清單</h5>
         <p class="text-muted mb-0" style="font-size:13px;">
-          待付款 / 付款失敗訂單彙整｜每位顧客的未付款總覽
+          購物車有現貨商品但尚未結帳的顧客｜可發 LINE 提醒結帳
         </p>
       </div>
       <button class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading">
@@ -149,7 +171,7 @@ onMounted(load)
       style="background:#fff8e1; border:1px solid #f0c040; color:#7a5c00; font-size:13px;">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
       下次自動銷單時間：<strong>{{ nextCancelDate }} 00:00（台灣）</strong>
-      &nbsp;—&nbsp;逾期訂單將自動取消並回補庫存，購物金同步失效。
+      &nbsp;—&nbsp;逾期未結帳的現貨訂單將於銷單時自動取消並回補庫存。
     </div>
 
     <!-- Error -->
@@ -158,7 +180,7 @@ onMounted(load)
     <!-- Empty -->
     <div v-if="!loading && !rows.length && !errMsg"
       class="text-center py-5 text-muted" style="font-size:14px;">
-      目前沒有待付款訂單 🎉
+      目前沒有待結帳的現貨顧客 🎉
     </div>
 
     <!-- Table -->
@@ -169,9 +191,8 @@ onMounted(load)
             <tr>
               <th class="px-3 py-3">顧客</th>
               <th class="px-3 py-3 text-center">LINE</th>
-              <th class="px-3 py-3 text-end">訂單筆數</th>
-              <th class="px-3 py-3 text-end">未付金額合計</th>
-              <th class="px-3 py-3">最新訂單時間</th>
+              <th class="px-3 py-3 text-end">購物車件數</th>
+              <th class="px-3 py-3 text-end">合計金額（參考）</th>
               <th class="px-3 py-3 text-center">操作</th>
             </tr>
           </thead>
@@ -195,19 +216,14 @@ onMounted(load)
                   style="font-size:11px;">未綁定</span>
               </td>
 
-              <!-- 訂單筆數 -->
+              <!-- 件數 -->
               <td class="px-3 py-3 text-end fw-semibold">
-                {{ row.orderCount }}
+                {{ row.itemCount }} 件
               </td>
 
               <!-- 金額合計 -->
               <td class="px-3 py-3 text-end fw-semibold" style="color:#c0392b;">
                 NT${{ row.totalAmount.toLocaleString() }}
-              </td>
-
-              <!-- 最新訂單時間 -->
-              <td class="px-3 py-3 text-muted" style="font-size:12px;">
-                {{ fmtDate(row.latestAt) }}
               </td>
 
               <!-- 操作 -->
@@ -237,7 +253,7 @@ onMounted(load)
         </table>
       </div>
       <div class="px-3 py-2 text-muted" style="font-size:12px; border-top:1px solid #f0ece7;">
-        共 {{ rows.length }} 位顧客，{{ rows.reduce((s, r) => s + r.orderCount, 0) }} 筆待付款訂單
+        共 {{ rows.length }} 位顧客，{{ rows.reduce((s, r) => s + r.itemCount, 0) }} 件現貨商品待結帳
       </div>
     </div>
 
