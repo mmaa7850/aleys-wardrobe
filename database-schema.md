@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-24
+> 更新時間：2026-05-10（電子發票欄位 — 待測試）
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -11,11 +11,7 @@
 |------|------|------|
 | `add_shipping_method_fields.sql` | 新增 ShippingMethod / HomeDelivery* 欄位 | ✅ 已執行 |
 | `add_trade_no.sql` | 新增 TradeNo 欄位（藍新退款用） | ✅ 已執行 |
-| `add_invoice_fields.sql` | 新增 Invoice* 7 個欄位（電子發票）+ ATMBankCode / ATMAccount / ATMExpireDate（ATM 儲值）| ⚠️ 待執行 |
-| `add_wallet_tables.sql` | 新增錢包系統三張表 + C_ORD_OrderList 兩個欄位 | ✅ 已執行 |
-| `add_line_binding.sql` | `C_MBR_MemberList` 新增 `LineUserID` / `FbName`；新增 `LineBindToken` 表 | ✅ 已執行（2026-05-20，staging + public 兩個 schema） |
-| `add_live_tables.sql` | 新增 `C_LIV_SessionList` / `C_LIV_ProductList`；`C_ORD_OrderList` 新增 `OrderSource` / `LiveSessionID` | ✅ 已執行（2026-05-20，staging + public 兩個 schema） |
-| `add_live_realtime_tables.sql` | 新增 `C_LIV_ActiveBidList` / `C_LIV_ProcessedCommentList`；`C_LIV_SessionList` 新增 `FbPageId` / `FbLiveVideoId`；`C_ORD_OrderList` 新增 `LiveCode` | ✅ 已執行（2026-05-22，staging + public 兩個 schema） |
+| `add_invoice_fields.sql` | 新增 Invoice* 7 個欄位（電子發票） | ⚠️ 待執行 |
 
 ---
 
@@ -83,20 +79,14 @@ WITH CHECK (
 ## Tables
 
 ### C_CART_CartItemList
-| 欄位 | 型別 | Nullable | Default | 備注 |
-|------|------|----------|---------|------|
-| ID | bigint | NO | — | |
-| CartID | bigint | NO | — | |
-| ProductID | bigint | YES | — | 購物金項目為 NULL |
-| VariantID | bigint | YES | — | 購物金項目為 NULL |
-| Qty | integer | YES | 1 | |
-| AddedAt | timestamptz | YES | now() | |
-| Source | varchar(20) | YES | 'web' | 'web' / 'live' / 'manual' / 'reward' |
-| LiveSessionID | bigint | YES | — | 直播來源時填入場次 ID |
-| IsReward | boolean | NO | false | 購物金項目 = true |
-| RewardAmt | integer | YES | — | 購物金金額（IsReward=true 時使用）|
-
-> **migration**：`add_cart_features.sql` ✅ 已執行（2026-05-23）
+| 欄位 | 型別 | Nullable | Default |
+|------|------|----------|---------|
+| ID | bigint | NO | — |
+| CartID | bigint | NO | — |
+| ProductID | bigint | NO | — |
+| VariantID | bigint | NO | — |
+| Qty | integer | YES | 1 |
+| AddedAt | timestamptz | YES | now() |
 
 ### C_CART_CartList
 | 欄位 | 型別 | Nullable | Default |
@@ -105,59 +95,6 @@ WITH CHECK (
 | MemberID | bigint | NO | — |
 | CreatedDate | timestamptz | YES | now() |
 | UpdatedDate | timestamptz | YES | now() |
-
-### C_LIV_ActiveBidList
-| 欄位 | 型別 | Nullable | Default | 備注 |
-|------|------|----------|---------|------|
-| ID | bigserial | NO | — | |
-| SessionID | bigint | NO | — | FK → C_LIV_SessionList.ID |
-| Code | varchar | NO | — | 直播商品代碼（大寫）|
-| ProductName | varchar | YES | — | 快照 |
-| Status | varchar(20) | NO | 'open' | `open` / `closed` |
-| OpenedAt | timestamptz | NO | now() | |
-| ClosedAt | timestamptz | YES | — | 截標時間 |
-| CreatedDate | timestamptz | NO | now() | |
-
-> UNIQUE INDEX `idx_live_active_bid_open` ON (SessionID, Code) WHERE Status = 'open'（partial index 確保同一場次同一代碼不重複開標）
-
-### C_LIV_ProcessedCommentList
-| 欄位 | 型別 | Nullable | Default | 備注 |
-|------|------|----------|---------|------|
-| ID | bigserial | NO | — | |
-| SessionID | bigint | NO | — | |
-| FbCommentId | varchar | NO | — | FB 留言 ID（全域唯一）|
-| FbUserId | varchar | YES | — | 留言者 FB 用戶 ID |
-| DedupKey | varchar | YES | — | `{CODE}\|{VariantID}` 同人同款去重；純紀錄型留言為 null |
-| CreatedDate | timestamptz | NO | now() | |
-
-> UNIQUE (SessionID, FbCommentId)（防止同則留言被重複處理）
-> 僅由 `live-bid-poll` Edge Function 以 service_role 讀寫，無公開 RLS policy。
-
-### C_LIV_SessionList
-| 欄位 | 型別 | Nullable | Default | 備注 |
-|------|------|----------|---------|------|
-| ID | bigserial | NO | — | |
-| Title | varchar(100) | NO | — | |
-| LiveDate | date | YES | — | |
-| Status | varchar(20) | NO | 'planned' | `planned` / `active` / `closed` |
-| Notes | text | YES | — | |
-| FbPageId | varchar | YES | — | 監控用粉專 ID（直播監控設定後儲存）|
-| FbLiveVideoId | varchar | YES | — | 目前直播影片 ID（直播監控設定後儲存）|
-| CreatedDate | timestamptz | YES | now() | |
-| UpdatedDate | timestamptz | YES | now() | |
-
-### C_LIV_ProductList
-| 欄位 | 型別 | Nullable | Default | 備注 |
-|------|------|----------|---------|------|
-| ID | bigserial | NO | — | |
-| SessionID | bigint | NO | — | FK → C_LIV_SessionList.ID ON DELETE CASCADE |
-| Code | varchar(20) | NO | — | 直播商品代碼（如 A1）|
-| ColorName | varchar(50) | NO | — | 顏色名稱（留言比對用）|
-| SizeName | varchar(20) | NO | — | 尺寸名稱（留言比對用）|
-| VariantID | bigint | NO | — | FK → C_PRD_ProductVariantList.ID |
-| ProductName | varchar(200) | YES | — | 快照，方便顯示 |
-| LivePrice | bigint | NO | — | 直播特價（NT$）|
-| CreatedDate | timestamptz | YES | now() | |
 
 ### C_MBR_MemberAddressList
 | 欄位 | 型別 | Nullable | Default |
@@ -187,8 +124,6 @@ WITH CHECK (
 | DefaultPayMethodID | bigint | YES | — |
 | MemberLevelID | bigint | YES | — (FK → S_MBR_MemberLevelList.ID) |
 | IsActive | boolean | YES | true |
-| LineUserID | text | YES | — （UNIQUE；LINE 帳號綁定後填入；`line-webhook` Unfollow 時清除）|
-| FbName | text | YES | — （FB 登入後擷取 `user_metadata.full_name`；直播留言比對用）|
 | CreatedDate | timestamptz | YES | now() |
 | UpdatedDate | timestamptz | YES | now() |
 
@@ -202,17 +137,6 @@ WITH CHECK (
 | SocialEmail | text | YES | — |
 | CreatedDate | timestamptz | YES | now() |
 
-### LineBindToken
-| 欄位 | 型別 | Nullable | Default | 備注 |
-|------|------|----------|---------|------|
-| Token | text | NO | — | PRIMARY KEY（UUID v4） |
-| LineUserID | text | NO | — | LINE 用戶 ID |
-| CreatedAt | timestamptz | YES | now() | |
-| UsedAt | timestamptz | YES | — | 綁定完成後填入 |
-| ExpiresAt | timestamptz | YES | now() + 7 days | 7 天有效期 |
-
-> RLS：已啟用（ENABLE ROW LEVEL SECURITY）；僅由 `line-webhook` / `line-bind` Edge Functions 使用 service_role 操作，無公開讀寫 policy。
-
 ### C_MBR_WishList
 | 欄位 | 型別 | Nullable | Default |
 |------|------|----------|---------|
@@ -220,56 +144,6 @@ WITH CHECK (
 | MemberID | bigint | NO | — |
 | ProductID | bigint | NO | — |
 | CreatedDate | timestamptz | YES | now() |
-
-### C_MBR_WalletList
-| 欄位 | 型別 | Nullable | Default |
-|------|------|----------|---------|
-| ID | SERIAL | NO | — |
-| MemberID | uuid | NO | UNIQUE, REFERENCES auth.users(id) |
-| Balance | integer | NO | 0, CHECK >= 0 |
-| CreatedDate | timestamptz | NO | now() |
-| UpdatedDate | timestamptz | NO | now() |
-
-### C_MBR_WalletTxList
-| 欄位 | 型別 | Nullable | Default | 備注 |
-|------|------|----------|---------|------|
-| ID | SERIAL | NO | — | |
-| MemberID | uuid | NO | — | |
-| TxType | varchar(20) | NO | — | 'topup' / 'order_deduct' / 'refund' / 'adjust' |
-| Amount | integer | NO | — | 正數=入帳, 負數=扣款 |
-| BalanceBefore | integer | NO | — | |
-| BalanceAfter | integer | NO | — | |
-| RelatedOrderNo | varchar(50) | YES | — | |
-| RelatedTopupNo | varchar(50) | YES | — | |
-| Note | text | YES | — | |
-| CreatedBy | uuid | YES | — | 管理員手動調整時填入 |
-| CreatedDate | timestamptz | NO | now() | |
-
-### C_MBR_WalletTopupList
-| 欄位 | 型別 | Nullable | Default | 備注 |
-|------|------|----------|---------|------|
-| ID | SERIAL | NO | — | |
-| TopupNo | varchar(50) | NO | UNIQUE | |
-| MemberID | uuid | NO | — | |
-| Amount | integer | NO | — | CHECK > 0 |
-| PaymentStatus | varchar(20) | NO | 'pending' | 'pending' / 'paid' / 'failed' |
-| InvoiceStatus | varchar(20) | NO | 'none' | 'none' / 'issued' |
-| InvoiceNo | varchar(20) | YES | — | |
-| InvoiceNumber | varchar(10) | YES | — | |
-| InvoiceRandomNum | varchar(4) | YES | — | |
-| InvoiceIssuedAt | timestamptz | YES | — | |
-| InvoiceCarrierType | varchar(10) | YES | — | |
-| InvoiceCarrierNum | varchar(50) | YES | — | |
-| InvoiceLoveCode | varchar(10) | YES | — | |
-| InvoiceBuyerUBN | varchar(8) | YES | — | |
-| TradeNo | varchar(50) | YES | — | |
-| PaymentMethod | varchar(20) | YES | — | 'credit' / 'atm' / 'linepay' |
-| ATMBankCode | varchar(10) | YES | — | ATM 銀行代碼（藍新取號後填入）⚠️ 需執行 add_invoice_fields.sql |
-| ATMAccount | varchar(20) | YES | — | ATM 虛擬帳號（藍新取號後填入）⚠️ 需執行 add_invoice_fields.sql |
-| ATMExpireDate | date | YES | — | ATM 繳費期限 ⚠️ 需執行 add_invoice_fields.sql |
-| PaidAt | timestamptz | YES | — | |
-| CreatedDate | timestamptz | NO | now() | |
-| UpdatedDate | timestamptz | NO | now() | |
 
 ### C_ORD_OrderItemList
 | 欄位 | 型別 | Nullable | Default |
@@ -286,47 +160,45 @@ WITH CHECK (
 | SubTotal | bigint | NO | — |
 
 ### C_ORD_OrderList
-| 欄位 | 型別 | Nullable | Default | 備注 |
-|------|------|----------|---------|------|
-| ID | bigint | NO | — | |
-| OrderNo | varchar | NO | — | 格式：`AW_YYYYMMDD_XXXXX`（一般）/ `LIV_YYYYMMDD_XXXXX`（直播）|
-| OrderSource | varchar(20) | YES | 'web' | `web` / `live` |
-| LiveSessionID | bigint | YES | — | FK → C_LIV_SessionList.ID（直播訂單才有值）|
-| LiveCode | varchar | YES | — | 直播商品代碼（直播訂單才有值，結標公告查詢用）|
-| CustomerName | varchar | NO | — | |
-| CustomerEmail | varchar | NO | — | |
-| CustomerPhone | varchar | YES | — | |
-| ShippingName | varchar | NO | — | |
-| ShippingPhone | varchar | NO | — | |
-| ShippingAddress | varchar | NO | — | |
-| ShippingMethodID | bigint | YES | — | |
-| ShippingFee | bigint | NO | 0 | |
-| ShippingMethod | varchar(20) | YES | 'home' | |
-| StoreID | varchar(10) | YES | — | |
-| StoreName | varchar(50) | YES | — | |
-| PayMethodID | bigint | YES | — | |
-| PaymentStatus | varchar | NO | 'pending' | |
-| PaymentMethod | varchar(20) | YES | — | |
-| PaymentFee | bigint | YES | — | |
-| PaidAt | timestamptz | YES | — | |
-| ATMBankCode | varchar(10) | YES | — | |
-| ATMAccount | varchar(20) | YES | — | |
-| CouponID | bigint | YES | — | |
-| HomeDeliveryNo | varchar(50) | YES | — | |
-| HomeDeliveryCompany | varchar(20) | YES | — | |
-| DiscountAmount | bigint | NO | 0 | |
-| ItemsTotal | bigint | NO | 0 | |
-| FinalAmount | bigint | NO | 0 | |
-| StatusID | bigint | YES | — | |
-| CustomerNote | text | YES | — | |
-| AdminNote | text | YES | — | |
-| LogisticsTradeNo | varchar(20) | YES | — | |
-| LgsNo | varchar(20) | YES | — | |
-| StorePrintNo | varchar(20) | YES | — | |
-| ShippingStatus | varchar(10) | YES | — | |
-| ShippingStatusText | varchar(50) | YES | — | |
-| CreatedDate | timestamptz | NO | now() | |
-| UpdatedDate | timestamptz | YES | — | |
+| 欄位 | 型別 | Nullable | Default |
+|------|------|----------|---------|
+| ID | bigint | NO | — |
+| OrderNo | varchar | NO | — |
+
+| CustomerName | varchar | NO | — |
+| CustomerEmail | varchar | NO | — |
+| CustomerPhone | varchar | YES | — |
+| ShippingName | varchar | NO | — |
+| ShippingPhone | varchar | NO | — |
+| ShippingAddress | varchar | NO | — |
+| ShippingMethodID | bigint | YES | — |
+| ShippingFee | bigint | NO | 0 |
+| ShippingMethod | varchar(20) | YES | 'home' |
+| StoreID | varchar(10) | YES | — |
+| StoreName | varchar(50) | YES | — |
+| PayMethodID | bigint | YES | — |
+| PaymentStatus | varchar | NO | 'pending' |
+| PaymentMethod | varchar(20) | YES | — |
+| PaymentFee | bigint | YES | — |
+| PaidAt | timestamptz | YES | — |
+| ATMBankCode | varchar(10) | YES | — |
+| ATMAccount | varchar(20) | YES | — |
+| CouponID | bigint | YES | — |
+| HomeDeliveryNo | varchar(50) | YES | — |
+| HomeDeliveryCompany | varchar(20) | YES | — |
+| DiscountAmount | bigint | NO | 0 |
+| ItemsTotal | bigint | NO | 0 |
+| FinalAmount | bigint | NO | 0 |
+| StatusID | bigint | YES | — |
+| CustomerNote | text | YES | — |
+| AdminNote | text | YES | — |
+| LogisticsTradeNo | varchar(20) | YES | — |
+| LgsNo | varchar(20) | YES | — |
+| StorePrintNo | varchar(20) | YES | — |
+| ShippingStatus | varchar(10) | YES | — |
+| ShippingStatusText | varchar(50) | YES | — |
+| CreatedDate | timestamptz | NO | now() |
+| UpdatedDate | timestamptz | YES | — |
 | InvoiceStatus ⚠️ 待測試 | varchar(20) | NO | 'none' | `none` / `issued` / `voided` / `allowance` |
 | InvoiceNo ⚠️ 待測試 | varchar(20) | YES | — | ezPay 發票開立序號（InvoiceTransNo） |
 | InvoiceNumber ⚠️ 待測試 | varchar(10) | YES | — | 實際發票號碼（如 AB12345678） |
@@ -334,8 +206,6 @@ WITH CHECK (
 | InvoiceIssuedAt ⚠️ 待測試 | timestamptz | YES | — | 發票開立時間 |
 | InvoiceAllowanceNo ⚠️ 待測試 | varchar(25) | YES | — | 折讓號 |
 | InvoiceAllowanceAmt ⚠️ 待測試 | integer | YES | — | 折讓金額（NT$） |
-| WalletDeductAmt | integer | NO | 0 | 錢包折抵金額 |
-| NewebpayAmt | integer | NO | 0 | 藍新實付金額（0 = 全錢包支付）|
 
 ### C_ORD_OrderStatusLog
 | 欄位 | 型別 | Nullable | Default |
@@ -756,50 +626,6 @@ WITH CHECK (
 | admin_update | authenticated | UPDATE | staging.is_admin() |
 | admin_delete | authenticated | DELETE | staging.is_admin() |
 | self_select | authenticated | SELECT | UserId = auth.uid()（任何管理員可讀自己那筆，loadAdminProfile 使用）|
-
-### LineBindToken
-> 無公開 policy；僅由 `line-webhook` 和 `line-bind` Edge Functions 以 service_role（繞過 RLS）讀寫。已啟用 RLS（`ENABLE ROW LEVEL SECURITY`）。
-
-### C_MBR_WalletList
-| Policy | Role | CMD | 條件 |
-|--------|------|-----|------|
-| members can read own wallet | authenticated | SELECT | MemberID = auth.uid() |
-
-> INSERT/UPDATE/DELETE 僅由 Edge Functions 使用 service_role 執行（繞過 RLS），無公開寫入政策。
-
-### C_MBR_WalletTxList
-| Policy | Role | CMD | 條件 |
-|--------|------|-----|------|
-| members can read own wallet tx | authenticated | SELECT | MemberID = auth.uid() |
-
-> INSERT/UPDATE/DELETE 僅由 Edge Functions 使用 service_role 執行（繞過 RLS），無公開寫入政策。
-
-### C_MBR_WalletTopupList
-| Policy | Role | CMD | 條件 |
-|--------|------|-----|------|
-| members can read own topup | authenticated | SELECT | MemberID = auth.uid() |
-
-> INSERT/UPDATE/DELETE 僅由 Edge Functions 使用 service_role 執行（繞過 RLS），無公開寫入政策。
-
-### C_LIV_ActiveBidList
-| Policy | Role | CMD | 條件 |
-|--------|------|-----|------|
-| live_active_bid_staff_all | authenticated | ALL | staging.is_staff()（任何啟用的管理員）|
-
-> INSERT/UPDATE 主要由 `live-bid-poll` Edge Function 以 service_role 執行（繞過 RLS）。
-
-### C_LIV_ProcessedCommentList
-> 無公開 policy；僅由 `live-bid-poll` Edge Function 以 service_role（繞過 RLS）讀寫。已啟用 RLS（`ENABLE ROW LEVEL SECURITY`）。
-
-### C_LIV_SessionList
-| Policy | Role | CMD | 條件 |
-|--------|------|-----|------|
-| live_session_staff_all | authenticated | ALL | staging.is_staff()（任何啟用的管理員）|
-
-### C_LIV_ProductList
-| Policy | Role | CMD | 條件 |
-|--------|------|-----|------|
-| live_product_staff_all | authenticated | ALL | staging.is_staff()（任何啟用的管理員）|
 
 ---
 

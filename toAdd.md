@@ -1,77 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-24
-
----
-
-## 🚀 正式上線前：帳號 & 憑證切換清單
-
-> 目前所有第三方服務均使用**開發測試帳號**，正式上線前必須換成使用者自己的帳號。
-
-### 需要切換的服務
-
-| 服務 | 設定位置 | 狀態 | 需要什麼 |
-|------|----------|------|----------|
-| **藍新金流 MPG** | Vercel 環境變數 | ⚠️ 待切換 | 商店代號、Hash Key、Hash IV、`RespondURL`/`NotifyURL` 改正式網址 |
-| **藍新物流** | Vercel 環境變數 | ⚠️ 待切換 | 物流商店代號、Hash Key、Hash IV |
-| **Supabase 專案** | Vercel 環境變數 + Edge Function Secrets | ⚠️ 待切換 | 已確認上線時需新建正式環境 Supabase 專案（目前 `xyqznatwbfuscocycqtb` 為 staging 用）。上線前需：新建 prod 專案、遷移 schema / RLS、重新設定所有 Edge Function Secrets（LINE、藍新、ezPay）、更新 Vercel 環境變數（`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`），同時更新 LINE Developers Webhook URL |
-| **Facebook OAuth** | Supabase Dashboard → Auth → Providers → Facebook | ✅ 測試成功（2026-05-20）。⚠️ 上線前需切換正式模式 | 目前 App「Aley's Wardrobe Test」為開發模式，只有 App 擁有者可用 FB 登入。正式上線前需在 FB Developer 將 App 切換為 Live 模式（需通過 App Review） |
-| **LINE OA 浮動按鈕** | 後台系統設定 → `line_oa_url` | ✅ 測試成功（2026-05-20）。⚠️ 上線前需在正式後台重新設定 | 測試帳號「Aley's Test」已設定，前台按鈕正常顯示。正式上線時需在 public schema 後台填入正式 LINE OA 連結（staging 和 public 是不同的 S_SYS_Config） |
-| **Google Analytics 4** | Vercel 環境變數 `VITE_GA_MEASUREMENT_ID` | ⚠️ 待切換 | 使用者申請自己的 GA4 屬性，取得 `G-XXXXXXXXXX` |
-| **ezPay 電子發票** | Supabase Edge Function Secrets + ezPay 商家後台 | ✅ Secrets 已填入，字軌已申請完成 | 正式上線前將 `EZPAY_ENV` 從 `test` 改為 `prod` |
-| **Vercel 部署** | Vercel 專案設定 | ⚠️ 待確認 | 正式網域綁定（目前用 vercel.app 預設網址） |
-
-### 額外要在後台設定的（不是環境變數）
-
-| 設定 | 位置 | 說明 |
-|------|------|------|
-| 公告文字 | 後台 → 系統設定 → `announcement` | 上線時可設定開幕公告 |
-| LINE OA 網址 | 後台 → 系統設定 → `line_oa_url` | 右下角浮動按鈕 |
-| GA Looker Studio | 後台 → 系統設定 → `ga_looker_studio_url` | 報表頁嵌入連結（選填） |
-| 付款方式名稱 | 後台 → 付款方式設定 | 確認顯示名稱符合正式環境 |
-| 配送方式與運費 | 後台 → 配送方式設定 | 確認費用正確 |
-| 管理員帳號 | 後台 → 管理者帳號 | 確認正式帳號都有設定權限 |
-| LINE OA 網址（正式） | 後台 → 系統設定 → `line_oa_url` | 正式上線時填入正式 LINE OA 的加入好友連結（格式：`https://lin.ee/XXXXXXX`） |
-
-### 未來可能需要
-| 服務 | 狀態 | 說明 |
-|------|------|------|
-| **Resend / SendGrid（SMTP）** | ❌ 尚未決定 | 訂單通知信、發票通知信用；需先決定是否要做 Email 通知 |
-| **FB App Review（直播留言權限）** | ⏳ 待申請（直播功能做好後送審） | `pages_read_engagement` 權限，讀取粉專直播留言；需先完成直播後台功能 + 隱私政策頁面 + 錄示範影片再送審 |
-
----
-
-## 📋 FB App Review 示範影片規劃
-
-> 送審 `pages_read_engagement`（直播留言讀取）時需附上的示範影片。
-> **送審時機：** 直播代建訂單後台功能完成後。
-
-### 影片內容（建議 2〜5 分鐘）
-
-**第一段：說明業務背景（30 秒）**
-- 用旁白或字幕說明：這是一個台灣服飾電商，透過 Facebook 直播銷售商品
-- 客人在直播留言商品關鍵字（例如「+1 A001 黑色 M」）下單
-- 系統需要即時讀取留言並自動建立訂單
-
-**第二段：示範購物網站（1 分鐘）**
-- 打開官網，展示商品列表、購物車、結帳流程
-- 說明這是官網，客人平時在這裡購物
-
-**第三段：示範直播留言讀取流程（2〜3 分鐘）**
-- 在 FB 粉專開一個測試直播（不公開）
-- 用測試帳號在直播留言「+1 商品關鍵字」
-- 打開後台系統，顯示留言被讀取進來
-- 系統根據關鍵字比對商品，自動建立訂單
-- 顯示訂單建立成功的畫面
-
-**第四段：說明為什麼需要這個權限（30 秒）**
-- `pages_read_engagement`：讀取粉專直播底下的留言
-- 沒有這個權限，系統就無法自動讀取留言建單
-
-### 注意事項
-- 影片要全程英文旁白或英文字幕（FB Review 是英文審核）
-- 需要準備好隱私政策頁面（Privacy Policy）的網址
-- 可以是測試環境的示範，不一定要正式上線的功能
+> 更新時間：2026-05-10
 
 ---
 
@@ -92,126 +21,70 @@
   - **優惠券效益** `/admin/reports/coupons`：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃
   - **訂單狀態分佈** `/admin/reports/orders`：甜甜圈圖 + 付款狀態明細表
   - **會員成長趨勢** `/admin/reports/members`：近12月柱狀圖；累積會員/本月活躍/回購會員 stat card
-- **錢包系統**：儲值（走藍新 MPG）、自動開立 ezPay 發票（⚠️ 待 ezPay 電子發票加值服務開通後完整測試）、錢包餘額折抵結帳（全額/部分）、混合付款（錢包+藍新）、全錢包免走藍新、退款退回錢包、手動調整餘額（後台）、RLS 政策；新增 DB 表：C_MBR_WalletList / C_MBR_WalletTxList / C_MBR_WalletTopupList；C_ORD_OrderList 新增 WalletDeductAmt / NewebpayAmt 欄位；新增 4 個 Edge Functions：wallet-topup / wallet-topup-notify / wallet-topup-return / wallet-adjust；前台 /wallet 頁面；後台 /admin/wallet 頁面；會員中心快捷入口
-- **購物車操作限制**：非預購商品（IsPreOrder=false）不顯示刪除按鈕，且數量 ± 控制鍵鎖定（disabled），包含現貨、直播自動入單、小編手動入單；只有預購商品可刪除與調整數量
-- **買衣服付款後自動開發票**：`payment-notify` 付款成功後自動呼叫 ezPay 開立發票；支援所有載具類型；NewebpayAmt=0（全錢包）跳過 ⚠️ 待測試
-- **退款入錢包**：新增 `wallet-refund` Edge Function；後台訂單 Modal 新增「退款入錢包」操作區塊；全額退款（FinalAmount − ShippingFee）或部分退款（指定金額）；退款後入會員錢包，不走藍新退款 API，不作廢發票 ⚠️ 待測試
-- **庫存扣除時機調整**：改為加入購物車時立即扣庫存（`decrement_stock` RPC，FOR UPDATE 原子性）；增加數量扣差量、減少數量還差量；DB 寫入失敗自動回補；`create-payment` 移除結帳前庫存檢查；`payment-notify` 移除付款後庫存扣除；migration：`cart_stock_functions.sql`（`public` + `staging` schema）
-- **購物車 UX 改善（鎖頭 + 勾選框）**：現貨商品前改顯示 🔒 鎖頭 SVG 圖示（已扣庫存，不可取消）；預購商品前顯示可勾選 checkbox（可選擇是否一起結帳）；`cart.initSelection()` 改為全選所有品項；`cart.toggleSelection()` 僅允許預購商品切換
-- **結帳發票錯誤訊息位置改善**：發票格式驗證失敗時，錯誤訊息改顯示在選定發票類型的輸入框下方（而非頁面底部），用 `invoiceError` ref 分開管理
-- **後台會員列表編輯 Modal**：新增「編輯」按鈕，小編可透過 Modal 填入會員姓名、電話、FB 名稱（`FbName`，直播留言比對用）；搜尋範圍擴充至 FB 名稱
-- **藍新手續費試算（銷售報表）**：銷售總覽新增「估算藍新手續費」stat card；信用卡/LINE Pay 2.8%、ATM min(1%, NT$20)；全錢包付款（NewebpayAmt=0）不計
-- **LINE Pay 支援**：`create-payment` Edge Function 新增 `LINEPAY: 1` 參數，藍新付款頁面顯示 LINE Pay 選項（需在 Supabase Dashboard 重新部署 Edge Function）
-- **FB 帳號登入（Facebook OAuth）**：登入頁「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用）；FB OAuth 回調（`/auth/callback`）整合；首次 FB 登入自動建立 `C_MBR_MemberList` 最小記錄（upsert by UserID）；`FbName`（`user.user_metadata.full_name`）自動存入會員資料，供直播留言比對 ✅ 測試成功（2026-05-20）
-- **直播代建訂單工具**：後台直播場次管理（`/admin/live`）+ 場次詳情（`/admin/live/:id`）；商品對照表（代碼/顏色/尺寸 → VariantID + 直播特價）；FB 留言文字貼入 → 客戶端解析（見解析規則）→ 預覽確認 → `live-import` Edge Function 批次建單（比對 FbName 取會員資料 + 預設地址、扣庫存、建 `LIV_YYYYMMDD_XXXXX` 訂單）→ 有 LINE 綁定自動推播付款連結，無綁定列入「待手動通知名單」 ✅ 已完成（2026-05-20）⚠️ 待測試
-- **直播留言解析包色支援**：留言格式 `AA包色M+1` → 展開為該代碼+尺寸所有顏色各 1 件；`live-bid-poll` 即時模式同步支援包色；去重 key 改為 `code|colorName|sizeName` 防止包色展開後重複建單 ✅ 已完成（2026-05-23）⚠️ 待測試
-- **購物車來源追蹤**：`C_CART_CartItemList` 新增 `Source varchar(20) DEFAULT 'web'`、`LiveSessionID bigint`、`IsReward boolean`、`RewardAmt integer`；`ProductID`/`VariantID` 允許 NULL（購物金項目）；`cart.addItem()` 支援 `{source, liveSessionId}` 選項；`_loadItems()` 處理購物金項目（`unitPrice=-RewardAmt`、`productName='購物金'`）；新增 `cart.addReward(amt)` 方法；`canCheckout` getter（selectedTotal > 0） ✅ 已完成（2026-05-23）⚠️ 待測試
-- **週一銷單機制（pg_cron）**：每週日 16:00 UTC（台灣週一 00:00）自動取消所有 PaymentStatus IN ('pending','payment_failed') 訂單、回補庫存、刪除購物車中 IsReward=true 的購物金；migration：`setup_weekly_cron.sql` ✅ 已執行（2026-05-23，jobid 1+2 已確認 active）
-- **錢包 ATM 儲值修正**：修正 ATM 取號後（Status=SUCCESS, PaymentType=VACC）被誤顯示為「儲值成功」的問題；`wallet-topup-return` 改判斷 PaymentType，ATM 取號成功後將 BankCode/CodeNo/ExpireDate 存入 `C_MBR_WalletTopupList`，導向 `/wallet?topup=atm_pending`；前台 WalletView.vue 新增待轉帳 ATM 卡片（顯示銀行代碼/虛擬帳號/繳費期限）；使用者關掉藍新頁面後仍可在錢包頁找回虛擬帳號；⚠️ 需執行 `add_invoice_fields.sql`（新增 ATMBankCode / ATMAccount / ATMExpireDate 欄位）
-- **待結清單後台頁面**：`/admin/orders/pending`；按會員彙整未付款訂單（筆數 + 金額合計）；顯示 LINE 綁定狀態；「LINE 提醒」按鈕一鍵推播催付通知；顯示下次銷單時間倒數 ✅ 已完成（2026-05-23）⚠️ 待測試
-- **LINE OA 帳號綁定系統**：消費者加入 LINE OA → `line-webhook` 收 Follow 事件 → 產生一次性 UUID Token（存 `LineBindToken` 表）→ LINE Push 傳送綁定連結 → 消費者點連結到 `/bind-line?token=xxx` → 未登入跳 `/login`（redirect 存 localStorage）→ FB 登入完成回 `/auth/callback` → 讀 localStorage 跳回 `/bind-line` → `line-bind` 驗證 token → upsert `LineUserID` 至 `C_MBR_MemberList`；AccountView 顯示 LINE 綁定狀態（已綁定 / 尚未綁定）；封鎖 LINE OA → 清除 `LineUserID` ✅ 測試成功（2026-05-20）
 
 ---
 
 ## ⚠️ 已開發，待測試 / 待上線
 
-### 直播代建訂單工具
+### 電子發票（ezPay）
 
-**程式已完成，需要測試驗證。**（DB migration `add_live_tables.sql` ✅ 已執行 2026-05-20）
-
-**待測試項目：**
-
-| # | 測試項目 | 預期結果 |
-|---|---------|---------|
-| 1 | 貼上正常留言，解析後預覽正確 | 名字+商品+數量都對應正確 |
-| 2 | 貼上含 `作者` 小編回覆，回覆不被解析 | 小編回覆的商品行不出現在預覽 |
-| 3 | 同一留言有兩筆商品 → 整個跳過 | 黃色警告顯示被跳過的留言 |
-| 4 | 倒序處理：舊留言先扣庫存 | 庫存不足時，新留言被略過 |
-| 5 | 同人同代碼留兩次 → ⚠️ 重複標記 | 預覽表格標黃 ⚠️ 重複 |
-| 6 | 無法匹配 FbName 的留言 → no_member | 建單結果顯示「找不到會員」 |
-| 7 | 庫存不足 → no_stock | 建單結果顯示「庫存不足」 |
-| 8 | 成功建單 + 有 LINE 綁定 → LINE Push | 客人收到付款連結 |
-| 9 | 成功建單 + 無 LINE 綁定 → 手動通知名單 | 頁面顯示待手動通知清單 |
-| 10 | **包色**：`AA包色M+1` → 展開為所有顏色各 1 件預覽 | 預覽顯示多行，各顏色獨立一行 |
-| 11 | **包色去重**：同人同代碼包色再留一次 → 重複標記 | 各色分別標黃 ⚠️ |
-
----
-
-### 待結清單 + 週銷單機制
-
-**程式已完成，需要執行 migration 並測試。**
-
-**執行前需先執行 SQL：**
-```
-supabase/migrations/add_cart_features.sql      -- ✅ 已執行（2026-05-23）
-supabase/migrations/setup_weekly_cron.sql      -- ✅ 已執行（2026-05-23）
-```
-
-**待測試項目：**
-
-| # | 測試項目 | 預期結果 |
-|---|---------|---------|
-| 1 | 後台側欄「待結清單」出現在訂單區段 | 路由 `/admin/orders/pending` 正常顯示 |
-| 2 | 有未付款訂單的會員列在清單中 | 姓名、筆數、金額、LINE 狀態正確 |
-| 3 | 點「LINE 提醒」 → 有 LINE 的會員收到 Push | LINE 收到催付訊息 |
-| 4 | 無 LINE 綁定的會員 → 顯示「無法通知」（灰字） | 無法通知按鈕不出現 |
-| 5 | 購物車加入購物金（`cart.addReward(100)`）→ `_loadItems` 顯示 -100 元 | 購物車多一行「購物金 -$100」 |
-| 6 | `selectedTotal` < 0 → 結帳按鈕 disabled（`canCheckout === false`） | 無法結帳 |
-
----
-
-### 電子發票（ezPay）+ 退款入錢包 + 購物車限制
-
-**程式已完成，需要測試驗證。**
+**程式已完成，尚未在正式環境測試。**
 
 **已實作範圍：**
-- 結帳頁發票偏好選擇（5 種：紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編），存入訂單
-- `payment-notify`：買衣服付款成功後**自動開立 ezPay 發票**（NewebpayAmt > 0 時）；全錢包付款自動跳過
-- `wallet-topup-notify`：儲值付款成功後**自動開立 ezPay 發票** ✅ 已測試（AA00000002）
-- 後台訂單 Modal「電子發票」卡片：顯示狀態/號碼/隨機碼；可手動補開 / 作廢 / 折讓（`issue-invoice`）
-- 後台訂單 Modal「退款入錢包」卡片：全額退款（FinalAmount − ShippingFee）或部分退款，退款入會員錢包（`wallet-refund`）
-- 購物車操作：僅 IsPreOrder=true 可刪除 / 調整數量，現貨 / 直播入單 / 小編手動入單兩者皆不顯示 / 鎖定
+- 後台訂單詳情新增「電子發票」卡片：顯示狀態 badge、發票號碼、隨機碼、折讓資訊
+- Footer 按鈕：開立發票 / 作廢發票 / 開立折讓（含折讓金額 inline 輸入）
+- Edge Function `issue-invoice`：支援 `issue` / `void` / `allowance` 三個 action
+- Migration `add_invoice_fields.sql`：新增 7 個 Invoice* 欄位至 `C_ORD_OrderList`
 
 **上線前需完成的步驟：**
 
-1. **執行 migration**（如尚未執行）
+1. **執行 migration**（Supabase Dashboard → SQL Editor）
    ```
    supabase/migrations/add_invoice_fields.sql
-   supabase/migrations/add_invoice_preference_fields.sql
-   supabase/migrations/cart_stock_functions.sql
    ```
 
-2. **ezPay Secrets 已設定**（EZPAY_MERCHANT_ID / EZPAY_HASH_KEY / EZPAY_HASH_IV / EZPAY_ENV）
+2. **設定環境變數**（Supabase Dashboard → Edge Functions → Secrets）
+   ```
+   EZPAY_MERCHANT_ID=  你的商店代號
+   EZPAY_HASH_KEY=     你的 Hash Key
+   EZPAY_HASH_IV=      你的 Hash IV
+   EZPAY_ENV=test      （測試完成後改為 prod）
+   ```
 
-3. **切換正式環境前**：將 `EZPAY_ENV` 從 `test` 改為 `prod`
+3. **用測試環境跑幾筆訂單**，確認：
+   - 開立發票回傳正確發票號碼
+   - 作廢發票成功（注意：奇數月 14 日前才可作廢）
+   - 開立折讓金額正確
 
-**待測試項目（⚠️ 請依序確認）：**
+**需使用者確認的問題：**
 
-| # | 測試項目 | 如何測試 | 預期結果 |
-|---|---------|---------|---------|
-| 1 | **買衣服付款後自動開發票** | 下一筆刷卡訂單付款成功後，查 `C_ORD_OrderList.InvoiceStatus` | `issued`，InvoiceNumber 有值 |
-| 2 | **消費者收到發票 email** | 同上，看會員信箱 | ezPay 寄出發票通知信 |
-| 3 | **手機條碼載具** | 結帳填手機條碼（格式 `/XXXXXXX`），付款後查訂單 | InvoiceNumber 有值，發票綁到手機條碼 |
-| 4 | **公司戶三聯式** | 結帳填統編+公司名，付款後查 | Category=B2B，InvoiceNumber 有值 |
-| 5 | **全錢包付款不開訂單發票** | 全額使用錢包付款，查 `C_ORD_OrderList.InvoiceStatus` | 仍為 `none`（發票在儲值時已開） |
-| 6 | **後台手動補開發票** | 後台訂單 Modal → 開立發票按鈕 | InvoiceNumber 正確顯示 |
-| 7 | **後台作廢發票** | 後台訂單 Modal → 作廢發票 | InvoiceStatus → `voided` |
-| 8 | **後台開立折讓** | 後台訂單 Modal → 開立折讓，填金額 | InvoiceStatus → `allowance`，AllowanceNo 有值 |
-| 9 | **全額退款入錢包** | 後台訂單 Modal → 全額退款入錢包 | 會員錢包增加 FinalAmount−ShippingFee；TxType=refund 紀錄寫入 |
-| 10 | **部分退款入錢包** | 後台訂單 Modal → 部分退款，填金額 | 會員錢包增加指定金額；訂單 AdminNote 更新 |
-| 11 | **購物車操作限制** | 前台購物車：現貨商品無刪除按鈕、± 按鈕 disabled；預購商品兩者皆可操作 | 符合預期 |
+> ❓ **Q1：ezPay 帳號申請了嗎？**
+> 需要有商店代號 + Hash Key + Hash IV 才能測試。
+> 申請連結：https://www.ezpay.com.tw
 
-**已解決的問題：**
+> ❓ **Q2：發票格式確認**
+> 目前實作預設為 B2C、應稅（5%）、PrintFlag=Y（客人索取紙本）。
+> 結帳流程**沒有**讓客人選載具（手機條碼/自然人憑證/ezPay 載具）或捐贈碼。
+> → 這樣可以嗎？還是要在結帳頁加入載具選擇欄位？
 
-> ✅ **Q3：退款 + 發票操作流程** — 已決定：退款入錢包（不作廢發票），發票與退款分開處理
-> ✅ **Q4：退款金流** — 已決定：退款存入會員錢包，不走藍新退款 API
-> ✅ **Q2：發票格式** — 已實作，結帳頁有完整偏好選擇
+> ❓ **Q3：退款 + 發票的操作流程**
+> 目前設計是「退款」和「發票作廢/折讓」**分開兩個操作**（分別按各自的按鈕）。
+> → 你希望合併成一個「退款」按鈕，同時自動處理發票？還是維持現在的分開操作？
 
-**待確認的問題：**
+> ❓ **Q4：部分退款（折讓）的錢要怎麼還給客人？**
+> 現在「開立折讓」只處理發票面的折讓，不處理實際退款金流。
+> 選項 A：退回原付款方式（信用卡退刷走藍新退款 API，金額改為折讓金額）
+> 選項 B：存入客戶錢包（需先做錢包功能，目前尚未開發）
+> 選項 C：純手動匯款給客人，系統只記錄折讓發票，不動金流
+> → **目前預設是選項 C**（系統只開折讓，退款另外人工處理）。若要做 A 或 B 需額外開發。
 
 > ❓ **Q5：退款後庫存要不要回補？**
-> 目前退款入錢包後，已扣的庫存**不會自動加回來**。
-> → 退回的商品是否要重新上架？還是直接報損？（影響是否需要自動回補庫存）
+> 目前退款成功後，已扣的庫存**不會自動加回來**。
+> → 退回的商品是要重新上架販售嗎？還是直接報損？（影響是否需要自動回補庫存）
+
+> ❓ **Q6：發票開立後要不要通知客人？**
+> 目前開立發票後，客人不會收到任何通知（不知道自己的發票號碼）。
+> → 需要系統自動寄 Email 告知發票號碼嗎？（需串接 SMTP 才能做）
 
 ---
 
@@ -223,78 +96,40 @@ supabase/migrations/setup_weekly_cron.sql      -- ✅ 已執行（2026-05-23）
 
 ## 🟡 中優先（功能重要，工程量中等）
 
-### 1. 後台直播代建訂單工具（FB 留言貼文匯入版）✅ 已完成（2026-05-20）
+### 1. 後台直播代建訂單工具（手動版）
 
-**適用時機：直播結束後的 24 小時限時 FB 貼文**
+直播結束後，小編在後台統一建立訂單，不依賴 FB API，先跑起來再考慮自動化。
 
-直播結束後會開一篇限時 24 小時的 FB 貼文，讓沒在現場的客人可以用直播當下的價格購買。貼文關閉後，小編複製 FB 貼文底下的留言文字，貼到後台匯入工具，系統自動解析並批次建單。
+**已確認的流程設計：**
+- 直播前公告數量，開始搶購
+- 直播完後開 24 小時限時 FB 貼文，留言者可用直播價購買
+- 貼文關閉後，小編根據**留言先後順序 FIFO** 分配庫存
+- 超出庫存的自動轉預購
+- 小編以 **CSV 上傳**方式批次建單（取代手動一筆筆輸入）
+- CSV 的直播特價欄位直接取代商品原價
+- 建單完成後批次發付款連結給客人（透過 LINE）
 
-**與直播即時自動化的區別：**
-- 直播**當下**搶商品 → 需要 FB API 即時捕捉（見 🟢 第 6 項）
-- 直播**結束後** 24 小時貼文留言 → 本工具，小編複製貼文文字，不需要 FB API
-
-**已確認的業務規則：**
-- **一則留言 = 一個商品 = 一筆訂單**（同一人可留多則，各自建單）
-- 重複留同款 → 顯示 ⚠️ 警告，讓小編確認
-- 庫存不足 → 略過，不建單，不轉預購（❌）
-
-**已確認的流程：**
-```
-直播結束 → 開 24 小時限時 FB 貼文
-  → 客人在貼文留言購買（格式：姓名 + 商品代碼顏色尺寸+數量）
-  → 貼文關閉後，小編複製全部留言文字
-  → 貼到後台「直播留言匯入」頁面 → 系統解析
-  → 預覽解析結果（標示 ⚠️ 警告：重複留言、未對應商品）
-  → 確認後批次建單
-      ├─ 該 variant 還有庫存 → 建立訂單，扣庫存
-      └─ 該 variant 庫存已耗盡 → 略過，不建單（❌ 不轉預購）
-  → 建單成功的客人批次透過 LINE 傳送付款連結
-  → 建單失敗（庫存不足）的客人：產生「未成功名單」供小編手動通知
-```
-
-> **範例：** Red/S 庫存 30 件，留言共 40 筆 Red/S
-> → 前 30 筆建立訂單 ✅
-> → 後 10 筆略過，列入未成功名單 ❌（顯示姓名、電話、商品，供小編手動聯絡）
-
-**留言格式（一則留言一款）：**
-```
-楊筱婷
-Y77藍L+1
-```
-
-**解析邏輯（客戶端，`LiveSessionDetail.vue`）：**
-
-1. **雜訊過濾**：`頭號粉絲`、時間戳（`5天`、`3小時`）、空行；看到 `作者` 標記 → 跳過（小編回覆開頭），同時跳過下一行（品牌名）
-2. **分組為 Block**：每個留言人名為一個 block，以下的商品行收進該 block
-3. **倒序處理**（⚠️ 重要）：複製貼上為新到舊，倒序後舊留言（先留者）優先扣庫存
-4. **一則留言只能有一筆商品**：block 內商品行 > 1 → 整個 block 跳過，在預覽區顯示黃色警告清單，小編手動通知客人重新補留
-5. **商品行格式**：`/^([A-Za-z]+\d+)([一-鿿]+)([A-Za-z]+)\+(\d+)$/`（代碼+中文顏色+英文尺寸+數量）
-6. **跨留言重複偵測**：同一人同代碼留了多次 → ⚠️ 標記，讓小編確認
-
-**直播前需建立直播活動與商品對應表：**
-- 每場直播前，後台新建「直播活動」並填入商品對照：
-  `代碼 + 顏色 + 尺寸 → VariantID + 直播特價`
+**直播前需建立關鍵字對照表：**
+- 每場直播前，後台建立「關鍵字 → 商品+顏色+尺寸」的對照表
+- 留言只接受完全符合關鍵字的，不做模糊比對
 - 此表存於新 table `S_LIV_KeywordList`
 
 ---
 
-#### FB User ID 對應官網帳號的問題 ✅ 已有解法
+#### FB User ID 對應官網帳號的問題（核心難題）
 
-**✅ 已確認：官網要加入 FB 登入 / 帳號綁定**
-> 1. 直接用 FB 帳號 Email 在官網註冊/登入（FB OAuth）
-> 2. 已有 Email 帳號的會員，可在會員中心「綁定 FB 帳號」
->
-> FB User ID 存入現有的 `C_MBR_MemberSocialList`（Platform=`facebook`, SocialUserID=FB_User_ID），與 LINE OAuth 完全相同的模式，**不需改 schema**。
+**問題根源：**
+FB User ID、LINE User ID、Email 是三個完全獨立的系統，沒有共同欄位，**無法自動對應**。
+其他直播商店做法是：第一次客人私訊姓名、電話、地址給 FB / LINE OA，但這份資料是非結構化的文字，系統無法自動解析並與官網帳號綁定。
 
-**這解決了什麼：**
-- 客人在官網用 FB 登入或綁定後，`C_MBR_MemberSocialList` 就有他的 FB User ID
-- Phase 2（FB API 自動化）捕捉到直播留言的 FB User ID，可直接查這張表找到官網會員
-- 不再需要靠電話當橋梁（雖然電話比對仍作為 fallback）
+**唯一能當橋梁的是「電話號碼」：**
+客人私訊的資料含電話，官網會員也有電話欄位（`C_MBR_MemberList.Phone`）。
+用電話做 key 是目前唯一可行的半自動比對方式。
 
-**兩階段解法（更新版）：**
+**兩階段解法：**
 
 **階段一：CSV 手動版（現在要做）**
-- 小編手動整理 CSV，沒有 FB User ID，主要靠電話比對：
+- FB User ID **完全不需要**，流程如下：
   ```
   客人留言 → 客人私訊姓名/電話/地址
     → 小編整理 CSV（含電話欄位）
@@ -306,15 +141,11 @@ Y77藍L+1
 
 **階段二：FB API 自動化（未來）**
 - 客人留言被 FB API 捕捉（含 FB User ID）
-- **優先查詢** `C_MBR_MemberSocialList` WHERE Platform='facebook' AND SocialUserID=`[FB User ID]`
-  - 找到 → 直接綁定到該官網會員，建單
-  - 找不到 → 查 `C_LIV_CustomerList` 有沒有舊紀錄（電話橋接）
-    - 有 → 用該紀錄建單
-    - 沒有（全新客人）→ Bot 自動私訊請客人留電話/地址
-      → 存入 `C_LIV_CustomerList`，再用電話嘗試比對官網會員
-
-**⚠️ 前置作業：需先完成 FB OAuth 功能（見 🟡 第 2 項）**
-FB API 自動化依賴 `C_MBR_MemberSocialList` 有 FB User ID 資料，因此官網的 FB 登入 / 綁定功能需要先上線，讓客人在直播前就綁好帳號。
+- 系統查 `C_LIV_CustomerList` 有沒有這個 FB User ID
+  - 有（舊客）→ 直接建單
+  - 沒有（新客）→ Bot 自動私訊請客人留資料
+    → 客人回覆（FB DM 的 sender 就是 FB User ID）
+    → 存入 `C_LIV_CustomerList`，用電話比對官網會員，能綁就綁
 
 **需要新增的 DB Table：**
 
@@ -368,24 +199,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 2. FB 帳號登入 / 綁定（FB OAuth）✅ 已完成（2026-05-20）
-
-**測試成功，目前使用開發模式 App「Aley's Wardrobe Test」運作。**
-
-**已完成的範圍：**
-- 登入頁「以 Facebook 繼續」按鈕（移至 Tab 上方，登入/註冊共用）
-- FB OAuth 回調（`/auth/callback`）自動 upsert 會員資料 + 擷取 `FbName`
-- `FbName` 存入 `C_MBR_MemberList.FbName`（供直播留言比對）
-- AccountView 顯示 LINE 綁定狀態
-
-**上線前需確認：**
-- 目前 FB App 為**開發模式**，只有 App 擁有者帳號可使用 FB 登入
-- 正式上線前需在 FB Developer 將 App 切換為 **Live 模式**（需通過 App Review）
-- 若直播自動化需要 `pages_read_engagement`，可用同一個 App 一起申請審核
-
----
-
-### 3. Google Analytics 整合
+### 2. Google Analytics 整合
 
 - 申請 GA4 屬性，取得 Measurement ID
 - 在 `.env` 加入 `VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX`（已預留欄位）
@@ -402,7 +216,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 4. 註冊確認信件優化
+### 3. 註冊確認信件優化
 
 現況：Supabase 預設寄件人為 `noreply@mail.supabase.io`，體驗不佳。
 
@@ -420,7 +234,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 5. 大戶會員標記（暫緩決策）
+### 4. 大戶會員標記（暫緩決策）
 
 **決策方向（已討論）：**
 - 優先選擇**方案 A（自動計算）**：不動 DB schema；在會員列表和訂單詳情頁根據累積消費金額顯示「大戶」badge；門檻值存 `S_SYS_Config`（key: `vip_threshold`）
@@ -433,78 +247,29 @@ CreatedDate     timestamptz
 
 ## 🟢 低優先（複雜度高 / 有外部依賴 / 暫緩）
 
-### 6. FB 直播即時留言自動化（直播當下）✅ 程式完成（2026-05-22）⚠️ 待測試
+### 5. FB 直播留言自動化
 
-> ⚠️ **重要區別**：此功能與「直播場次詳情 → Tab 2 留言匯入」是**完全不同的兩件事**
-> - **Tab 2 留言匯入**：直播「結束後」，小編手動複製 FB 貼文留言文字貼入後台，系統解析建單。**不需要 FB API，不需要 App Review，已完成。**
-> - **本功能（第 6 項）**：直播「進行中」，系統透過 FB Graph API 即時抓取直播留言，自動建單。**需要 FB API 和 App Review，尚未開發。**
-
-**適用時機：直播進行中，客人即時留言搶商品**
-
-直播當下客人在直播間留言搶商品，系統即時捕捉留言、確認庫存，得標後透過 LINE 通知客人並傳送付款連結。
-
-**確認的流程：**
-```
-直播進行中
-  → 客人留言關鍵字搶商品（例：A1藍L+1，瘋狂刷也只算一筆）
-  → FB API 即時捕捉留言（含 FB User ID）
-  → 系統查庫存 + 依 FIFO 分配
-      ├─ 搶到 → LINE OA 通知得標 + 傳付款連結
-      └─ 沒搶到 → 庫存不足，不通知（或通知已售完）
-```
-
-**去重規則：**
-同一個 FB User ID + 同一場直播 + 同一個商品代碼 → 不管留言幾次，只建一筆訂單，後面的忽略。
-
-**技術架構決策：**
-
-| 項目 | 決策 | 說明 |
-|------|------|------|
-| **讀取方式** | 輪詢（Polling）| 每 5~10 秒打一次 `GET /{live-video-id}/comments`，實作簡單，延遲可接受；Webhook 留未來升級 |
-| **取得直播 ID** | 自動抓取 | 用 Page Access Token 打 `GET /{page-id}/live_videos?status=LIVE`，取第一筆影片 ID |
-| **UI 位置** | 待確認 | 方案 A：在現有「直播場次詳情」頁加第三個 Tab「即時監控」；方案 B：獨立監控頁面 |
+讓客人直播留言「+1 商品 顏色 尺寸」後，系統自動建訂單、分配庫存、發結帳連結。
 
 **技術需求：**
-- FB App + `pages_read_engagement` 權限（需 App Review，約 5〜14 工作天）
-- `signInWithFacebook()` 需加入 `scopes: 'pages_read_engagement'`，讓登入後的 token 有此權限
-- Supabase session 的 `provider_token` 即為 FB user access token，可用來換 Page Access Token
-- ✅ 通知管道：LINE OA（不用 FB Messenger）
-- FB User ID ↔ 官網帳號對應：透過 `C_MBR_MemberList.FbName` 或未來的 `C_MBR_MemberSocialList`
-
-**已確認的設計：**
-- **同時多標**：多個商品可以同時開著（例如 Q80 沒賣完就開 H20，兩個都接單），各自獨立計算庫存與結標
-- **起標觸發**：監聽粉專（Page ID）發出含「起標線」的留言 → 解析入單關鍵字 + 樣式關鍵字 + 直購價 → 開始接單
-- **自動結標**：某商品所有顏色尺寸庫存全部歸零 → 系統自動以粉專身份發結標線 + 結標公告到 FB
-- **手動結標**：小編在後台按「截標」按鈕 → 系統代發結標線 + 結標公告（用於庫存未歸零但小編想提前結標的情況）
-- **防偽**：只有 `comment.from.id === Page ID` 的留言才觸發起標/結標邏輯，消費者無法偽造
-- **去重**：同一 FB User ID + 同場直播 + 同商品代碼，不管留幾次只建一筆訂單
-- **需申請權限**：`pages_read_engagement`（讀留言）+ `pages_manage_engagement`（代發結標線/結標公告），同一 App 一起送審
+- FB App + `pages_read_engagement`、`pages_messaging` 權限（需 App Review，約 5〜14 工作天）
+- 識別方式：用 FB User ID 當客人身份，不需事先綁定會員帳號（參考就醬播做法）
+- 結帳連結透過 FB Messenger 自動私訊
 
 **需使用者確認的問題：**
-> 全部已確認，無待確認項目。
 
-**已確認的 UX 決策：**
-- ✅ **沒搶到不通知**：結標公告貼到 FB 即可，得標者有 LINE 通知
-- ✅ **UI 不需獨立頁面**：在現有「直播場次詳情」頁加一個「直播中」Section，顯示目前開標商品、剩餘庫存、手動截標按鈕即可；小編直播當下主要看 FB，後台只需確認系統偵測正確 + 必要時手動截標
+> ❓ **Q1：願意等 FB App Review（5〜14 工作天）嗎？**
+> 建議先把功能 1（手動代建版）跑起來，FB 自動化在申請期間同步開發。
 
----
+> ❓ **Q2：通知管道**
+> 結帳連結要透過 FB Messenger 傳，還是透過 LINE OA 傳？
 
-### 7. 直播封鎖機制（TODO）
-
-**尚未開發，標記為未來待辦。**
-
-直播中被小編封鎖的顧客，下次直播留言時系統自動跳過（不建單）。
-
-**設計草案（未確認）：**
-- `C_MBR_MemberList` 新增 `IsLiveBlocked boolean`（或另建黑名單表）
-- `live-bid-poll` 建單前查黑名單，被封鎖的 FB User ID 直接跳過
-- `live-import`（貼文留言匯入版）同步過濾被封鎖的 FbName
-
-> **⏸ 暫緩**：等直播功能測試穩定後再評估是否需要此機制。
+> ❓ **Q3：直播後補單**
+> 直播結束後漏掉的留言，要 API 自動抓取，還是小編手動匯入 CSV？
 
 ---
 
-### 9. 分批出貨
+### 6. 分批出貨
 
 單筆訂單中部分商品先到貨、部分延後，需拆分出貨記錄與通知。
 
@@ -515,7 +280,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 10. 訂單取消流程
+### 7. 訂單取消流程
 
 目前系統沒有「取消訂單」功能，只有「退款」。
 
@@ -530,7 +295,7 @@ CreatedDate     timestamptz
 
 ---
 
-### 11. 訂單通知信
+### 8. 訂單通知信
 
 目前下單、付款成功、出貨，客人都**不會收到任何通知**。
 
@@ -542,3 +307,21 @@ CreatedDate     timestamptz
 
 ---
 
+### 9. 客戶錢包 / 儲值（暫緩，待會計確認）
+
+**⚠️ 實作前需請會計師確認「儲值不開發票、消費開發票」符合記帳需求。**
+
+**功能範圍：**
+- 會員錢包餘額，可抵消費
+- 儲值走藍新 MPG，消費發票改用藍新獨立電子發票 API 開立完整金額
+- 滿額贈贈點（與實付金額分開記錄）
+
+**DB 設計方向：**
+- `C_MBR_WalletList`：錢包餘額
+- `C_MBR_WalletTransactionList`：每筆異動 log（topup / bonus / consume / refund）
+- 餘額只能透過 edge function 異動（RLS 擋前端直接 UPDATE）
+
+**需使用者確認的問題：**
+
+> ❓ **Q1：會計師確認了嗎？**
+> 這是硬性前提，確認前不開發。

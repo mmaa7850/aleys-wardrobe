@@ -50,13 +50,6 @@ const refundLoading = ref(false);
 const refundError = ref("");
 const refundSuccess = ref(false);
 
-// ── 退款入錢包 ────────────────────────────────────────
-const walletRefundLoading = ref(false);
-const walletRefundError = ref("");
-const walletRefundSuccess = ref("");
-const walletRefundAmt = ref("");
-const showWalletRefundForm = ref(false);
-
 // ── 電子發票 ──────────────────────────────────────────
 const invoiceLoading = ref(false);
 const invoiceError = ref("");
@@ -187,11 +180,6 @@ const openDetail = async (id) => {
   saveError.value = "";
   refundSuccess.value = false;
   refundError.value = "";
-  walletRefundLoading.value = false;
-  walletRefundError.value = "";
-  walletRefundSuccess.value = "";
-  walletRefundAmt.value = "";
-  showWalletRefundForm.value = false;
   shipForm.value = { company: 'tcat', no: '' };
   shipError.value = '';
   shipSuccess.value = false;
@@ -348,67 +336,10 @@ const doRefund = async (manual = false) => {
   }
 };
 
-// ── 退款入錢包 ────────────────────────────────────────
-const canWalletRefund = computed(() => detailOrder.value?.PaymentStatus === 'paid');
-
-const fullRefundAmt = computed(() => {
-  if (!detailOrder.value) return 0;
-  return Math.max(0, (detailOrder.value.FinalAmount ?? 0) - (detailOrder.value.ShippingFee ?? 0));
-});
-
-const doWalletRefund = async (type) => {
-  if (!detailOrder.value) return;
-  const amt = type === 'full' ? fullRefundAmt.value : Number(walletRefundAmt.value);
-  const confirmMsg = type === 'full'
-    ? `確定全額退款 NT$${amt.toLocaleString()} 入會員錢包？\n（總額 ${detailOrder.value.FinalAmount?.toLocaleString()} 扣除運費 ${detailOrder.value.ShippingFee?.toLocaleString()}）\n訂單將標記為「已退款」。`
-    : `確定部分退款 NT$${Number(walletRefundAmt.value).toLocaleString()} 入會員錢包？`;
-  if (!window.confirm(confirmMsg)) return;
-
-  walletRefundLoading.value = true;
-  walletRefundError.value = "";
-  walletRefundSuccess.value = "";
-
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData?.session?.access_token;
-    const body = { orderNo: detailOrder.value.OrderNo, type, ...(type === 'partial' && { refundAmt: Number(walletRefundAmt.value) }) };
-
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wallet-refund`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(body),
-      }
-    );
-    const data = await res.json();
-    if (!res.ok || !data.success) throw new Error(data.error || '退款失敗');
-
-    if (type === 'full') {
-      detailOrder.value = { ...detailOrder.value, PaymentStatus: 'refunded' };
-      const idx = rows.value.findIndex(r => r.ID === detailOrder.value.ID);
-      if (idx !== -1) rows.value[idx].PaymentStatus = 'refunded';
-    }
-    walletRefundSuccess.value = `退款成功！NT$${data.refundAmt.toLocaleString()} 已入會員錢包（餘額：NT$${data.balanceAfter.toLocaleString()}）`;
-    showWalletRefundForm.value = false;
-    walletRefundAmt.value = "";
-  } catch (err) {
-    walletRefundError.value = err?.message ?? String(err);
-  } finally {
-    walletRefundLoading.value = false;
-  }
-};
-
 // ── Invoice actions ───────────────────────────────────
-// 全額錢包付款（NewebpayAmt=0, WalletDeductAmt>0）→ 不需開發票
-const isFullWalletOrder = computed(() =>
-  (detailOrder.value?.NewebpayAmt ?? 0) === 0 &&
-  (detailOrder.value?.WalletDeductAmt ?? 0) > 0
-);
 const canIssueInvoice = computed(() =>
   detailOrder.value?.PaymentStatus === 'paid' &&
-  (!detailOrder.value?.InvoiceStatus || detailOrder.value?.InvoiceStatus === 'none') &&
-  !isFullWalletOrder.value
+  (!detailOrder.value?.InvoiceStatus || detailOrder.value?.InvoiceStatus === 'none')
 );
 const canVoidInvoice = computed(() => detailOrder.value?.InvoiceStatus === 'issued');
 const canAllowance   = computed(() => detailOrder.value?.InvoiceStatus === 'issued');
@@ -721,14 +652,6 @@ onMounted(async () => {
                       <dt class="fw-semibold text-dark">{{ t("order.orders.labelFinalAmount") }}</dt>
                       <dd class="fw-bold text-primary">NT$ {{ detailOrder.FinalAmount?.toLocaleString() }}</dd>
 
-                      <!-- 錢包付款明細 -->
-                      <template v-if="(detailOrder.WalletDeductAmt ?? 0) > 0">
-                        <dt>錢包扣款</dt>
-                        <dd class="text-purple">－ NT$ {{ detailOrder.WalletDeductAmt?.toLocaleString() }}</dd>
-                        <dt class="fw-semibold">藍新付款</dt>
-                        <dd class="fw-semibold">NT$ {{ detailOrder.NewebpayAmt?.toLocaleString() }}</dd>
-                      </template>
-
                       <dt>{{ t("order.orders.labelPaymentFee") }}</dt>
                       <dd>{{ detailOrder.PaymentFee != null ? `NT$ ${detailOrder.PaymentFee.toLocaleString()}` : "-" }}</dd>
                     </dl>
@@ -814,55 +737,6 @@ onMounted(async () => {
                     </template>
                     <!-- 未付款或其他狀況 -->
                     <p v-else class="text-muted small mb-0">訂單付款後才可標記出貨</p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 退款入錢包 -->
-              <div v-if="canWalletRefund || walletRefundSuccess" class="col-12 col-md-6">
-                <div class="card h-100">
-                  <div class="card-header small fw-semibold">退款入錢包</div>
-                  <div class="card-body">
-                    <p class="text-muted small mb-3">
-                      退款金額將直接入會員錢包餘額，不走藍新退款流程。<br>
-                      全額退款 = 訂單金額 − 運費
-                    </p>
-
-                    <!-- 全額退款 -->
-                    <div v-if="canWalletRefund && !walletRefundSuccess" class="mb-2">
-                      <button class="btn btn-outline-danger btn-sm w-100" :disabled="walletRefundLoading"
-                        @click="doWalletRefund('full')">
-                        <span v-if="walletRefundLoading" class="spinner-border spinner-border-sm me-1"></span>
-                        全額退款入錢包（NT$ {{ fullRefundAmt.toLocaleString() }}）
-                      </button>
-                    </div>
-
-                    <!-- 部分退款 -->
-                    <div v-if="canWalletRefund && !walletRefundSuccess">
-                      <button class="btn btn-outline-warning btn-sm w-100 mb-2"
-                        @click="showWalletRefundForm = !showWalletRefundForm">
-                        部分退款入錢包
-                      </button>
-                      <div v-if="showWalletRefundForm" class="mt-2">
-                        <div class="mb-2">
-                          <label class="form-label small mb-1">退款金額（NT$）</label>
-                          <input v-model="walletRefundAmt" type="number" class="form-control form-control-sm"
-                            placeholder="輸入退款金額" min="1" :max="detailOrder.FinalAmount"
-                            :disabled="walletRefundLoading" />
-                        </div>
-                        <div class="d-flex gap-2">
-                          <button class="btn btn-warning btn-sm" :disabled="walletRefundLoading || !walletRefundAmt"
-                            @click="doWalletRefund('partial')">
-                            <span v-if="walletRefundLoading" class="spinner-border spinner-border-sm me-1"></span>
-                            確認部分退款
-                          </button>
-                          <button class="btn btn-outline-secondary btn-sm" @click="showWalletRefundForm = false">取消</button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div v-if="walletRefundSuccess" class="alert alert-success py-2 small mb-0">{{ walletRefundSuccess }}</div>
-                    <div v-if="walletRefundError" class="alert alert-danger py-2 small mb-0">{{ walletRefundError }}</div>
                   </div>
                 </div>
               </div>
@@ -1053,14 +927,7 @@ onMounted(async () => {
           </template>
 
           <!-- 發票按鈕 -->
-          <!-- 全額錢包付款：顯示說明，不顯示開立按鈕 -->
-          <template v-if="detailOrder && isFullWalletOrder &&
-            (!detailOrder.InvoiceStatus || detailOrder.InvoiceStatus === 'none')">
-            <span class="badge bg-secondary" style="font-size:12px;padding:6px 10px;font-weight:500;">
-              儲值時已開立，本筆無需開立
-            </span>
-          </template>
-          <template v-else-if="detailOrder && canIssueInvoice">
+          <template v-if="detailOrder && canIssueInvoice">
             <button type="button" class="btn btn-outline-success" :disabled="invoiceLoading"
               @click="doInvoiceAction('issue')">
               <span v-if="invoiceLoading" class="spinner-border spinner-border-sm me-1"></span>
@@ -1094,8 +961,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.text-purple { color: #7c3aed; }
-
 .info-dl {
   display: grid;
   grid-template-columns: auto 1fr;

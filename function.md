@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-05-24
+> 更新時間：2026-05-10（電子發票串接 — 待測試）
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -13,14 +13,14 @@
 |------|------|------|
 | 首頁 | `/` | Hero 區塊（左側文字 + 右側裝飾框）、跑馬燈 Ticker、**動態 Banner 橫幅**（`home-banner`，Ticker 下方全寬，多張輪播）、最新上架 8 件商品卡片、探索風格分類卡、品牌故事；管理員可見 FAB 快速進入後台 |
 | 商品列表 | `/products` | 分類篩選 + 關鍵字搜尋、商品卡片（圖片/影片、售價/原價劃線/SALE badge）、Hover 顯示「查看商品」 |
-| 商品詳情 | `/products/:id` | 圖片/影片 Gallery（主圖 + 縮圖列）、顏色→尺寸選擇（依庫存過濾）、**數量選擇器**（現貨上限卡庫存；預購上限 99）、商品描述/尺寸規格 Tab；**預購模式**：`IsPreOrder=true` 且所選 variant 庫存歸零時顯示預購 badge + 預計出貨日 + 說明，按鈕改「立即預購」，數量選擇器仍顯示；加入購物車、收藏按鈕 |
-| 購物車 | `/cart` | 品項列表（**現貨商品前顯示 🔒 鎖頭圖示**（已扣庫存，不可取消選取）；**預購商品前顯示勾選框**（可決定是否一起結帳）；圖、名稱、規格、**預購預計出貨日**、**數量 ±**（**僅預購品項可調整**，非預購品項兩顆按鈕均 disabled）、**刪除**（**僅預購品項顯示刪除按鈕**，現貨/直播入單/小編手動入單不顯示））；**已選取合計金額**；前往結帳按鈕（無勾選時 disabled）；`cart.initSelection()` 在載入後自動全選所有品項 |
-| 結帳 | `/checkout` | 僅結算購物車中**已勾選品項**（`cart.selectedItems`）；自動從會員資料填入姓名/電話；**配送方式**從 DB 動態載入，超商取貨（`cvscom`）/ 宅配到府（`home`）驅動不同表單欄位；**手動優惠碼**輸入驗證；**滿額自動折抵**（`IsAutoApply=true`，自動套用最高折扣，距下一門檻進度提示）；**錢包折抵**：「使用錢包折抵」選項（顯示餘額、折抵金額、實付金額）；全錢包支付不走藍新直接建立已付款訂單；**電子發票設定**（5 種：紙本 / 手機條碼 / 自然人憑證 / 捐贈愛心碼 / 公司戶統編，各有格式驗證，**驗證錯誤訊息顯示在該發票類型的輸入框下方**）；金額明細（小計+運費-折扣-錢包折抵）；送出後呼叫 `create-payment` Edge Function，自動 submit 藍新付款表單（或全錢包直接完成）；成功後僅移除已勾選品項 |
+| 商品詳情 | `/products/:id` | 圖片/影片 Gallery（主圖 + 縮圖列）、顏色→尺寸選擇（依庫存過濾）、數量選擇器（上限卡庫存）、商品描述/尺寸規格 Tab；**預購模式**：`IsPreOrder=true` 且庫存歸零時顯示預購 badge + 預計出貨日 + 說明，按鈕改「立即預購」；加入購物車、收藏按鈕 |
+| 購物車 | `/cart` | 品項列表（圖、名稱、規格、數量 ± 控制、刪除）、合計金額、前往結帳 |
+| 結帳 | `/checkout` | 自動從會員資料填入姓名/電話；**配送方式**從 DB 動態載入，超商取貨（`cvscom`）/ 宅配到府（`home`）驅動不同表單欄位；**手動優惠碼**輸入驗證；**滿額自動折抵**（`IsAutoApply=true`，自動套用最高折扣，距下一門檻進度提示）；金額明細（小計+運費-折扣）；送出後呼叫 `create-payment` Edge Function，自動 submit 藍新付款表單 |
 | 優惠券專區 | `/coupons` | 僅一般會員可見（管理員導首頁）；分兩區：**滿額自動折抵**（金色 badge、無需輸入）、**優惠碼**（顯示代碼 + 一鍵複製）；從 DB 動態載入有效期內且 `IsActive=true` 的優惠券 |
 | 結帳成功 | `/order-success/:orderNo` | 成功訊息、訂單編號、前往訂單詳情 / 繼續購物 |
 | 訂單紀錄 | `/orders` | 完整訂單列表（依建立時間倒序）；四色付款狀態 badge（待付款/已付款/付款失敗/已退款）；桌面版表格 header，行動版簡化雙列；空清單提示「去逛逛」 |
 | 訂單詳情 | `/orders/:orderNo` | 訂單狀態、付款狀態 badge、商品明細、收件人資訊、**宅配物流追蹤**：後台填入單號後顯示物流公司 + 單號 + 可點擊的查詢連結（黑貓、新竹、郵局）；ATM 繳費帳號（付款前）；**重新付款**按鈕（呼叫 `retry-payment`） |
-| 會員中心 | `/account` | 個人資料（姓名/電話/性別/生日）可編輯儲存、會員等級顯示、最近 3 筆訂單預覽（附「查看全部訂單」連結跳 `/orders`）、登出；**LINE 綁定狀態**：顯示「已綁定，直播訂單通知已開啟」（綠色 badge）或「加入好友綁定」按鈕（連到 LINE OA @563sjoch） |
+| 會員中心 | `/account` | 個人資料（姓名/電話/性別/生日）可編輯儲存、會員等級顯示、最近 3 筆訂單預覽（附「查看全部訂單」連結跳 `/orders`）、登出 |
 | 收藏清單 | `/wishlist` | 收藏商品格狀顯示、移除收藏 |
 | 尺寸指南 | `/size-guide` | S/M/L/XL 量法說明 + 各尺寸對照表（靜態） |
 | 退換貨政策 | `/returns` | 7 天鑑賞期、退換條件、4 步驟流程（靜態） |
@@ -28,14 +28,9 @@
 | 常見問題 | `/faq` | Accordion Q&A（靜態） |
 | 品牌故事 | `/brand-story` | 三段式品牌敘事（靜態） |
 | 聯絡我們 | `/contact` | 聯絡資訊 + 表單（靜態） |
-| 直播場次管理 | `/admin/live` | 直播場次列表（名稱/日期/狀態）；新增場次 Modal（名稱/日期/狀態/備注）；點場次進入詳情 |
-| 直播場次詳情 | `/admin/live/:id` | 場次資訊（可編輯）；Tab 1 **商品對照表**：新增/編輯/刪除（代碼/顏色/尺寸/直播特價，內建 Variant 搜尋 dropdown）；Tab 2 **留言匯入（直播結束後用）**：直播結束後小編手動複製 FB 貼文留言文字貼入→客戶端解析（①過濾雜訊＋`作者`回覆整塊跳過 ②分組成 block ③倒序處理舊留言優先扣庫存 ④一則留言含多筆商品→整個跳過並顯示黃色警告 ⑤跨留言重複→⚠️標記 ⑥**包色**：`AA包色M+1` 展開為所有顏色各 1 件）→預覽確認→呼叫 `live-import`→顯示建單結果（成功/庫存不足/找不到會員）+待手動通知名單 ⚠️ 待測試。**⚠️ 注意：此 Tab 是直播結束後的手動批次匯入，與直播進行中的 FB API 即時讀取留言是完全不同的功能（後者見 toAdd.md 🟢 第 6 項，尚未開發）** |
-| 待結清單 | `/admin/orders/pending` | 按會員彙整所有 PaymentStatus IN ('pending','payment_failed') 訂單；顯示 LINE 綁定狀態、筆數、未付金額合計、最新訂單時間；「LINE 提醒」按鈕一鍵推播催付通知（透過 `line-notify`）；頁面頂部顯示下次自動銷單時間（每週一 00:00 台灣）⚠️ 待測試 |
-| 錢包 | `/wallet` | 前台錢包頁面（需登入）；顯示目前餘額（深色漸層卡片）；快速選擇金額按鈕（100/300/500/1000/3000）或自訂金額；發票設定（5種：紙本/手機條碼/自然人憑證/捐贈愛心碼/公司戶）；前往藍新付款；**ATM 待轉帳區塊**：若有 PaymentStatus=pending AND PaymentMethod=atm 的儲值單，顯示銀行代碼、虛擬帳號（格式化）、繳費期限、儲值金額，關閉頁面後仍可找回；交易紀錄列表（類型/金額/前後餘額/時間）；付款成功後輪詢餘額直到入帳（最多20秒每2秒一次） |
-| 登入/註冊 | `/login` | 「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用，`#1877F2`）；Email 登入/註冊 Tab、忘記密碼；FB OAuth redirect 目標存 localStorage（防 LINE in-app browser 跨頁清空）；FB OAuth ✅ 測試成功（2026-05-20） |
+| 登入/註冊 | `/login` | Email 登入/註冊、LINE OAuth、忘記密碼 |
 | 重設密碼 | `/reset-password` | 密碼重設表單 |
-| LINE 綁定 | `/bind-line` | LINE 帳號綁定頁（無需登入即可訪問）；讀取 URL query `token`；未登入跳 `/login?redirect=/bind-line?token=xxx`（redirect 存 localStorage）；登入後呼叫 `line-bind` Edge Function；顯示 Loading / 成功（3秒倒數後跳 `/account`）/ 失敗 / 無token 四種狀態 |
-| OAuth 回調 | `/auth/callback` | OAuth 登入回調處理；FB 登入後擷取 `FbName` upsert 至 `C_MBR_MemberList`；讀取 localStorage 的 `oauth_redirect`，存在且以 `/bind-line` 開頭時跳回綁定頁 |
+| OAuth 回調 | `/auth/callback` | LINE 登入回調處理 |
 
 ---
 
@@ -56,19 +51,18 @@
 | 標籤設定 | `/admin/products/settags` | CanManageProducts | 管理商品標籤（`S_PRD_TagList`） |
 | 庫存總覽 | `/admin/inventory/overview` | CanManageProducts | 所有上架商品各 variant 庫存、低庫存（≤5）/售完警示、可直接修改數量並建立異動紀錄 |
 | 庫存紀錄 | `/admin/inventory/logs` | CanManageProducts | 庫存異動歷史（異動量、前後庫存、原因、時間） |
-| 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單；依訂單號/Email 搜尋、付款狀態/訂單狀態篩選；點開 Modal 分三 Tab：**訂單資訊**（可修改收件資訊、備注、訂單狀態）、**品項**、**狀態紀錄**；**宅配出貨**：填物流公司 + 單號 → 標記已出貨（更新 `HomeDeliveryNo`/`HomeDeliveryCompany`/`ShippingStatus`）；**退款**：信用卡訂單可發起退款（呼叫 `refund-payment`）；**退款入錢包** ⚠️ 待測試：已付款訂單可全額退款（FinalAmount − ShippingFee 入錢包，訂單標記已退款）或部分退款（指定金額入錢包），呼叫 `wallet-refund`；**⚠️ 待測試 — 電子發票**：已付款訂單可手動補開發票（呼叫 `issue-invoice`）、作廢發票、開立折讓；發票狀態 badge 顯示於訂單資訊卡；付款成功後 `payment-notify` 已自動開立發票，後台手動開立僅供補發/例外情況；**全錢包訂單**：顯示灰色「儲值時已開立，本筆無需開立」badge 替代開立發票按鈕；訂單詳情顯示錢包折抵/藍新實付金額分開 |
+| 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單；依訂單號/Email 搜尋、付款狀態/訂單狀態篩選；點開 Modal 分三 Tab：**訂單資訊**（可修改收件資訊、備注、訂單狀態）、**品項**、**狀態紀錄**；**宅配出貨**：填物流公司 + 單號 → 標記已出貨（更新 `HomeDeliveryNo`/`HomeDeliveryCompany`/`ShippingStatus`）；**退款**：信用卡訂單可發起退款（呼叫 `refund-payment`）；**⚠️ 待測試 — 電子發票**：已付款訂單可手動開立發票（呼叫 `issue-invoice`，B2C/含稅 5%/PrintFlag=Y）、作廢發票（全額退款用）、開立折讓（部分退款用）；發票狀態 badge 顯示於訂單資訊卡 |
 | 訂單狀態管理 | `/admin/orders/setstatus` | CanManageOrders | 管理訂單狀態選項（`S_ORD_StatusList`） |
 | 優惠券設定 | `/admin/marketing/setcoupons` | CanManageMarketing | 建立/管理優惠券（優惠碼、折扣金額、最低消費門檻、`IsAutoApply`、有效期、使用次數） |
 | Banner 設定 | `/admin/marketing/setbanners` | CanManageMarketing | 建立/管理 Banner（`S_MKT_BannerList`）；**圖片直接上傳** Supabase Storage（`banners` bucket）或貼外部 URL；**顯示位置**：`home-hero`（首頁 Hero 裝飾框內，建議 3:4）/ `home-banner`（Ticker 下方全寬，建議 16:5）；日期排程；列表快速開關顯示/隱藏；刪除同步移除 Storage 檔案 |
-| 會員列表 | `/admin/members` | CanManageMembers | 全部一般會員（排除管理員帳號）、搜尋（姓名/FB名稱/Email/電話）/等級篩選、可直接切換會員等級；**編輯 Modal**：點「編輯」按鈕可修改姓名、電話、FB名稱（`FbName`，供直播留言比對） |
+| 會員列表 | `/admin/members` | CanManageMembers | 全部一般會員（排除管理員帳號）、搜尋/等級篩選、可直接切換會員等級 |
 | 會員等級設定 | `/admin/members/levels` | CanManageMembers | 管理會員等級（`S_MBR_MemberLevelList`） |
-| **錢包管理** | `/admin/wallet` | CanManageMembers | 管理員錢包管理；搜尋並選擇會員；查看餘額與交易紀錄；手動調整餘額（需填備注） |
 | 付款方式設定 | `/admin/settings/setpaymethods` | CanManageSettings | 管理付款方式（`S_PAY_PayMethodList`） |
 | 配送方式設定 | `/admin/settings/setshippingmethods` | CanManageSettings | 管理配送方式（名稱、`MethodCode`、`Fee`、啟用）；`MethodCode` 決定結帳流程（`cvscom` / `home`） |
 | 系統設定分類 | `/admin/settings/setconfigcategories` | CanManageSettings | 管理設定分類（`S_SYS_ConfigCategoryList`） |
 | 系統設定 | `/admin/settings/setconfig` | CanManageSettings | 全站 Key-Value 參數（`S_SYS_Config`）；前台透過 `useSiteConfigStore` 讀取；已實作：`announcement`（公告欄）、`maintenance_mode`、`payment_disabled` |
 | 管理者帳號 | `/admin/settings/admin-users` | IsAdmin（超管）| 管理後台帳號與細項權限（`S_SYS_AdminUserList`）；僅超管可進入 |
-| **報表 — 銷售總覽** | `/admin/reports/sales` | 全部 | 今日/本週/本月/自訂區間切換；5 張 stat card（已付款營收、訂單數、客單價、退款金額、**估算藍新手續費**（信用卡 2.8%、ATM min(1%, NT$20)，全錢包付款不計）；低庫存警示卡片；每日已付款營收折線圖（Chart.js） |
+| **報表 — 銷售總覽** | `/admin/reports/sales` | 全部 | 今日/本週/本月/自訂區間切換；4 張 stat card（已付款營收、訂單數、客單價、退款金額）；低庫存警示卡片；每日已付款營收折線圖（Chart.js） |
 | **報表 — 商品排行** | `/admin/reports/products` | 全部 | 已付款訂單統計；依銷售金額或數量排序；時間區間可選（本週/本月/近3月/自訂）；前3名 🥇🥈🥉 |
 | **報表 — 優惠券效益** | `/admin/reports/coupons` | 全部 | 各券：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃；手動碼 vs 自動折抵分類顯示 |
 | **報表 — 訂單狀態分佈** | `/admin/reports/orders` | 全部 | 全部訂單甜甜圈圖（付款狀態4種：待付款/已付款/付款失敗/已退款）；佔比表格；點擊跳訂單列表 |
@@ -80,25 +74,15 @@
 
 | Function | JWT 驗證 | 說明 |
 |----------|----------|------|
-| `create-payment` | ✅ 需要 | 後端驗證手動優惠券（有效期/使用次數/`IsActive`/`MinOrderAmount`）；後端自動偵測滿額折抵（`IsAutoApply=true`，挑選符合門檻最高折扣一張）；計算 `FinalAmount = 小計 + 運費 − 手動折扣 − 自動折抵`；建立訂單（`C_ORD_OrderList` / `C_ORD_OrderItemList`）；**儲存客戶發票偏好**（`InvoiceCarrierType`/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName`）；扣除手動與自動優惠券 `UsageCount`；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；AES 加密藍新參數，回傳 Gateway URL；**錢包折抵**：接受 `walletDeductAmt` 參數；計算 `walletDeduct = min(walletBalance, finalAmount)`，`newebpayAmt = finalAmount - walletDeduct`；若 walletDeduct > 0 則先扣錢包（若後續失敗自動回補）；若 newebpayAmt = 0 → 全錢包支付，直接建立已付款訂單，return `{ walletOnly: true, orderNo }`，不走藍新；藍新付款金額改為 newebpayAmt；訂單新增 WalletDeductAmt / NewebpayAmt 欄位；**庫存檢查已移除**（改在購物車加入時扣除） |
-| `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態為 `paid`、儲存 CVSCOM 門市資訊（`StoreCode`/`LgsNo`）；**付款成功後自動開立 ezPay 電子發票**：`NewebpayAmt > 0` 時自動呼叫 ezPay（支援手機條碼/自然人憑證/捐贈/公司戶/紙本）；`NewebpayAmt = 0`（全錢包付款）跳過（儲值時已開立）；發票結果寫回 `C_ORD_OrderList` Invoice* 欄位 ⚠️ 待測試；**庫存扣除已移除**（改在購物車加入時扣除） |
+| `create-payment` | ✅ 需要 | 後端驗證手動優惠券（有效期/使用次數/`IsActive`/`MinOrderAmount`）；後端自動偵測滿額折抵（`IsAutoApply=true`，挑選符合門檻最高折扣一張）；計算 `FinalAmount = 小計 + 運費 − 手動折扣 − 自動折抵`；建立訂單（`C_ORD_OrderList` / `C_ORD_OrderItemList`）；扣除手動與自動優惠券 `UsageCount`；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；AES 加密藍新參數，回傳 Gateway URL |
+| `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新付款狀態為 `paid`、扣庫存、儲存 CVSCOM 門市資訊（`StoreCode`/`LgsNo`） |
 | `payment-return` | ❌ 關閉 | 藍新前台導回：儲存付款方式、ATM 帳號、CVSCOM 門市資訊，導向 `/order-success/:orderNo` |
 | `retry-payment` | ✅ 需要 | 對同一訂單重新產生藍新付款參數（訂單號加 `_R1/_R2` 後綴），不重建訂單 |
 | `refund-payment` | ✅ 需要 | 呼叫藍新 NPA-B032 退款 API；僅支援信用卡類付款（CREDIT、ApplePay、GooglePay 等） |
 | `logistics-notify` | ❌ 關閉 | 藍新物流 NPA-B58 webhook：接收貨態推播，更新 `ShippingStatus`/`ShippingStatusText` |
-| `issue-invoice` ⚠️ 待測試 | ✅ 需要 | ezPay 電子發票操作；支援三個 action：`issue`（開立，讀取訂單的發票偏好自動判斷：B2C/B2B Category、PrintFlag、CarrierType/CarrierNum、LoveCode、BuyerUBN；B2B 以未稅金額作為 ItemPrice，B2C 以含稅金額；商品費用+運費拆列）、`void`（作廢，填作廢原因「訂單退款」）、`allowance`（開立折讓，立即確認 Status=1）；AES-256-CBC 加密（block size 32，`node:crypto` 實作）；結果寫回 `C_ORD_OrderList` 的 Invoice* 欄位；環境變數：`EZPAY_MERCHANT_ID` / `EZPAY_HASH_KEY` / `EZPAY_HASH_IV` / `EZPAY_ENV`（test/prod）；**全錢包支付訂單**（NewebpayAmt=0 且 WalletDeductAmt>0）直接拒絕開立（儲值時已開過）；**混合付款訂單**發票金額為 NewebpayAmt（非 FinalAmount）；運費按比例分攤 |
+| `issue-invoice` ⚠️ 待測試 | ✅ 需要 | ezPay 電子發票操作；支援三個 action：`issue`（開立，B2C/含稅 5%/PrintFlag=Y，商品費用+運費拆列）、`void`（作廢，填作廢原因「訂單退款」）、`allowance`（開立折讓，立即確認 Status=1）；AES-256-CBC 加密（block size 32，`node:crypto` 實作）；結果寫回 `C_ORD_OrderList` 的 Invoice* 欄位；環境變數：`EZPAY_MERCHANT_ID` / `EZPAY_HASH_KEY` / `EZPAY_HASH_IV` / `EZPAY_ENV`（test/prod） |
 | `store-map` | ✅ 需要 | （舊流程殘留）產生超商地圖選店參數，現已不在結帳流程使用 |
 | `store-callback` | ❌ 關閉 | （舊流程殘留）接收門市選擇回呼，現已不在結帳流程使用 |
-| `wallet-topup` | ✅ 需要 | 前端呼叫建立儲值訂單；驗證金額（正整數）；生成 TopupNo（TU_YYYYMMDD_XXXXX）；寫入 C_MBR_WalletTopupList；建立藍新 MPG 付款參數（ReturnURL=wallet-topup-return, NotifyURL=wallet-topup-notify）；回傳加密付款參數 |
-| `wallet-topup-notify` | ❌ 關閉 | 藍新儲值 server-to-server webhook；驗簽解密；冪等檢查（已處理就跳過）；更新 PaymentStatus；入帳 C_MBR_WalletList（upsert）；寫入 C_MBR_WalletTxList；自動呼叫 ezPay 開立發票 |
-| `wallet-topup-return` | ❌ 關閉 | 藍新儲值付款後瀏覽器 redirect；解密結果；**ATM 取號成功（PaymentType=VACC）**：將 BankCode / CodeNo / ExpireDate 存入 `C_MBR_WalletTopupList`，導向 `/wallet?topup=atm_pending&topupNo=xxx`；其他付款（信用卡/LINE Pay）：導向 `/wallet?topup=success` 或 `/wallet?topup=fail` |
-| `wallet-adjust` | ✅ 需要 | 管理員手動調整錢包餘額；GET：取得餘額+交易紀錄；POST：驗證金額（非零整數）與備注、確認餘額不低於0、upsert C_MBR_WalletList、寫入 C_MBR_WalletTxList (TxType='adjust') |
-| `wallet-refund` | ✅ 需要 | 管理員將退款金額入會員錢包；POST `{ orderNo, type: 'full'|'partial', refundAmt? }`；管理員身份驗證（IsActive）；全額退款 = FinalAmount − ShippingFee；部分退款 = 指定金額；透過 CustomerEmail → MemberList 查 UserID；upsert C_MBR_WalletList；寫入 C_MBR_WalletTxList (TxType='refund', RelatedOrderNo, Note, CreatedBy)；全額退款更新 PaymentStatus → 'refunded'；部分退款追加 AdminNote 記錄 ⚠️ 待測試 |
-| `line-webhook` | ❌ 關閉（`--no-verify-jwt`） | LINE Messaging API Webhook；x-line-signature HMAC-SHA256 驗證；**Follow 事件**：生成 UUID Token → 存入 `LineBindToken` 表（7 天有效）→ LINE Push 傳送綁定連結（`${SITE_URL}/bind-line?token=xxx`）；**Unfollow 事件**：清除 `C_MBR_MemberList.LineUserID`；Secrets：`LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / `SITE_URL` / `DB_SCHEMA` |
-| `line-bind` | ✅ 需要 | 前台呼叫，完成 LINE 帳號綁定；驗證 JWT（取得 UserID）；驗證 token（存在、未過期、未使用）；upsert `LineUserID` 至 `C_MBR_MemberList`（by UserID，避免無記錄時 update 不生效）；標記 Token.UsedAt；Secrets：`DB_SCHEMA` |
-| `line-notify` | ✅ 需要 | 管理員呼叫；POST `{ lineUserId, message }`；驗證 IsActive 管理員身份；發 LINE Push API；供未來出貨通知等場景重用 |
-| `live-import` | ✅ 需要 | 直播留言批次建單；POST `{ sessionId, items: [{ livProductId, fbName, qty }] }`；管理員身份驗證；逐筆：查 `C_LIV_ProductList`→比對 `C_MBR_MemberList.FbName`→取預設地址（`C_MBR_MemberAddressList`）→`decrement_stock` RPC→建 `C_ORD_OrderList`（OrderSource='live', OrderNo=`LIV_YYYYMMDD_XXXXX`）+ `C_ORD_OrderItemList`→有 `LineUserID` 則 LINE Push 付款連結；回傳每筆 status（success/no_stock/no_member/error）|
-| `live-bid-poll` | ✅ 需要 | **直播進行中** FB 即時搶標；支援兩個 action：①`poll`（輪詢）：呼叫 FB Graph API 取新留言 → 偵測粉專「起標線」留言自動開標（寫 `C_LIV_ActiveBidList`）→ 消費者留言 FIFO 去重建單（`decrement_stock` → `C_ORD_OrderList` + `C_ORD_OrderItemList`）→ **包色支援**：留言含「包色」→ 展開為所有顏色各 1 件分別建單（內部 `createOrder` helper）→ 所有 variant 庫存歸零時自動呼叫 FB API 發結標線+結標公告 → LINE 通知得標者；②`manual_close`：管理員手動截標，發結標線+結標公告；去重機制：`C_LIV_ProcessedCommentList`（FbCommentId 防跨輪詢重複、FbUserId+DedupKey={code}\|{VariantID} 防同人同款重複下單）；需 FB App 權限 `pages_read_engagement`+`pages_manage_engagement` ⚠️ 待上線測試 |
 
 ---
 
@@ -106,11 +90,10 @@
 
 | Store | 說明 |
 |-------|------|
-| `auth.js` | 使用者 session、登入（Email / Facebook OAuth，`signInWithFacebook`，provider: "facebook"，redirectTo: `/auth/callback`）/登出/重設密碼；查 `S_SYS_AdminUserList` 取得 `isAdmin`/`isActive`/`permissions`（5 個 Can*）；getter `canEnterAdmin`（IsActive=true）、`canAccess(perm)`；FB OAuth redirect 目標由 `LoginView` 寫入 localStorage，`AuthCallbackView` 讀取 |
-| `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊；**品項預購判斷**：`IsPreOrder=true && variant.StockQty <= 0` 雙重條件；**庫存扣除時機**：`addItem` 時呼叫 `decrement_stock` RPC 原子性扣庫存（預購品不扣）；`updateQty` 增量時扣差量、減量時還差量；DB insert 失敗自動回補；**來源追蹤**：`addItem(productId, variantId, qty, {source, liveSessionId})` 選項，寫入 `Source`/`LiveSessionID`；**購物金支援**：`IsReward=true` 項目（無 ProductID/VariantID）；`addReward(amt)` 新增購物金項目（每車只允許一筆）；`_loadItems` 購物金項目顯示 `productName='購物金'`、`unitPrice=-RewardAmt`；**選取狀態**：state `selectedItemIds`；getter `selectedItems`/`selectedTotal`/`canCheckout`（selectedTotal > 0，防購物金導致負值結帳）；action `initSelection()`/`toggleSelection(id)` |
+| `auth.js` | 使用者 session、登入（Email / LINE OAuth）/登出/重設密碼；查 `S_SYS_AdminUserList` 取得 `isAdmin`/`isActive`/`permissions`（5 個 Can*）；getter `canEnterAdmin`（IsActive=true）、`canAccess(perm)` |
+| `cart.js` | 購物車以 DB 為主（`C_CART_CartList` / `C_CART_CartItemList`）；登入後自動建立會員記錄；加入/修改數量/刪除/清空；品項帶入商品圖片/顏色/尺寸資訊 |
 | `wishlist.js` | 收藏清單 toggle（`C_MBR_WishList`）；`has(id)` 判斷是否收藏 |
 | `siteConfig.js` | 從 `S_SYS_Config` 一次性載入所有 Key-Value 設定（`loaded` 守衛防重複請求）；getter：`get(key)`、`announcement`、`maintenanceMode`、`paymentDisabled`；`FrontendLayout` 掛載時呼叫 `load()` |
-| `wallet.js` | 錢包餘額（balance）與交易紀錄（transactions）；fetchBalance（查 C_MBR_WalletList）；fetchTransactions（查 C_MBR_WalletTxList，最近50筆）；topup（呼叫 wallet-topup Edge Function，回傳藍新付款參數）；reset() |
 
 ---
 
@@ -124,24 +107,12 @@
 - `S_PRD_ColorList` / `S_PRD_SizeList` / `S_PRD_CategoryList` / `S_PRD_TagList` — 系統選項
 
 ### 會員與購物
-- `C_MBR_MemberList` — 會員資料（`UserID`/`Email`/`Phone`/`Gender`/`Birthday`/`MemberLevelID`/`LineUserID`（LINE 帳號綁定）/`FbName`（FB 顯示名稱，直播留言比對用））
+- `C_MBR_MemberList` — 會員資料（`UserID`/`Email`/`Phone`/`Gender`/`Birthday`/`MemberLevelID`）
 - `C_MBR_WishList` — 收藏清單
 - `C_CART_CartList` / `C_CART_CartItemList` — 購物車
-- `C_MBR_WalletList` — 錢包主表（MemberID/Balance/CreatedDate/UpdatedDate）；RLS：僅本人可讀
-- `C_MBR_WalletTxList` — 交易流水帳（TxType: topup/order_deduct/refund/adjust；Amount 正=入負=扣；BalanceBefore/BalanceAfter；RelatedOrderNo/RelatedTopupNo；CreatedBy 管理員調整時填入）；RLS：僅本人可讀
-- `C_MBR_WalletTopupList` — 儲值訂單（TopupNo/MemberID/Amount/PaymentStatus/InvoiceStatus 及完整 Invoice* 欄位）；RLS：僅本人可讀
-
-### 直播
-- `C_LIV_SessionList` — 直播場次（`ID`/`Title`/`LiveDate`/`Status`: planned/active/closed/`Notes`）
-- `C_LIV_ProductList` — 直播商品對照表（`SessionID`/`Code`留言代碼/`ColorName`/`SizeName`/`VariantID`/`ProductName`快取/`LivePrice`）
-- `C_ORD_OrderList.OrderSource` — 新增欄位，`'web'`/`'live'`/`'admin'`
-- `C_ORD_OrderList.LiveSessionID` — 新增欄位，對應 `C_LIV_SessionList.ID`
-
-### LINE 綁定
-- `LineBindToken` — 一次性 LINE 綁定 Token（`Token` UUID PK / `LineUserID` / `CreatedAt` / `UsedAt` / `ExpiresAt` 7天）；`line-webhook` 於 Follow 事件寫入，`line-bind` 驗證並標記 UsedAt；RLS: 僅 service_role 可操作
 
 ### 訂單
-- `C_ORD_OrderList` — 訂單主檔（付款狀態、配送方式/運費/地址、`DiscountAmount`/`FinalAmount`、`HomeDeliveryNo`/`HomeDeliveryCompany`、`ShippingStatus`/`ShippingStatusText`、ATM 帳號、超商門市資訊；**⚠️ 待測試** — 電子發票欄位：`InvoiceStatus`/`InvoiceNo`/`InvoiceNumber`/`InvoiceRandomNum`/`InvoiceIssuedAt`/`InvoiceAllowanceNo`/`InvoiceAllowanceAmt`；**客戶發票偏好**：`InvoiceCarrierType`（null=紙本/`0`=手機條碼/`1`=自然人憑證/`2`=ezPay 載具/`D`=捐贈/`B2B`=公司戶）/`InvoiceCarrierNum`/`InvoiceLoveCode`/`InvoiceBuyerUBN`/`InvoiceBuyerName`；migration：`add_invoice_preference_fields.sql`；**錢包欄位**：`WalletDeductAmt`（integer，錢包折抵金額）/`NewebpayAmt`（integer，藍新實付金額，0=全錢包支付）；migration：`add_wallet_tables.sql`）
+- `C_ORD_OrderList` — 訂單主檔（付款狀態、配送方式/運費/地址、`DiscountAmount`/`FinalAmount`、`HomeDeliveryNo`/`HomeDeliveryCompany`、`ShippingStatus`/`ShippingStatusText`、ATM 帳號、超商門市資訊；**⚠️ 待測試** — 電子發票欄位：`InvoiceStatus`/`InvoiceNo`/`InvoiceNumber`/`InvoiceRandomNum`/`InvoiceIssuedAt`/`InvoiceAllowanceNo`/`InvoiceAllowanceAmt`）
 - `C_ORD_OrderItemList` — 訂單明細
 - `C_ORD_OrderLogList` — 訂單狀態異動紀錄
 
@@ -171,17 +142,6 @@
 | `product-pictures` | 商品圖片與影片（Public；管理員上傳/刪除） |
 | `banners` | 首頁 Banner 圖片（Public；管理員上傳/刪除） |
 
-## Edge Function JWT 例外設定（supabase/config.toml）
-
-以下 Edge Functions 設定 `verify_jwt = false`（接收第三方 webhook 或瀏覽器 redirect，無法帶 JWT）：
-- `payment-notify`
-- `payment-return`
-- `logistics-notify`
-- `store-callback`
-- `wallet-topup-notify`
-- `wallet-topup-return`
-- `line-webhook`（LINE 平台不傳 JWT，改以 x-line-signature HMAC-SHA256 驗簽）
-
 ---
 
 ## 第三方整合
@@ -192,8 +152,7 @@
 | 藍新物流 (NewebPay Logistics) | 7-11 C2C 超商取貨不付款；藍新自動建立物流單並回傳 `LgsNo`；NPA-B58 推播貨態 |
 | 藍新退款 NPA-B032 | 信用卡類訂單退款 API |
 | ezPay 電子發票加值服務 ⚠️ 待測試 | 開立/作廢/折讓電子發票；測試環境：`cinv.ezpay.com.tw`；正式環境：`inv.ezpay.com.tw`；API 文件整理於 `ezpay.md` |
-| Supabase Auth | Email 登入/註冊/重設密碼、Facebook OAuth ✅ 測試成功（2026-05-20，目前開發模式 App） |
-| LINE Messaging API | LINE OA Webhook（Follow/Unfollow 事件）；LINE Push API（發送綁定連結）；Channel ID: 2010141809；@563sjoch ✅ 測試成功（2026-05-20） |
+| Supabase Auth | Email 登入/註冊/重設密碼、LINE OAuth |
 | Supabase Storage | 商品圖片/影片、Banner 圖片存放 |
 | Chart.js | 後台報表圖表（折線圖、甜甜圈圖、柱狀圖）；僅後台報表頁使用，lazy load |
 | Google Analytics 4 | `src/lib/gtag.js`；`initGA()` 啟動時注入 gtag.js；追蹤 4 個事件：`view_item`（商品詳情）、`add_to_cart`（加入購物車）、`begin_checkout`（進入結帳）、`purchase`（付款成功，sessionStorage 防重複）；Measurement ID 存 `.env` `VITE_GA_MEASUREMENT_ID`；後台 `/admin/reports/analytics` 頁面顯示追蹤狀態 + Looker Studio 嵌入（`ga_looker_studio_url` 存 S_SYS_Config） |
