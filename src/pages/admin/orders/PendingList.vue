@@ -32,26 +32,35 @@ async function load() {
   loading.value = true
   errMsg.value  = ''
   try {
-    // 取所有 pending / payment_failed 訂單，附帶會員資料
-    const { data, error } = await db
+    // 1. 取所有 pending / payment_failed 訂單
+    const { data: orders, error: ordErr } = await db
       .from('C_ORD_OrderList')
-      .select(`
-        ID, MemberID, FinalAmount, PaymentStatus, CreatedDate,
-        C_MBR_MemberList ( ID, FbName, Email, LineUserID )
-      `)
+      .select('ID, MemberID, FinalAmount, PaymentStatus, CreatedDate')
       .in('PaymentStatus', ['pending', 'payment_failed'])
       .order('CreatedDate', { ascending: false })
 
-    if (error) throw error
+    if (ordErr) throw ordErr
+    if (!orders?.length) { rows.value = []; return }
 
-    // 依 MemberID 彙整
-    const memberMap = {}
-    for (const ord of (data ?? [])) {
-      const m = ord.C_MBR_MemberList
+    // 2. 取所有相關會員資料
+    const memberIds = [...new Set(orders.map(o => o.MemberID).filter(Boolean))]
+    const { data: members, error: mbrErr } = await db
+      .from('C_MBR_MemberList')
+      .select('ID, FbName, Email, LineUserID')
+      .in('ID', memberIds)
+
+    if (mbrErr) throw mbrErr
+
+    const memberMap = Object.fromEntries((members ?? []).map(m => [m.ID, m]))
+
+    // 3. 依 MemberID 彙整
+    const grouped = {}
+    for (const ord of orders) {
+      const m = memberMap[ord.MemberID]
       if (!m) continue
       const mid = m.ID
-      if (!memberMap[mid]) {
-        memberMap[mid] = {
+      if (!grouped[mid]) {
+        grouped[mid] = {
           memberId:    mid,
           fbName:      m.FbName || '',
           email:       m.Email || '',
@@ -62,14 +71,14 @@ async function load() {
           latestAt:    null,
         }
       }
-      memberMap[mid].orderCount  += 1
-      memberMap[mid].totalAmount += ord.FinalAmount ?? 0
-      if (!memberMap[mid].latestAt || ord.CreatedDate > memberMap[mid].latestAt) {
-        memberMap[mid].latestAt = ord.CreatedDate
+      grouped[mid].orderCount  += 1
+      grouped[mid].totalAmount += ord.FinalAmount ?? 0
+      if (!grouped[mid].latestAt || ord.CreatedDate > grouped[mid].latestAt) {
+        grouped[mid].latestAt = ord.CreatedDate
       }
     }
 
-    rows.value = Object.values(memberMap)
+    rows.value = Object.values(grouped)
       .sort((a, b) => (b.latestAt ?? '').localeCompare(a.latestAt ?? ''))
   } catch (e) {
     errMsg.value = e.message
