@@ -263,7 +263,7 @@ onMounted(async () => {
             </div>
             <div class="od-info-item">
               <span class="od-info-item__label">轉帳金額</span>
-              <span class="od-info-item__val od-info-item__val--strong">NT$ {{ order.FinalAmount?.toLocaleString() }}</span>
+              <span class="od-info-item__val od-info-item__val--strong">NT$ {{ (order.NewebpayAmt ?? order.FinalAmount)?.toLocaleString() }}</span>
             </div>
           </div>
         </section>
@@ -303,9 +303,21 @@ onMounted(async () => {
               <span>運費</span>
               <span class="od-summary__free">免運費</span>
             </div>
+            <div v-if="order.DiscountAmount > 0" class="od-summary__row od-summary__row--discount">
+              <span>優惠折抵</span>
+              <span>- NT$ {{ order.DiscountAmount?.toLocaleString() }}</span>
+            </div>
+            <div v-if="order.WalletDeductAmt > 0" class="od-summary__row od-summary__row--discount">
+              <span>購物金折抵</span>
+              <span>- NT$ {{ order.WalletDeductAmt?.toLocaleString() }}</span>
+            </div>
             <div class="od-summary__row od-summary__row--total">
               <span>訂單總計</span>
               <span>NT$ {{ order.FinalAmount?.toLocaleString() }}</span>
+            </div>
+            <div v-if="order.WalletDeductAmt > 0 && order.PaymentStatus !== 'paid'" class="od-summary__row od-summary__row--newebpay">
+              <span>尚需透過金流付款</span>
+              <span>NT$ {{ (order.NewebpayAmt ?? order.FinalAmount)?.toLocaleString() }}</span>
             </div>
           </div>
         </section>
@@ -567,6 +579,8 @@ onMounted(async () => {
 }
 
 .od-summary__free { color: #15803D; font-size: 12px; }
+.od-summary__row--discount { color: #15803D; }
+.od-summary__row--newebpay { color: #D97706; font-weight: 600; }
 
 .od-summary__row--total {
   font-size: 15px;

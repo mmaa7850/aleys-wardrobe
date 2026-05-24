@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     const { data: order } = await supabaseAdmin
       .schema(dbSchema)
       .from('C_ORD_OrderList')
-      .select('ID, FinalAmount, CustomerEmail, OrderNo')
+      .select('ID, FinalAmount, NewebpayAmt, WalletDeductAmt, CustomerEmail, OrderNo')
       .eq('OrderNo', orderNo)
       .eq('CustomerEmail', user.email)
       .neq('PaymentStatus', 'paid')
@@ -111,8 +111,12 @@ Deno.serve(async (req) => {
     const retrySeq = timeStamp % 10
     const merchantOrderNo = `${orderNo}_R${retrySeq}`
 
+    // NewebpayAmt is the amount already sent to Newebpay at order creation (FinalAmount minus wallet deduction).
+    // Retry must use the same figure — wallet was already deducted.
+    const retryAmt = order.NewebpayAmt ?? order.FinalAmount
+
     const params: Record<string, string | number> = {
-      Amt:             order.FinalAmount,
+      Amt:             retryAmt,
       ClientBackURL:   `${siteUrl}/orders/${orderNo}`,
       CREDIT:          1,
       Email:           order.CustomerEmail,
