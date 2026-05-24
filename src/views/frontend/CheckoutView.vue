@@ -27,7 +27,10 @@ const recipientPhone = ref('')
 const customerNote = ref('')
 
 const isSubmitting = ref(false)
-const errorMsg = ref('')
+const submitError  = ref('')   // 送出失敗的通用錯誤
+const nameError    = ref('')
+const phoneError   = ref('')
+const addressError = ref('')
 const invoiceError = ref('')
 
 // ── Invoice preference ────────────────────────────────
@@ -179,49 +182,44 @@ onMounted(async () => {
 })
 
 async function submitOrder() {
-  errorMsg.value = ''
+  submitError.value  = ''
+  nameError.value    = ''
+  phoneError.value   = ''
+  addressError.value = ''
   invoiceError.value = ''
 
+  let hasError = false
+
   if (!recipientName.value.trim()) {
-    errorMsg.value = '請填寫收件人姓名'
-    return
+    nameError.value = '請填寫收件人姓名'; hasError = true
   }
   if (!recipientPhone.value.trim()) {
-    errorMsg.value = '請填寫收件人電話'
-    return
-  }
-  if (!validatePhone(recipientPhone.value)) {
-    errorMsg.value = '電話格式錯誤，請只輸入數字和連字號'
-    return
+    phoneError.value = '請填寫收件人電話'; hasError = true
+  } else if (!validatePhone(recipientPhone.value)) {
+    phoneError.value = '電話格式錯誤，請只輸入數字和連字號'; hasError = true
   }
   if (isHome.value && !shippingAddress.value.trim()) {
-    errorMsg.value = '請填寫收件地址'
-    return
+    addressError.value = '請填寫收件地址'; hasError = true
   }
   if (!selectedMethod.value) {
-    errorMsg.value = '請選擇配送方式'
-    return
+    submitError.value = '請選擇配送方式'; hasError = true
   }
   if (invoiceCarrierType.value === '0' && !/^\/[A-Z0-9+\-.]{7}$/.test(invoiceCarrierNum.value)) {
-    invoiceError.value = '手機條碼格式錯誤，應為 /XXXXXXX（斜線開頭共 8 碼）'
-    return
+    invoiceError.value = '手機條碼格式錯誤，應為 /XXXXXXX（斜線開頭共 8 碼）'; hasError = true
   }
   if (invoiceCarrierType.value === '1' && !/^[A-Z]{2}\d{14}$/.test(invoiceCarrierNum.value)) {
-    invoiceError.value = '自然人憑證格式錯誤，應為 2 碼大寫英文 + 14 碼數字'
-    return
+    invoiceError.value = '自然人憑證格式錯誤，應為 2 碼大寫英文 + 14 碼數字'; hasError = true
   }
   if (invoiceCarrierType.value === 'D' && !/^\d{3,7}$/.test(invoiceLoveCode.value)) {
-    invoiceError.value = '捐贈碼格式錯誤，應為 3~7 碼數字'
-    return
+    invoiceError.value = '捐贈碼格式錯誤，應為 3~7 碼數字'; hasError = true
   }
   if (invoiceCarrierType.value === 'B2B' && !/^\d{8}$/.test(invoiceBuyerUBN.value)) {
-    invoiceError.value = '統一編號格式錯誤，應為 8 碼數字'
-    return
+    invoiceError.value = '統一編號格式錯誤，應為 8 碼數字'; hasError = true
   }
   if (invoiceCarrierType.value === 'B2B' && !invoiceBuyerName.value.trim()) {
-    invoiceError.value = '請填寫公司名稱'
-    return
+    invoiceError.value = '請填寫公司名稱'; hasError = true
   }
+  if (hasError) return
 
   isSubmitting.value = true
 
@@ -318,7 +316,7 @@ async function submitOrder() {
 
   } catch (err) {
     console.error('[checkout] submitOrder error:', err)
-    errorMsg.value = '訂單送出失敗，請稍後再試。'
+    submitError.value = '訂單送出失敗，請稍後再試。'
     isSubmitting.value = false
   }
 }
@@ -392,8 +390,11 @@ async function submitOrder() {
               v-model="recipientName"
               type="text"
               class="co-input"
+              :class="{ 'co-input--error': nameError }"
               placeholder="請輸入姓名"
+              @input="nameError = ''"
             />
+            <p v-if="nameError" class="co-field-error">{{ nameError }}</p>
           </div>
 
           <div class="co-field">
@@ -405,8 +406,11 @@ async function submitOrder() {
               v-model="recipientPhone"
               type="tel"
               class="co-input"
+              :class="{ 'co-input--error': phoneError }"
               placeholder="例：0912-345-678"
+              @input="phoneError = ''"
             />
+            <p v-if="phoneError" class="co-field-error">{{ phoneError }}</p>
           </div>
 
           <!-- Address: only for home delivery -->
@@ -417,8 +421,11 @@ async function submitOrder() {
               v-model="shippingAddress"
               type="text"
               class="co-input"
+              :class="{ 'co-input--error': addressError }"
               placeholder="例：台北市中山區中山北路一段100號5樓"
+              @input="addressError = ''"
             />
+            <p v-if="addressError" class="co-field-error">{{ addressError }}</p>
           </div>
 
           <div class="co-field co-field--full">
@@ -541,9 +548,9 @@ async function submitOrder() {
           <span v-else>送出後將進入藍新金流付款頁面，可選擇付款方式（信用卡、ATM 轉帳）並在該頁面選擇超商取貨門市。</span>
         </div>
 
-        <!-- Error message -->
-        <div v-if="errorMsg" class="co-error">
-          {{ errorMsg }}
+        <!-- 送出失敗通用錯誤 -->
+        <div v-if="submitError" class="co-error">
+          {{ submitError }}
         </div>
 
         <!-- Submit (mobile) -->
@@ -847,6 +854,14 @@ async function submitOrder() {
 }
 
 .co-required { color: #DC2626; }
+
+.co-input--error { border-color: #DC2626 !important; }
+
+.co-field-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #DC2626;
+}
 
 .co-input {
   height: 44px;
