@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-10（電子發票欄位 — 待測試）
+> 更新時間：2026-05-24
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -11,7 +11,7 @@
 |------|------|------|
 | `add_shipping_method_fields.sql` | 新增 ShippingMethod / HomeDelivery* 欄位 | ✅ 已執行 |
 | `add_trade_no.sql` | 新增 TradeNo 欄位（藍新退款用） | ✅ 已執行 |
-| `add_invoice_fields.sql` | 新增 Invoice* 7 個欄位（電子發票） | ⚠️ 待執行 |
+| `add_invoice_fields.sql` | Invoice* 欄位（ezPay）+ ATM 轉帳欄位（錢包儲值）+ 發票載具欄位（InvoiceCarrierType 等） | ✅ 已執行 |
 
 ---
 
@@ -137,6 +137,51 @@ WITH CHECK (
 | SocialEmail | text | YES | — |
 | CreatedDate | timestamptz | YES | now() |
 
+### C_MBR_WalletList
+| 欄位 | 型別 | Nullable | Default |
+|------|------|----------|---------|
+| ID | bigint | NO | — |
+| MemberID | bigint | NO | — |
+| Balance | bigint | NO | 0 |
+| CreatedDate | timestamptz | YES | now() |
+| UpdatedDate | timestamptz | YES | — |
+
+### C_MBR_WalletTopupList
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| TopupNo | varchar | NO | — | 儲值單號（TU_YYYYMMDD_XXXXX）|
+| MemberID | bigint | NO | — | |
+| Amount | bigint | NO | — | 儲值金額 |
+| PaymentStatus | varchar(20) | NO | 'pending' | `pending` / `paid` / `fail` |
+| PaymentMethod | varchar(20) | YES | — | `credit` / `atm` 等 |
+| ATMBankCode | varchar(10) | YES | — | ATM 虛擬帳號銀行代碼 |
+| ATMAccount | varchar(20) | YES | — | ATM 虛擬帳號 |
+| ATMExpireDate | date | YES | — | ATM 繳費期限 |
+| InvoiceStatus | varchar(20) | NO | 'none' | `none` / `issued` / `voided` |
+| InvoiceCarrierType | varchar(10) | YES | — | 同訂單 InvoiceCarrierType |
+| InvoiceCarrierNum | varchar(30) | YES | — | |
+| InvoiceLoveCode | varchar(10) | YES | — | |
+| InvoiceBuyerUBN | varchar(8) | YES | — | |
+| InvoiceNo | varchar(20) | YES | — | ezPay 發票序號 |
+| InvoiceNumber | varchar(10) | YES | — | 實際發票號碼 |
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | — | |
+
+### C_MBR_WalletTxList
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| MemberID | bigint | NO | — | |
+| TxType | varchar(20) | NO | — | `topup` / `order_deduct` / `refund` / `adjust` |
+| Amount | bigint | NO | — | 異動金額（正=入帳，負=支出）|
+| BalanceBefore | bigint | NO | — | |
+| BalanceAfter | bigint | NO | — | |
+| RelatedTopupNo | varchar | YES | — | 對應儲值單號 |
+| RelatedOrderNo | varchar | YES | — | 對應訂單號 |
+| Note | text | YES | — | |
+| CreatedDate | timestamptz | YES | now() | |
+
 ### C_MBR_WishList
 | 欄位 | 型別 | Nullable | Default |
 |------|------|----------|---------|
@@ -183,6 +228,8 @@ WITH CHECK (
 | PaidAt | timestamptz | YES | — |
 | ATMBankCode | varchar(10) | YES | — |
 | ATMAccount | varchar(20) | YES | — |
+| WalletDeductAmt | bigint | NO | 0 | 本次從錢包扣款金額 |
+| NewebpayAmt | bigint | NO | 0 | 實際送藍新收款金額（= FinalAmount − WalletDeductAmt）|
 | CouponID | bigint | YES | — |
 | HomeDeliveryNo | varchar(50) | YES | — |
 | HomeDeliveryCompany | varchar(20) | YES | — |
@@ -199,13 +246,18 @@ WITH CHECK (
 | ShippingStatusText | varchar(50) | YES | — |
 | CreatedDate | timestamptz | NO | now() |
 | UpdatedDate | timestamptz | YES | — |
-| InvoiceStatus ⚠️ 待測試 | varchar(20) | NO | 'none' | `none` / `issued` / `voided` / `allowance` |
-| InvoiceNo ⚠️ 待測試 | varchar(20) | YES | — | ezPay 發票開立序號（InvoiceTransNo） |
-| InvoiceNumber ⚠️ 待測試 | varchar(10) | YES | — | 實際發票號碼（如 AB12345678） |
-| InvoiceRandomNum ⚠️ 待測試 | varchar(4) | YES | — | 4 碼防偽隨機碼 |
-| InvoiceIssuedAt ⚠️ 待測試 | timestamptz | YES | — | 發票開立時間 |
-| InvoiceAllowanceNo ⚠️ 待測試 | varchar(25) | YES | — | 折讓號 |
-| InvoiceAllowanceAmt ⚠️ 待測試 | integer | YES | — | 折讓金額（NT$） |
+| InvoiceStatus | varchar(20) | NO | 'none' | `none` / `issued` / `voided` / `allowance` |
+| InvoiceNo | varchar(20) | YES | — | ezPay 發票開立序號（InvoiceTransNo） |
+| InvoiceNumber | varchar(10) | YES | — | 實際發票號碼（如 AB12345678） |
+| InvoiceRandomNum | varchar(4) | YES | — | 4 碼防偽隨機碼 |
+| InvoiceIssuedAt | timestamptz | YES | — | 發票開立時間 |
+| InvoiceAllowanceNo | varchar(25) | YES | — | 折讓號 |
+| InvoiceAllowanceAmt | integer | YES | — | 折讓金額（NT$） |
+| InvoiceCarrierType | varchar(10) | YES | — | 結帳時選擇的載具類型：`''`=紙本 / `0`=手機條碼 / `1`=自然人憑證 / `D`=捐贈 / `B2B`=公司戶 |
+| InvoiceCarrierNum | varchar(30) | YES | — | 手機條碼 or 自然人憑證號碼 |
+| InvoiceLoveCode | varchar(10) | YES | — | 捐贈碼 |
+| InvoiceBuyerUBN | varchar(8) | YES | — | 公司戶統一編號 |
+| InvoiceBuyerName | varchar(100) | YES | — | 公司戶名稱 |
 
 ### C_ORD_OrderStatusLog
 | 欄位 | 型別 | Nullable | Default |
