@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-05-09（訂單紀錄獨立頁 / LINE OA 浮動按鈕 / GA4 追蹤基礎建設）
+> 更新時間：2026-05-10（電子發票串接 — 待測試）
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -51,7 +51,7 @@
 | 標籤設定 | `/admin/products/settags` | CanManageProducts | 管理商品標籤（`S_PRD_TagList`） |
 | 庫存總覽 | `/admin/inventory/overview` | CanManageProducts | 所有上架商品各 variant 庫存、低庫存（≤5）/售完警示、可直接修改數量並建立異動紀錄 |
 | 庫存紀錄 | `/admin/inventory/logs` | CanManageProducts | 庫存異動歷史（異動量、前後庫存、原因、時間） |
-| 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單；依訂單號/Email 搜尋、付款狀態/訂單狀態篩選；點開 Modal 分三 Tab：**訂單資訊**（可修改收件資訊、備注、訂單狀態）、**品項**、**狀態紀錄**；**宅配出貨**：填物流公司 + 單號 → 標記已出貨（更新 `HomeDeliveryNo`/`HomeDeliveryCompany`/`ShippingStatus`）；**退款**：信用卡訂單可發起退款（呼叫 `refund-payment`） |
+| 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單；依訂單號/Email 搜尋、付款狀態/訂單狀態篩選；點開 Modal 分三 Tab：**訂單資訊**（可修改收件資訊、備注、訂單狀態）、**品項**、**狀態紀錄**；**宅配出貨**：填物流公司 + 單號 → 標記已出貨（更新 `HomeDeliveryNo`/`HomeDeliveryCompany`/`ShippingStatus`）；**退款**：信用卡訂單可發起退款（呼叫 `refund-payment`）；**⚠️ 待測試 — 電子發票**：已付款訂單可手動開立發票（呼叫 `issue-invoice`，B2C/含稅 5%/PrintFlag=Y）、作廢發票（全額退款用）、開立折讓（部分退款用）；發票狀態 badge 顯示於訂單資訊卡 |
 | 訂單狀態管理 | `/admin/orders/setstatus` | CanManageOrders | 管理訂單狀態選項（`S_ORD_StatusList`） |
 | 優惠券設定 | `/admin/marketing/setcoupons` | CanManageMarketing | 建立/管理優惠券（優惠碼、折扣金額、最低消費門檻、`IsAutoApply`、有效期、使用次數） |
 | Banner 設定 | `/admin/marketing/setbanners` | CanManageMarketing | 建立/管理 Banner（`S_MKT_BannerList`）；**圖片直接上傳** Supabase Storage（`banners` bucket）或貼外部 URL；**顯示位置**：`home-hero`（首頁 Hero 裝飾框內，建議 3:4）/ `home-banner`（Ticker 下方全寬，建議 16:5）；日期排程；列表快速開關顯示/隱藏；刪除同步移除 Storage 檔案 |
@@ -80,6 +80,7 @@
 | `retry-payment` | ✅ 需要 | 對同一訂單重新產生藍新付款參數（訂單號加 `_R1/_R2` 後綴），不重建訂單 |
 | `refund-payment` | ✅ 需要 | 呼叫藍新 NPA-B032 退款 API；僅支援信用卡類付款（CREDIT、ApplePay、GooglePay 等） |
 | `logistics-notify` | ❌ 關閉 | 藍新物流 NPA-B58 webhook：接收貨態推播，更新 `ShippingStatus`/`ShippingStatusText` |
+| `issue-invoice` ⚠️ 待測試 | ✅ 需要 | ezPay 電子發票操作；支援三個 action：`issue`（開立，B2C/含稅 5%/PrintFlag=Y，商品費用+運費拆列）、`void`（作廢，填作廢原因「訂單退款」）、`allowance`（開立折讓，立即確認 Status=1）；AES-256-CBC 加密（block size 32，`node:crypto` 實作）；結果寫回 `C_ORD_OrderList` 的 Invoice* 欄位；環境變數：`EZPAY_MERCHANT_ID` / `EZPAY_HASH_KEY` / `EZPAY_HASH_IV` / `EZPAY_ENV`（test/prod） |
 | `store-map` | ✅ 需要 | （舊流程殘留）產生超商地圖選店參數，現已不在結帳流程使用 |
 | `store-callback` | ❌ 關閉 | （舊流程殘留）接收門市選擇回呼，現已不在結帳流程使用 |
 
@@ -111,7 +112,7 @@
 - `C_CART_CartList` / `C_CART_CartItemList` — 購物車
 
 ### 訂單
-- `C_ORD_OrderList` — 訂單主檔（付款狀態、配送方式/運費/地址、`DiscountAmount`/`FinalAmount`、`HomeDeliveryNo`/`HomeDeliveryCompany`、`ShippingStatus`/`ShippingStatusText`、ATM 帳號、超商門市資訊）
+- `C_ORD_OrderList` — 訂單主檔（付款狀態、配送方式/運費/地址、`DiscountAmount`/`FinalAmount`、`HomeDeliveryNo`/`HomeDeliveryCompany`、`ShippingStatus`/`ShippingStatusText`、ATM 帳號、超商門市資訊；**⚠️ 待測試** — 電子發票欄位：`InvoiceStatus`/`InvoiceNo`/`InvoiceNumber`/`InvoiceRandomNum`/`InvoiceIssuedAt`/`InvoiceAllowanceNo`/`InvoiceAllowanceAmt`）
 - `C_ORD_OrderItemList` — 訂單明細
 - `C_ORD_OrderLogList` — 訂單狀態異動紀錄
 
@@ -150,6 +151,7 @@
 | 藍新金流 (NewebPay) MPG | 信用卡、ATM 轉帳付款；`CVSCOM=1` 讓藍新 MPG 頁面處理超商門市選擇 |
 | 藍新物流 (NewebPay Logistics) | 7-11 C2C 超商取貨不付款；藍新自動建立物流單並回傳 `LgsNo`；NPA-B58 推播貨態 |
 | 藍新退款 NPA-B032 | 信用卡類訂單退款 API |
+| ezPay 電子發票加值服務 ⚠️ 待測試 | 開立/作廢/折讓電子發票；測試環境：`cinv.ezpay.com.tw`；正式環境：`inv.ezpay.com.tw`；API 文件整理於 `ezpay.md` |
 | Supabase Auth | Email 登入/註冊/重設密碼、LINE OAuth |
 | Supabase Storage | 商品圖片/影片、Banner 圖片存放 |
 | Chart.js | 後台報表圖表（折線圖、甜甜圈圖、柱狀圖）；僅後台報表頁使用，lazy load |
