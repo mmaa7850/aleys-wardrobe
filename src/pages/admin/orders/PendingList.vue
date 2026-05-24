@@ -35,46 +35,47 @@ async function load() {
     // 1. 取所有 pending / payment_failed 訂單
     const { data: orders, error: ordErr } = await db
       .from('C_ORD_OrderList')
-      .select('ID, MemberID, FinalAmount, PaymentStatus, CreatedDate')
+      .select('ID, CustomerEmail, CustomerName, FinalAmount, PaymentStatus, CreatedDate')
       .in('PaymentStatus', ['pending', 'payment_failed'])
       .order('CreatedDate', { ascending: false })
 
     if (ordErr) throw ordErr
     if (!orders?.length) { rows.value = []; return }
 
-    // 2. 取所有相關會員資料
-    const memberIds = [...new Set(orders.map(o => o.MemberID).filter(Boolean))]
+    // 2. 取所有相關會員資料（by CustomerEmail）
+    const emails = [...new Set(orders.map(o => o.CustomerEmail).filter(Boolean))]
     const { data: members, error: mbrErr } = await db
       .from('C_MBR_MemberList')
       .select('ID, FbName, Email, LineUserID')
-      .in('ID', memberIds)
+      .in('Email', emails)
 
     if (mbrErr) throw mbrErr
 
-    const memberMap = Object.fromEntries((members ?? []).map(m => [m.ID, m]))
+    const memberMap = Object.fromEntries((members ?? []).map(m => [m.Email, m]))
 
-    // 3. 依 MemberID 彙整
+    // 3. 依 CustomerEmail 彙整
     const grouped = {}
     for (const ord of orders) {
-      const m = memberMap[ord.MemberID]
-      if (!m) continue
-      const mid = m.ID
-      if (!grouped[mid]) {
-        grouped[mid] = {
-          memberId:    mid,
-          fbName:      m.FbName || '',
-          email:       m.Email || '',
-          lineUserId:  m.LineUserID || null,
-          hasLine:     !!m.LineUserID,
+      const email = ord.CustomerEmail
+      if (!email) continue
+      const m = memberMap[email]
+      const key = email
+      if (!grouped[key]) {
+        grouped[key] = {
+          memberId:    m?.ID ?? null,
+          fbName:      m?.FbName || ord.CustomerName || '',
+          email:       email,
+          lineUserId:  m?.LineUserID || null,
+          hasLine:     !!m?.LineUserID,
           orderCount:  0,
           totalAmount: 0,
           latestAt:    null,
         }
       }
-      grouped[mid].orderCount  += 1
-      grouped[mid].totalAmount += ord.FinalAmount ?? 0
-      if (!grouped[mid].latestAt || ord.CreatedDate > grouped[mid].latestAt) {
-        grouped[mid].latestAt = ord.CreatedDate
+      grouped[key].orderCount  += 1
+      grouped[key].totalAmount += ord.FinalAmount ?? 0
+      if (!grouped[key].latestAt || ord.CreatedDate > grouped[key].latestAt) {
+        grouped[key].latestAt = ord.CreatedDate
       }
     }
 
