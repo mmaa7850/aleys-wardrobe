@@ -49,6 +49,8 @@ onMounted(async () => {
       <!-- Items list -->
       <div class="cart-items">
         <div class="cart-items__header">
+          <span></span>
+          <span></span>
           <span>商品</span>
           <span class="d-hide-sm">單價</span>
           <span>數量</span>
