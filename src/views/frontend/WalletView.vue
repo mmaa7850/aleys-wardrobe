@@ -9,11 +9,14 @@ const route  = useRoute()
 const wallet = useWalletStore()
 const auth   = useAuthStore()
 
-const topupResult     = ref(null)   // 'success' | 'fail' | null
+const topupResult     = ref(null)   // 'success' | 'atm_pending' | 'fail' | null
 const showTopupForm   = ref(false)
 const topupAmount     = ref('')
 const topupSubmitting = ref(false)
 const topupError      = ref('')
+
+// ATM 待轉帳的儲值單（從 DB 查詢，讓用戶關掉頁面後仍可找回）
+const pendingAtmTopups = ref([])
 
 const invoiceCarrierType = ref('')
 const invoiceCarrierNum  = ref('')
@@ -23,10 +26,42 @@ const invoiceBuyerUBN    = ref('')
 const payForm   = ref(null)
 const payParams = ref(null)
 
+async function fetchPendingAtmTopups(specificTopupNo = null) {
+  if (!auth.user?.id) return
+  let query = db
+    .from('C_MBR_WalletTopupList')
+    .select('TopupNo, Amount, ATMBankCode, ATMAccount, ATMExpireDate, CreatedDate, PaymentMethod')
+    .eq('PaymentStatus', 'pending')
+
+  if (specificTopupNo) {
+    query = query.eq('TopupNo', specificTopupNo)
+  } else {
+    query = query.eq('MemberID', auth.user.id).eq('PaymentMethod', 'atm')
+  }
+
+  const { data, error } = await query.order('CreatedDate', { ascending: false })
+  if (error) { console.error('[fetchPendingAtmTopups]', error.message); return }
+  // 只顯示有取到 ATM 帳號的筆數
+  pendingAtmTopups.value = (data ?? []).filter(t => t.ATMBankCode || t.ATMAccount)
+}
+
+function fmtAtmAccount(acct) {
+  if (!acct) return '—'
+  return acct.replace(/(.{4})/g, '$1 ').trim()
+}
+
+function fmtExpireDate(iso) {
+  if (!iso) return '—'
+  return new Date(iso + 'T00:00:00+08:00').toLocaleDateString('zh-TW', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  })
+}
+
 onMounted(async () => {
   if (!auth.isLoggedIn) return
 
-  await Promise.all([wallet.fetchBalance(), wallet.fetchTransactions()])
+  const urlTopupNo = route.query.topupNo || null
+  await Promise.all([wallet.fetchBalance(), wallet.fetchTransactions(), fetchPendingAtmTopups(urlTopupNo)])
 
   if (route.query.topup === 'success') {
     topupResult.value = 'success'
@@ -39,11 +74,12 @@ onMounted(async () => {
       if (wallet.balance !== balanceBefore || attempts >= 10) {
         clearInterval(poll)
         if (wallet.balance !== balanceBefore) {
-          // 餘額已更新，也順便刷新交易紀錄
           wallet.fetchTransactions()
         }
       }
     }, 2000)
+  } else if (route.query.topup === 'atm_pending') {
+    topupResult.value = 'atm_pending'
   } else if (route.query.topup === 'fail') {
     topupResult.value = 'fail'
   }
@@ -113,6 +149,10 @@ async function submitTopup() {
     <div v-if="topupResult === 'success'" class="wv-toast wv-toast--ok">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
       儲值成功！餘額將於幾秒內更新。
+    </div>
+    <div v-if="topupResult === 'atm_pending'" class="wv-toast wv-toast--atm">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      ATM 虛擬帳號已取得，請在期限內完成轉帳，轉帳完成後餘額將自動入帳。
     </div>
     <div v-if="topupResult === 'fail'" class="wv-toast wv-toast--err">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -214,6 +254,35 @@ async function submitTopup() {
 
       <!-- Right: transactions -->
       <section class="wv-main">
+
+        <!-- Pending ATM topups -->
+        <div v-if="pendingAtmTopups.length > 0" class="wv-atm-section">
+          <h2 class="wv-section-title">待轉帳 ATM 儲值</h2>
+          <div v-for="t in pendingAtmTopups" :key="t.TopupNo" class="wv-atm-card">
+            <div class="wv-atm-card__badge">等待轉帳</div>
+            <div class="wv-atm-card__amount">NT$ {{ Number(t.Amount).toLocaleString() }}</div>
+            <div class="wv-atm-card__rows">
+              <div class="wv-atm-card__row">
+                <span class="wv-atm-card__label">銀行代碼</span>
+                <span class="wv-atm-card__val">{{ t.ATMBankCode || '—' }}</span>
+              </div>
+              <div class="wv-atm-card__row">
+                <span class="wv-atm-card__label">虛擬帳號</span>
+                <span class="wv-atm-card__val wv-atm-card__val--acct">{{ fmtAtmAccount(t.ATMAccount) }}</span>
+              </div>
+              <div class="wv-atm-card__row">
+                <span class="wv-atm-card__label">繳費期限</span>
+                <span class="wv-atm-card__val">{{ fmtExpireDate(t.ATMExpireDate) }}</span>
+              </div>
+              <div class="wv-atm-card__row">
+                <span class="wv-atm-card__label">儲值單號</span>
+                <span class="wv-atm-card__val wv-atm-card__val--no">{{ t.TopupNo }}</span>
+              </div>
+            </div>
+            <p class="wv-atm-card__note">轉帳完成後餘額將自動入帳，無需重新操作。</p>
+          </div>
+        </div>
+
         <h2 class="wv-section-title">交易紀錄</h2>
 
         <div v-if="wallet.loading" class="wv-empty">
@@ -300,8 +369,9 @@ async function submitTopup() {
   font-size: 14px;
   margin-bottom: 24px;
 }
-.wv-toast--ok  { background: rgba(34,197,94,.1); border: 1px solid rgba(34,197,94,.25); color: #15803d; }
-.wv-toast--err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.2); color: #b91c1c; }
+.wv-toast--ok  { background: rgba(34,197,94,.1);  border: 1px solid rgba(34,197,94,.25); color: #15803d; }
+.wv-toast--atm { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.3); color: #b45309; }
+.wv-toast--err { background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.2);  color: #b91c1c; }
 
 /* ── Body: aside + main ──────────────────────────────── */
 .wv-body {
@@ -490,6 +560,81 @@ async function submitTopup() {
 }
 .wv-submit-btn:hover:not(:disabled) { opacity: .82; }
 .wv-submit-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── Pending ATM topup cards ─────────────────────────── */
+.wv-atm-section { display: flex; flex-direction: column; gap: 12px; }
+
+.wv-atm-card {
+  background: #fffbf0;
+  border: 1.5px solid rgba(245,158,11,.35);
+  border-radius: 16px;
+  padding: 20px 22px;
+  position: relative;
+  box-shadow: 0 2px 12px rgba(245,158,11,.08);
+}
+.wv-atm-card__badge {
+  display: inline-block;
+  background: rgba(245,158,11,.15);
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(245,158,11,.25);
+  margin-bottom: 10px;
+}
+.wv-atm-card__amount {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 30px;
+  font-weight: 600;
+  color: var(--fe-text, #1f2937);
+  line-height: 1;
+  margin-bottom: 16px;
+  letter-spacing: -0.5px;
+}
+.wv-atm-card__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.wv-atm-card__row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.wv-atm-card__label {
+  font-size: 11px;
+  color: rgba(31,41,55,.45);
+  font-weight: 500;
+  width: 62px;
+  flex-shrink: 0;
+}
+.wv-atm-card__val {
+  font-size: 14px;
+  color: var(--fe-text, #1f2937);
+  font-weight: 500;
+}
+.wv-atm-card__val--acct {
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #1f2937;
+}
+.wv-atm-card__val--no {
+  font-size: 12px;
+  color: rgba(31,41,55,.5);
+  font-weight: 400;
+}
+.wv-atm-card__note {
+  font-size: 12px;
+  color: rgba(31,41,55,.45);
+  margin: 0;
+  line-height: 1.5;
+}
 
 /* ── Transaction list ────────────────────────────────── */
 .wv-main { display: flex; flex-direction: column; gap: 16px; }

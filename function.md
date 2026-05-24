@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-05-20
+> 更新時間：2026-05-24
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -31,7 +31,7 @@
 | 直播場次管理 | `/admin/live` | 直播場次列表（名稱/日期/狀態）；新增場次 Modal（名稱/日期/狀態/備注）；點場次進入詳情 |
 | 直播場次詳情 | `/admin/live/:id` | 場次資訊（可編輯）；Tab 1 **商品對照表**：新增/編輯/刪除（代碼/顏色/尺寸/直播特價，內建 Variant 搜尋 dropdown）；Tab 2 **留言匯入（直播結束後用）**：直播結束後小編手動複製 FB 貼文留言文字貼入→客戶端解析（①過濾雜訊＋`作者`回覆整塊跳過 ②分組成 block ③倒序處理舊留言優先扣庫存 ④一則留言含多筆商品→整個跳過並顯示黃色警告 ⑤跨留言重複→⚠️標記 ⑥**包色**：`AA包色M+1` 展開為所有顏色各 1 件）→預覽確認→呼叫 `live-import`→顯示建單結果（成功/庫存不足/找不到會員）+待手動通知名單 ⚠️ 待測試。**⚠️ 注意：此 Tab 是直播結束後的手動批次匯入，與直播進行中的 FB API 即時讀取留言是完全不同的功能（後者見 toAdd.md 🟢 第 6 項，尚未開發）** |
 | 待結清單 | `/admin/orders/pending` | 按會員彙整所有 PaymentStatus IN ('pending','payment_failed') 訂單；顯示 LINE 綁定狀態、筆數、未付金額合計、最新訂單時間；「LINE 提醒」按鈕一鍵推播催付通知（透過 `line-notify`）；頁面頂部顯示下次自動銷單時間（每週一 00:00 台灣）⚠️ 待測試 |
-| 錢包 | `/wallet` | 前台錢包頁面（需登入）；顯示目前餘額（深色漸層卡片）；快速選擇金額按鈕（100/300/500/1000/3000）或自訂金額；發票設定（5種：紙本/手機條碼/自然人憑證/捐贈愛心碼/公司戶）；前往藍新付款；交易紀錄列表（類型/金額/前後餘額/時間）；付款成功後輪詢餘額直到入帳（最多20秒每2秒一次） |
+| 錢包 | `/wallet` | 前台錢包頁面（需登入）；顯示目前餘額（深色漸層卡片）；快速選擇金額按鈕（100/300/500/1000/3000）或自訂金額；發票設定（5種：紙本/手機條碼/自然人憑證/捐贈愛心碼/公司戶）；前往藍新付款；**ATM 待轉帳區塊**：若有 PaymentStatus=pending AND PaymentMethod=atm 的儲值單，顯示銀行代碼、虛擬帳號（格式化）、繳費期限、儲值金額，關閉頁面後仍可找回；交易紀錄列表（類型/金額/前後餘額/時間）；付款成功後輪詢餘額直到入帳（最多20秒每2秒一次） |
 | 登入/註冊 | `/login` | 「以 Facebook 繼續」按鈕移至 Tab 上方（登入/註冊共用，`#1877F2`）；Email 登入/註冊 Tab、忘記密碼；FB OAuth redirect 目標存 localStorage（防 LINE in-app browser 跨頁清空）；FB OAuth ✅ 測試成功（2026-05-20） |
 | 重設密碼 | `/reset-password` | 密碼重設表單 |
 | LINE 綁定 | `/bind-line` | LINE 帳號綁定頁（無需登入即可訪問）；讀取 URL query `token`；未登入跳 `/login?redirect=/bind-line?token=xxx`（redirect 存 localStorage）；登入後呼叫 `line-bind` Edge Function；顯示 Loading / 成功（3秒倒數後跳 `/account`）/ 失敗 / 無token 四種狀態 |
@@ -91,7 +91,7 @@
 | `store-callback` | ❌ 關閉 | （舊流程殘留）接收門市選擇回呼，現已不在結帳流程使用 |
 | `wallet-topup` | ✅ 需要 | 前端呼叫建立儲值訂單；驗證金額（正整數）；生成 TopupNo（TU_YYYYMMDD_XXXXX）；寫入 C_MBR_WalletTopupList；建立藍新 MPG 付款參數（ReturnURL=wallet-topup-return, NotifyURL=wallet-topup-notify）；回傳加密付款參數 |
 | `wallet-topup-notify` | ❌ 關閉 | 藍新儲值 server-to-server webhook；驗簽解密；冪等檢查（已處理就跳過）；更新 PaymentStatus；入帳 C_MBR_WalletList（upsert）；寫入 C_MBR_WalletTxList；自動呼叫 ezPay 開立發票 |
-| `wallet-topup-return` | ❌ 關閉 | 藍新儲值付款後瀏覽器 redirect；解密結果；導向 /wallet?topup=success 或 /wallet?topup=fail |
+| `wallet-topup-return` | ❌ 關閉 | 藍新儲值付款後瀏覽器 redirect；解密結果；**ATM 取號成功（PaymentType=VACC）**：將 BankCode / CodeNo / ExpireDate 存入 `C_MBR_WalletTopupList`，導向 `/wallet?topup=atm_pending&topupNo=xxx`；其他付款（信用卡/LINE Pay）：導向 `/wallet?topup=success` 或 `/wallet?topup=fail` |
 | `wallet-adjust` | ✅ 需要 | 管理員手動調整錢包餘額；GET：取得餘額+交易紀錄；POST：驗證金額（非零整數）與備注、確認餘額不低於0、upsert C_MBR_WalletList、寫入 C_MBR_WalletTxList (TxType='adjust') |
 | `wallet-refund` | ✅ 需要 | 管理員將退款金額入會員錢包；POST `{ orderNo, type: 'full'|'partial', refundAmt? }`；管理員身份驗證（IsActive）；全額退款 = FinalAmount − ShippingFee；部分退款 = 指定金額；透過 CustomerEmail → MemberList 查 UserID；upsert C_MBR_WalletList；寫入 C_MBR_WalletTxList (TxType='refund', RelatedOrderNo, Note, CreatedBy)；全額退款更新 PaymentStatus → 'refunded'；部分退款追加 AdminNote 記錄 ⚠️ 待測試 |
 | `line-webhook` | ❌ 關閉（`--no-verify-jwt`） | LINE Messaging API Webhook；x-line-signature HMAC-SHA256 驗證；**Follow 事件**：生成 UUID Token → 存入 `LineBindToken` 表（7 天有效）→ LINE Push 傳送綁定連結（`${SITE_URL}/bind-line?token=xxx`）；**Unfollow 事件**：清除 `C_MBR_MemberList.LineUserID`；Secrets：`LINE_CHANNEL_SECRET` / `LINE_CHANNEL_ACCESS_TOKEN` / `SITE_URL` / `DB_SCHEMA` |

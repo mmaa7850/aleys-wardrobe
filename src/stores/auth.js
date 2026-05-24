@@ -101,7 +101,7 @@ export const useAuthStore = defineStore("auth", {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "facebook",
         options: {
-          scopes: 'email,public_profile',
+          scopes: 'email',
           redirectTo: `${window.location.origin}/auth/callback`,
         },
       });

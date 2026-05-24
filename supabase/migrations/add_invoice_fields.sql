@@ -1,4 +1,16 @@
--- Add e-invoice fields to C_ORD_OrderList (both schemas must stay in sync)
+-- Add e-invoice fields to C_ORD_OrderList + ATM fields to C_MBR_WalletTopupList (both schemas must stay in sync)
+
+ALTER TABLE public."C_MBR_WalletTopupList"
+  ADD COLUMN IF NOT EXISTS "ATMBankCode"   VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS "ATMAccount"    VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS "ATMExpireDate" DATE;
+
+ALTER TABLE staging."C_MBR_WalletTopupList"
+  ADD COLUMN IF NOT EXISTS "ATMBankCode"   VARCHAR(10),
+  ADD COLUMN IF NOT EXISTS "ATMAccount"    VARCHAR(20),
+  ADD COLUMN IF NOT EXISTS "ATMExpireDate" DATE;
+
+-- Add e-invoice fields to C_ORD_OrderList
 
 ALTER TABLE public."C_ORD_OrderList"
   ADD COLUMN IF NOT EXISTS "InvoiceStatus"      VARCHAR(20)  NOT NULL DEFAULT 'none',

@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-22
+> 更新時間：2026-05-24
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -11,7 +11,7 @@
 |------|------|------|
 | `add_shipping_method_fields.sql` | 新增 ShippingMethod / HomeDelivery* 欄位 | ✅ 已執行 |
 | `add_trade_no.sql` | 新增 TradeNo 欄位（藍新退款用） | ✅ 已執行 |
-| `add_invoice_fields.sql` | 新增 Invoice* 7 個欄位（電子發票） | ⚠️ 待執行 |
+| `add_invoice_fields.sql` | 新增 Invoice* 7 個欄位（電子發票）+ ATMBankCode / ATMAccount / ATMExpireDate（ATM 儲值）| ⚠️ 待執行 |
 | `add_wallet_tables.sql` | 新增錢包系統三張表 + C_ORD_OrderList 兩個欄位 | ✅ 已執行 |
 | `add_line_binding.sql` | `C_MBR_MemberList` 新增 `LineUserID` / `FbName`；新增 `LineBindToken` 表 | ✅ 已執行（2026-05-20，staging + public 兩個 schema） |
 | `add_live_tables.sql` | 新增 `C_LIV_SessionList` / `C_LIV_ProductList`；`C_ORD_OrderList` 新增 `OrderSource` / `LiveSessionID` | ✅ 已執行（2026-05-20，staging + public 兩個 schema） |
@@ -263,7 +263,10 @@ WITH CHECK (
 | InvoiceLoveCode | varchar(10) | YES | — | |
 | InvoiceBuyerUBN | varchar(8) | YES | — | |
 | TradeNo | varchar(50) | YES | — | |
-| PaymentMethod | varchar(20) | YES | — | |
+| PaymentMethod | varchar(20) | YES | — | 'credit' / 'atm' / 'linepay' |
+| ATMBankCode | varchar(10) | YES | — | ATM 銀行代碼（藍新取號後填入）⚠️ 需執行 add_invoice_fields.sql |
+| ATMAccount | varchar(20) | YES | — | ATM 虛擬帳號（藍新取號後填入）⚠️ 需執行 add_invoice_fields.sql |
+| ATMExpireDate | date | YES | — | ATM 繳費期限 ⚠️ 需執行 add_invoice_fields.sql |
 | PaidAt | timestamptz | YES | — | |
 | CreatedDate | timestamptz | NO | now() | |
 | UpdatedDate | timestamptz | NO | now() | |

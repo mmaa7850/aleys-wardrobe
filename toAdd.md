@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-23
+> 更新時間：2026-05-24
 
 ---
 
@@ -107,6 +107,7 @@
 - **直播留言解析包色支援**：留言格式 `AA包色M+1` → 展開為該代碼+尺寸所有顏色各 1 件；`live-bid-poll` 即時模式同步支援包色；去重 key 改為 `code|colorName|sizeName` 防止包色展開後重複建單 ✅ 已完成（2026-05-23）⚠️ 待測試
 - **購物車來源追蹤**：`C_CART_CartItemList` 新增 `Source varchar(20) DEFAULT 'web'`、`LiveSessionID bigint`、`IsReward boolean`、`RewardAmt integer`；`ProductID`/`VariantID` 允許 NULL（購物金項目）；`cart.addItem()` 支援 `{source, liveSessionId}` 選項；`_loadItems()` 處理購物金項目（`unitPrice=-RewardAmt`、`productName='購物金'`）；新增 `cart.addReward(amt)` 方法；`canCheckout` getter（selectedTotal > 0） ✅ 已完成（2026-05-23）⚠️ 待測試
 - **週一銷單機制（pg_cron）**：每週日 16:00 UTC（台灣週一 00:00）自動取消所有 PaymentStatus IN ('pending','payment_failed') 訂單、回補庫存、刪除購物車中 IsReward=true 的購物金；migration：`setup_weekly_cron.sql` ✅ 已執行（2026-05-23，jobid 1+2 已確認 active）
+- **錢包 ATM 儲值修正**：修正 ATM 取號後（Status=SUCCESS, PaymentType=VACC）被誤顯示為「儲值成功」的問題；`wallet-topup-return` 改判斷 PaymentType，ATM 取號成功後將 BankCode/CodeNo/ExpireDate 存入 `C_MBR_WalletTopupList`，導向 `/wallet?topup=atm_pending`；前台 WalletView.vue 新增待轉帳 ATM 卡片（顯示銀行代碼/虛擬帳號/繳費期限）；使用者關掉藍新頁面後仍可在錢包頁找回虛擬帳號；⚠️ 需執行 `add_invoice_fields.sql`（新增 ATMBankCode / ATMAccount / ATMExpireDate 欄位）
 - **待結清單後台頁面**：`/admin/orders/pending`；按會員彙整未付款訂單（筆數 + 金額合計）；顯示 LINE 綁定狀態；「LINE 提醒」按鈕一鍵推播催付通知；顯示下次銷單時間倒數 ✅ 已完成（2026-05-23）⚠️ 待測試
 - **LINE OA 帳號綁定系統**：消費者加入 LINE OA → `line-webhook` 收 Follow 事件 → 產生一次性 UUID Token（存 `LineBindToken` 表）→ LINE Push 傳送綁定連結 → 消費者點連結到 `/bind-line?token=xxx` → 未登入跳 `/login`（redirect 存 localStorage）→ FB 登入完成回 `/auth/callback` → 讀 localStorage 跳回 `/bind-line` → `line-bind` 驗證 token → upsert `LineUserID` 至 `C_MBR_MemberList`；AccountView 顯示 LINE 綁定狀態（已綁定 / 尚未綁定）；封鎖 LINE OA → 清除 `LineUserID` ✅ 測試成功（2026-05-20）
 
