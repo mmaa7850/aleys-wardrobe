@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     const { data: order } = await supabaseAdmin
       .schema(dbSchema)
       .from('C_ORD_OrderList')
-      .select('ID, FinalAmount, CustomerEmail, OrderNo')
+      .select('ID, FinalAmount, NewebpayAmt, WalletDeductAmt, CustomerEmail, OrderNo, ShippingMethod')
       .eq('OrderNo', orderNo)
       .eq('CustomerEmail', user.email)
       .neq('PaymentStatus', 'paid')
@@ -111,20 +111,37 @@ Deno.serve(async (req) => {
     const retrySeq = timeStamp % 10
     const merchantOrderNo = `${orderNo}_R${retrySeq}`
 
+    // NewebpayAmt is the amount already sent to Newebpay at order creation (FinalAmount minus wallet deduction).
+    // Retry must use the same figure — wallet was already deducted.
+    const retryAmt = order.NewebpayAmt ?? order.FinalAmount
+
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const atmExpire = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+    const expireDate = `${atmExpire.getFullYear()}${pad(atmExpire.getMonth()+1)}${pad(atmExpire.getDate())}`
+
+    const isCVS = order.ShippingMethod === 'cvscom'
+
     const params: Record<string, string | number> = {
-      Amt:             order.FinalAmount,
+      Amt:             retryAmt,
       ClientBackURL:   `${siteUrl}/orders/${orderNo}`,
       CREDIT:          1,
+      CustomerURL:     `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-return`,
       Email:           order.CustomerEmail,
+      ExpireDate:      expireDate,
       ItemDesc:        itemDesc || '商品購買',
-      LoginType:       0,
       MerchantID:      merchantId,
       MerchantOrderNo: merchantOrderNo,
       NotifyURL:       `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-notify`,
       RespondType:     'JSON',
       ReturnURL:       `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-return`,
       TimeStamp:       timeStamp,
+      VACC:            1,
       Version:         '2.0',
+    }
+
+    if (isCVS) {
+      params['CVSCOM'] = 1
+      params['LgsType'] = 'C2C'
     }
 
     const queryStr  = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&')
