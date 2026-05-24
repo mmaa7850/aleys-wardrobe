@@ -26,23 +26,18 @@ const invoiceBuyerUBN    = ref('')
 const payForm   = ref(null)
 const payParams = ref(null)
 
-async function fetchPendingAtmTopups(specificTopupNo = null) {
+async function fetchPendingAtmTopups() {
   if (!auth.user?.id) return
-  let query = db
+  const { data, error } = await db
     .from('C_MBR_WalletTopupList')
-    .select('TopupNo, Amount, ATMBankCode, ATMAccount, ATMExpireDate, CreatedDate, PaymentMethod')
+    .select('TopupNo, Amount, ATMBankCode, ATMAccount, ATMExpireDate, CreatedDate')
+    .eq('MemberID', auth.user.id)
     .eq('PaymentStatus', 'pending')
-
-  if (specificTopupNo) {
-    query = query.eq('TopupNo', specificTopupNo)
-  } else {
-    query = query.eq('MemberID', auth.user.id).eq('PaymentMethod', 'atm')
-  }
-
-  const { data, error } = await query.order('CreatedDate', { ascending: false })
+    .eq('PaymentMethod', 'atm')
+    .not('ATMBankCode', 'is', null)
+    .order('CreatedDate', { ascending: false })
   if (error) { console.error('[fetchPendingAtmTopups]', error.message); return }
-  // 只顯示有取到 ATM 帳號的筆數
-  pendingAtmTopups.value = (data ?? []).filter(t => t.ATMBankCode || t.ATMAccount)
+  pendingAtmTopups.value = data ?? []
 }
 
 function fmtAtmAccount(acct) {
@@ -60,8 +55,7 @@ function fmtExpireDate(iso) {
 onMounted(async () => {
   if (!auth.isLoggedIn) return
 
-  const urlTopupNo = route.query.topupNo || null
-  await Promise.all([wallet.fetchBalance(), wallet.fetchTransactions(), fetchPendingAtmTopups(urlTopupNo)])
+  await Promise.all([wallet.fetchBalance(), wallet.fetchTransactions(), fetchPendingAtmTopups()])
 
   if (route.query.topup === 'success') {
     topupResult.value = 'success'
