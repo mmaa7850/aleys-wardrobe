@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     const { data: order, error: orderErr } = await supabaseAdmin
       .schema(dbSchema)
       .from('C_ORD_OrderList')
-      .select('ID, OrderNo, FinalAmount, ShippingFee, PaymentStatus, CustomerName, CustomerEmail, InvoiceStatus, InvoiceNo, InvoiceNumber, InvoiceRandomNum')
+      .select('ID, OrderNo, FinalAmount, ShippingFee, PaymentStatus, CustomerName, CustomerEmail, InvoiceStatus, InvoiceNo, InvoiceNumber, InvoiceRandomNum, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN, InvoiceBuyerName')
       .eq('OrderNo', orderNo)
       .single()
 
@@ -117,15 +117,19 @@ Deno.serve(async (req) => {
         itemAmts.push(String(shippingFee))
       }
 
+      const carrierType: string = (order as any).InvoiceCarrierType || ''
+      const isB2B      = carrierType === 'B2B'
+      const isDonate   = carrierType === 'D'
+
       const params: Record<string, string> = {
         RespondType:     'JSON',
         Version:         '1.5',
         TimeStamp:       String(Math.floor(Date.now() / 1000)),
         MerchantOrderNo: order.OrderNo,
         Status:          '1',
-        Category:        'B2C',
-        BuyerName:       order.CustomerName || '消費者',
-        PrintFlag:       'Y',
+        Category:        isB2B ? 'B2B' : 'B2C',
+        BuyerName:       isB2B ? ((order as any).InvoiceBuyerName || order.CustomerName || '公司') : (order.CustomerName || '消費者'),
+        PrintFlag:       isDonate ? 'N' : 'Y',   // 捐贈發票不需列印
         TaxType:         '1',
         TaxRate:         '5',
         Amt:             String(amt),
@@ -137,6 +141,29 @@ Deno.serve(async (req) => {
         ItemPrice:       itemPrices.join('|'),
         ItemAmt:         itemAmts.join('|'),
       }
+
+      // 公司戶三聯式：加統一編號
+      if (isB2B && (order as any).InvoiceBuyerUBN) {
+        params.BuyerUBN = (order as any).InvoiceBuyerUBN
+      }
+
+      // 手機條碼（CarrierType=1）
+      if (carrierType === '0' && (order as any).InvoiceCarrierNum) {
+        params.CarrierType = '1'
+        params.CarrierNum  = (order as any).InvoiceCarrierNum
+      }
+
+      // 自然人憑證（CarrierType=2，MOICA）
+      if (carrierType === '1' && (order as any).InvoiceCarrierNum) {
+        params.CarrierType = '2'
+        params.CarrierNum  = (order as any).InvoiceCarrierNum
+      }
+
+      // 捐贈碼
+      if (isDonate && (order as any).InvoiceLoveCode) {
+        params.LoveCode = (order as any).InvoiceLoveCode
+      }
+
       if (order.CustomerEmail) params.BuyerEmail = order.CustomerEmail
 
       const apiData = await callEzpay('invoice_issue', params)

@@ -81,7 +81,7 @@
 | `retry-payment` | ✅ 需要 | 對同一訂單重新產生藍新付款參數（訂單號加 `_R0~R9` 後綴避免重複，不重建訂單）；開放信用卡 + ATM 轉帳（VACC=1、ExpireDate 3天）；超商取貨訂單附加 CVSCOM/LgsType 參數；使用 `NewebpayAmt`（扣除錢包後的實際付款金額）|
 | `refund-payment` | ✅ 需要 | 呼叫藍新 NPA-B032 退款 API；僅支援信用卡類付款（CREDIT、ApplePay、GooglePay 等） |
 | `logistics-notify` | ❌ 關閉 | 藍新物流 NPA-B58 webhook：接收貨態推播，更新 `ShippingStatus`/`ShippingStatusText` |
-| `issue-invoice` | ✅ 需要 | ezPay 電子發票操作；支援三個 action：`issue`（開立，B2C/含稅 5%/PrintFlag=Y，商品費用+運費拆列；公司戶時以 `InvoiceBuyerUBN/Name` 開三聯式）、`void`（作廢）、`allowance`（開立折讓）；AES-256-CBC 加密（block size 32）；結果寫回 `C_ORD_OrderList` Invoice* 欄位；環境變數：`EZPAY_MERCHANT_ID` / `EZPAY_HASH_KEY` / `EZPAY_HASH_IV` / `EZPAY_ENV` |
+| `issue-invoice` | ✅ 需要 | ezPay 電子發票操作；支援三個 action：`issue`（開立，依 `InvoiceCarrierType` 自動帶入對應載具參數：紙本=B2C/PrintFlag=Y、手機條碼=CarrierType:1、自然人憑證=CarrierType:2、捐贈=LoveCode/PrintFlag:N、公司戶=B2B/BuyerUBN）、`void`（作廢）、`allowance`（開立折讓）；AES-256-CBC 加密（block size 32）；結果寫回 `C_ORD_OrderList` Invoice* 欄位；環境變數：`EZPAY_MERCHANT_ID` / `EZPAY_HASH_KEY` / `EZPAY_HASH_IV` / `EZPAY_ENV` |
 | `wallet-topup` | ✅ 需要 | 建立儲值單（`C_MBR_WalletTopupList`）並產生藍新付款參數；支援信用卡 + ATM 轉帳；接收載具類型（手機條碼/自然人憑證/捐贈/公司戶）供儲值完成後開發票 |
 | `wallet-topup-notify` | ❌ 關閉 | 藍新儲值 webhook：驗簽解密、更新 `PaymentStatus=paid`、加計 `C_MBR_WalletList.Balance`、寫 `C_MBR_WalletTxList` 流水帳；ATM 入帳後自動呼叫 ezPay 開立儲值發票 |
 | `wallet-topup-return` | ❌ 關閉 | 藍新儲值前台 redirect：ATM 取號成功時將 `ATMBankCode`/`ATMAccount`/`ATMExpireDate` 寫入 DB，導向 `/wallet?topup=atm_pending` |

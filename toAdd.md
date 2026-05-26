@@ -40,11 +40,21 @@
 - Edge Function `issue-invoice`：支援 `issue` / `void` / `allowance` 三個 action
 - Migration `add_invoice_fields.sql`：✅ 已執行（全部 Invoice* 欄位 + 發票載具欄位）
 
+**⚠️ Bug 修正（2026-05-26）：**
+`issue-invoice` 原本開立發票時未查詢 `InvoiceCarrierType` 等欄位，導致所有載具都以紙本（B2C PrintFlag=Y）開立，選手機條碼/MOICA/捐贈均無效。已修正並重新部署：
+- `'0'`（手機條碼）→ `CarrierType=1, CarrierNum`
+- `'1'`（自然人憑證/MOICA）→ `CarrierType=2, CarrierNum`（欄位：`InvoiceCarrierNum`）
+- `'D'`（捐贈碼）→ `LoveCode, PrintFlag=N`（欄位：`InvoiceLoveCode`）
+- `'B2B'`（公司戶三聯式）→ `Category=B2B, BuyerUBN, BuyerName`
+
+> 📌 **自然人憑證欄位位置**：結帳頁選了「自然人憑證載具」radio button 後才展開輸入框，值存入 `InvoiceCarrierNum`（`InvoiceCarrierType = '1'`）
+
 **測試結果：**
-- ✅ **紙本發票**：開立成功，ezPay 自動寄發票通知 email 給買家
-- ✅ **手機條碼**：開立成功，ezPay 自動寄發票通知 email 給買家
-- ⚠️ **公司戶三聯式**：DB 欄位已補齊，待重新測試
-- ⚠️ **自然人憑證、捐贈碼**：待測試
+- ✅ **紙本發票**：開立成功，ezPay 自動寄發票通知 email 給買家（不受 Bug 影響）
+- ⚠️ **手機條碼**：需重新測試（之前測試時 carrier 未傳給 ezPay，實際開的是紙本；Bug 已修）
+- ⚠️ **公司戶三聯式**：待測試（Bug 已修，DB 欄位已補齊）
+- ⚠️ **自然人憑證（MOICA）**：待測試（Bug 已修）
+- ⚠️ **捐贈碼**：待測試（Bug 已修）
 - ⚠️ **後台手動補開/作廢/折讓**：待測試
 
 **尚需設定（正式上線前）：**
