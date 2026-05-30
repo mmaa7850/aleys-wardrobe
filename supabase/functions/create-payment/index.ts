@@ -178,6 +178,10 @@ Deno.serve(async (req) => {
       }).eq('MemberID', user.id)
     }
 
+    // 查第一個訂單狀態（建立時即設定，不等付款）
+    const { data: firstStatus } = await supabaseAdmin.schema(dbSchema)
+      .from('S_ORD_StatusList').select('ID').order('ID', { ascending: true }).limit(1).single()
+
     const { data: order, error: orderErr } = await supabaseAdmin
       .schema(dbSchema)
       .from('C_ORD_OrderList')
@@ -207,6 +211,7 @@ Deno.serve(async (req) => {
         InvoiceLoveCode:    invoiceLoveCode,
         InvoiceBuyerUBN:    invoiceBuyerUBN,
         InvoiceBuyerName:   invoiceBuyerName,
+        ...(firstStatus?.ID ? { StatusID: firstStatus.ID } : {}),
       })
       .select('ID')
       .single()
@@ -278,11 +283,7 @@ Deno.serve(async (req) => {
     if (newebpayAmount === 0) {
       const now = new Date().toISOString()
 
-      // 查第一個訂單狀態（自動設定，與 payment-notify 行為一致）
-      const { data: firstStatus } = await supabaseAdmin.schema(dbSchema)
-        .from('S_ORD_StatusList').select('ID').order('ID', { ascending: true }).limit(1).single()
-
-      // 補寫付款相關欄位
+      // 補寫付款相關欄位（firstStatus 已在建立訂單前查好）
       await supabaseAdmin.schema(dbSchema).from('C_ORD_OrderList').update({
         PaidAt:        now,
         PaymentMethod: 'wallet',
