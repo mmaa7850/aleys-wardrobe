@@ -96,9 +96,16 @@ Deno.serve(async (req) => {
       if (order.PaymentStatus !== 'paid') return json({ error: '訂單非付款狀態，無法開立發票' }, 400)
       if (order.InvoiceStatus && order.InvoiceStatus !== 'none') return json({ error: '此訂單已有發票記錄' }, 400)
 
-      const totalAmt   = order.FinalAmount
-      const shippingFee = order.ShippingFee || 0
-      const goodsAmt   = totalAmt - shippingFee
+      // 有錢包折抵時用 NewebpayAmt（避免與儲值發票重複開票）
+      const walletDeduct = (order as any).WalletDeductAmt ?? 0
+      const totalAmt    = walletDeduct > 0
+        ? ((order as any).NewebpayAmt ?? order.FinalAmount)
+        : order.FinalAmount
+      // 運費按比例分攤（錢包折抵時運費也縮小）
+      const shippingFee = walletDeduct > 0
+        ? Math.round((order.ShippingFee || 0) * (totalAmt / order.FinalAmount))
+        : (order.ShippingFee || 0)
+      const goodsAmt = totalAmt - shippingFee
 
       // B2C 含稅單價，以 5% 計算銷售額與稅額
       const amt    = Math.round(totalAmt / 1.05)

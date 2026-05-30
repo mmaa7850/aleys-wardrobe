@@ -385,7 +385,7 @@ const doInvoiceAction = async (action) => {
 
   const amt = Number(allowanceAmtInput.value);
   const confirmMsg = {
-    issue:     `確定開立電子發票？\n訂單：${detailOrder.value.OrderNo}\n金額：NT$ ${detailOrder.value.FinalAmount?.toLocaleString()}`,
+    issue:     `確定開立電子發票？\n訂單：${detailOrder.value.OrderNo}\n金額：NT$ ${(detailOrder.value.NewebpayAmt ?? detailOrder.value.FinalAmount)?.toLocaleString()}`,
     void:      `確定作廢此發票？\n發票號碼：${detailOrder.value.InvoiceNumber}\n作廢後無法復原。`,
     allowance: `確定開立折讓 NT$ ${amt.toLocaleString()}？`,
   }[action];
