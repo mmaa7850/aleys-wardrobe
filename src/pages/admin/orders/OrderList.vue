@@ -296,6 +296,19 @@ const saveDetail = async () => {
 // ── Refund ────────────────────────────────────────────
 const CREDIT_METHODS = new Set(['CREDIT', 'APPLEPAY', 'GOOGLEPAY', 'SAMSUNGPAY', 'WEBATM', 'UNIONPAY', 'CREDITAE', 'FOREIGN']);
 
+const PAYMENT_METHOD_LABEL: Record<string, string> = {
+  CREDIT:    '信用卡',
+  APPLEPAY:  'Apple Pay',
+  GOOGLEPAY: 'Google Pay',
+  SAMSUNGPAY:'Samsung Pay',
+  WEBATM:    '網路 ATM',
+  UNIONPAY:  '銀聯卡',
+  VACC:      'ATM 虛擬帳號',
+  LINEPAY:   'LINE Pay',
+  wallet:    '購物金（錢包）',
+};
+const fmtPayMethod = (m: string | null) => m ? (PAYMENT_METHOD_LABEL[m] ?? m) : '-';
+
 const canRefund = computed(() => detailOrder.value?.PaymentStatus === 'paid');
 const canApiRefund = computed(() => {
   const m = detailOrder.value?.PaymentMethod;
@@ -650,7 +663,7 @@ onMounted(async () => {
                   <div class="card-body">
                     <dl class="info-dl">
                       <dt>{{ t("order.orders.labelPayMethod") }}</dt>
-                      <dd>{{ detailOrder.PaymentMethod ?? payMethodMap[detailOrder.PayMethodID] ?? "-" }}</dd>
+                      <dd>{{ fmtPayMethod(detailOrder.PaymentMethod) }}</dd>
 
                       <dt>{{ t("order.orders.labelPaymentStatus") }}</dt>
                       <dd>

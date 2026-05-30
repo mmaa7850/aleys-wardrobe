@@ -96,10 +96,15 @@ onMounted(async () => {
 
   order.value = orderData
 
-  const { data: itemsData } = await db
-    .rpc('get_order_items', { p_order_no: route.params.orderNo })
+  const [{ data: itemsData }, { data: statusData }] = await Promise.all([
+    db.rpc('get_order_items', { p_order_no: route.params.orderNo }),
+    orderData.StatusID
+      ? db.from('S_ORD_StatusList').select('Description').eq('ID', orderData.StatusID).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ])
 
   items.value = itemsData || []
+  if (statusData?.Description) order.value = { ...order.value, _statusLabel: statusData.Description }
   isLoading.value = false
 })
 </script>
@@ -161,6 +166,10 @@ onMounted(async () => {
             <div class="od-info-item">
               <span class="od-info-item__label">訂單金額</span>
               <span class="od-info-item__val od-info-item__val--strong">NT$ {{ order.FinalAmount?.toLocaleString() }}</span>
+            </div>
+            <div v-if="order._statusLabel" class="od-info-item">
+              <span class="od-info-item__label">訂單狀態</span>
+              <span class="od-status-badge">{{ order._statusLabel }}</span>
             </div>
           </div>
 
@@ -478,6 +487,16 @@ onMounted(async () => {
 .od-pay-badge--paid    { background: rgba(34,197,94,0.12); color: #15803D; }
 .od-pay-badge--pending { background: rgba(180,180,180,0.15); color: var(--fe-muted); }
 .od-pay-badge--failed  { background: rgba(220,38,38,0.08); color: #DC2626; }
+
+.od-status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(200,168,130,0.15);
+  color: var(--fe-gold-d, #9a7a52);
+}
 
 /* Tracking */
 .od-tracking {
