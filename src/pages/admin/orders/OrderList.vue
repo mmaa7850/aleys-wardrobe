@@ -62,7 +62,10 @@ const INVOICE_STATUS_LABEL = {
   issued:    '已開立',
   voided:    '已作廢',
   allowance: '已折讓',
+  wallet:    '毋需開立',
 };
+
+const isWalletOnly = computed(() => detailOrder.value?.PaymentMethod === 'wallet');
 
 // ── 標記已出貨（宅配）─────────────────────────────────
 const shipForm = ref({ company: 'tcat', no: '' });
@@ -290,7 +293,15 @@ const CREDIT_METHODS = new Set(['CREDIT', 'APPLEPAY', 'GOOGLEPAY', 'SAMSUNGPAY',
 const canRefund = computed(() => detailOrder.value?.PaymentStatus === 'paid');
 const canApiRefund = computed(() => {
   const m = detailOrder.value?.PaymentMethod;
-  return canRefund.value && (!m || CREDIT_METHODS.has(m));
+  return canRefund.value && !!m && CREDIT_METHODS.has(m);
+});
+const refundBtnLabel = computed(() => {
+  const m = detailOrder.value?.PaymentMethod;
+  if (m && CREDIT_METHODS.has(m)) return '信用卡退款（藍新 API）';
+  if (m === 'VACC') return 'ATM 退款（手動匯款）';
+  if (m === 'LINEPAY') return 'LINE Pay 退款（手動）';
+  if (m === 'wallet') return '退回錢包（手動）';
+  return '標記已退款（手動）';
 });
 
 const doRefund = async (manual = false) => {
@@ -339,7 +350,8 @@ const doRefund = async (manual = false) => {
 // ── Invoice actions ───────────────────────────────────
 const canIssueInvoice = computed(() =>
   detailOrder.value?.PaymentStatus === 'paid' &&
-  (!detailOrder.value?.InvoiceStatus || detailOrder.value?.InvoiceStatus === 'none')
+  (!detailOrder.value?.InvoiceStatus || detailOrder.value?.InvoiceStatus === 'none') &&
+  !isWalletOnly.value
 );
 const canVoidInvoice = computed(() => detailOrder.value?.InvoiceStatus === 'issued');
 const canAllowance   = computed(() => detailOrder.value?.InvoiceStatus === 'issued');
@@ -649,8 +661,13 @@ onMounted(async () => {
                       <dt>{{ t("order.orders.labelDiscountAmount") }}</dt>
                       <dd>－ NT$ {{ detailOrder.DiscountAmount?.toLocaleString() }}</dd>
 
+                      <template v-if="detailOrder.WalletDeductAmt > 0">
+                        <dt>錢包折抵</dt>
+                        <dd>－ NT$ {{ detailOrder.WalletDeductAmt?.toLocaleString() }}</dd>
+                      </template>
+
                       <dt class="fw-semibold text-dark">{{ t("order.orders.labelFinalAmount") }}</dt>
-                      <dd class="fw-bold text-primary">NT$ {{ detailOrder.FinalAmount?.toLocaleString() }}</dd>
+                      <dd class="fw-bold text-primary">NT$ {{ (detailOrder.NewebpayAmt ?? detailOrder.FinalAmount)?.toLocaleString() }}</dd>
 
                       <dt>{{ t("order.orders.labelPaymentFee") }}</dt>
                       <dd>{{ detailOrder.PaymentFee != null ? `NT$ ${detailOrder.PaymentFee.toLocaleString()}` : "-" }}</dd>
@@ -750,12 +767,13 @@ onMounted(async () => {
                       <dt>發票狀態</dt>
                       <dd>
                         <span class="badge" :class="{
-                          'bg-secondary': !detailOrder.InvoiceStatus || detailOrder.InvoiceStatus === 'none',
+                          'bg-secondary': !isWalletOnly && (!detailOrder.InvoiceStatus || detailOrder.InvoiceStatus === 'none'),
                           'bg-success':   detailOrder.InvoiceStatus === 'issued',
                           'bg-danger':    detailOrder.InvoiceStatus === 'voided',
                           'bg-warning text-dark': detailOrder.InvoiceStatus === 'allowance',
+                          'bg-light text-muted border': isWalletOnly,
                         }">
-                          {{ INVOICE_STATUS_LABEL[detailOrder.InvoiceStatus] || '未開立' }}
+                          {{ isWalletOnly ? '毋需開立' : (INVOICE_STATUS_LABEL[detailOrder.InvoiceStatus] || '未開立') }}
                         </span>
                       </dd>
                       <template v-if="detailOrder.InvoiceNumber">
@@ -912,7 +930,7 @@ onMounted(async () => {
               @click="doRefund(false)"
             >
               <span v-if="refundLoading" class="spinner-border spinner-border-sm me-1"></span>
-              {{ refundLoading ? '退款中…' : '信用卡退款（藍新 API）' }}
+              {{ refundLoading ? '退款中…' : refundBtnLabel }}
             </button>
             <button
               v-else
@@ -922,7 +940,7 @@ onMounted(async () => {
               @click="doRefund(true)"
             >
               <span v-if="refundLoading" class="spinner-border spinner-border-sm me-1"></span>
-              {{ refundLoading ? '處理中…' : '標記已退款（ATM / 手動）' }}
+              {{ refundLoading ? '處理中…' : refundBtnLabel }}
             </button>
           </template>
 
