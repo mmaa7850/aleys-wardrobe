@@ -156,7 +156,7 @@ const loadOrders = async () => {
   try {
     let query = db
       .from("C_ORD_OrderList")
-      .select("ID, OrderNo, CustomerName, FinalAmount, PaymentStatus, StatusID, CreatedDate")
+      .select("ID, OrderNo, CustomerName, FinalAmount, NewebpayAmt, WalletDeductAmt, PaymentStatus, StatusID, CreatedDate")
       .order("CreatedDate", { ascending: false })
       .limit(200);
 
@@ -560,7 +560,7 @@ onMounted(async () => {
               <td class="fw-semibold font-monospace small">{{ r.OrderNo }}</td>
               <td class="text-muted small">{{ formatDate(r.CreatedDate) }}</td>
               <td>{{ r.CustomerName }}</td>
-              <td class="text-end fw-semibold">NT$ {{ r.FinalAmount?.toLocaleString() }}</td>
+              <td class="text-end fw-semibold">NT$ {{ (r.WalletDeductAmt > 0 ? (r.NewebpayAmt ?? r.FinalAmount) : r.FinalAmount)?.toLocaleString() }}</td>
               <td class="text-center">
                 <span class="badge" :class="paymentBadgeClass(r.PaymentStatus)">
                   {{ paymentLabel(r.PaymentStatus) }}
