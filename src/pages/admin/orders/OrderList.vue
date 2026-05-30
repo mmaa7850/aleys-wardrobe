@@ -99,6 +99,7 @@ const markShipped = async () => {
   shipError.value = '';
   shipSuccess.value = false;
   try {
+    const shippedStatus = statusOptions.value.find(s => s.Name === 'shipped')
     const { error } = await db
       .from('C_ORD_OrderList')
       .update({
@@ -107,6 +108,7 @@ const markShipped = async () => {
         ShippingStatus: 'shipped',
         ShippingStatusText: '已出貨',
         UpdatedDate: new Date().toISOString(),
+        ...(shippedStatus ? { StatusID: shippedStatus.ID } : {}),
       })
       .eq('ID', detailOrder.value.ID);
     if (error) throw error;
@@ -117,6 +119,7 @@ const markShipped = async () => {
       HomeDeliveryNo: shipForm.value.no.trim(),
       ShippingStatus: 'shipped',
       ShippingStatusText: '已出貨',
+      ...(shippedStatus ? { StatusID: shippedStatus.ID } : {}),
     };
     shipSuccess.value = true;
   } catch (err) {
@@ -337,8 +340,12 @@ const doRefund = async (manual = false) => {
     const data = await res.json();
     if (!res.ok || !data.success) throw new Error(data.error || '退款失敗');
 
-    // 更新本地狀態
-    detailOrder.value = { ...detailOrder.value, PaymentStatus: 'refunded' };
+    // 更新本地狀態，並自動設訂單狀態為「已退款」
+    const refundedStatus = statusOptions.value.find(s => s.Name === 'refunded')
+    if (refundedStatus) {
+      await db.from('C_ORD_OrderList').update({ StatusID: refundedStatus.ID, UpdatedDate: new Date().toISOString() }).eq('ID', detailOrder.value.ID)
+    }
+    detailOrder.value = { ...detailOrder.value, PaymentStatus: 'refunded', ...(refundedStatus ? { StatusID: refundedStatus.ID } : {}) };
     const idx = rows.value.findIndex(r => r.ID === detailOrder.value.ID);
     if (idx !== -1) rows.value[idx].PaymentStatus = 'refunded';
 
