@@ -314,7 +314,7 @@ onMounted(async () => {
             </div>
             <div class="od-summary__row od-summary__row--total">
               <span>訂單總計</span>
-              <span>NT$ {{ order.FinalAmount?.toLocaleString() }}</span>
+              <span>NT$ {{ (order.WalletDeductAmt > 0 ? (order.NewebpayAmt ?? order.FinalAmount) : order.FinalAmount)?.toLocaleString() }}</span>
             </div>
             <div v-if="order.WalletDeductAmt > 0 && order.PaymentStatus !== 'paid'" class="od-summary__row od-summary__row--newebpay">
               <span>尚需透過金流付款</span>
