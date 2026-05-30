@@ -170,7 +170,8 @@ Deno.serve(async (req) => {
       const apiData = await callEzpay('invoice_issue', params)
       if (apiData.Status !== 'SUCCESS') return json({ error: `發票開立失敗：${apiData.Message || apiData.Status}` }, 400)
 
-      const r = apiData.Result as Record<string, string>
+      const raw = apiData.Result
+      const r = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Record<string, string>
       await supabaseAdmin.schema(dbSchema).from('C_ORD_OrderList').update({
         InvoiceStatus:    'issued',
         InvoiceNo:        r.InvoiceTransNo,
@@ -232,7 +233,8 @@ Deno.serve(async (req) => {
       const apiData = await callEzpay('allowance_issue', params)
       if (apiData.Status !== 'SUCCESS') return json({ error: `折讓開立失敗：${apiData.Message || apiData.Status}` }, 400)
 
-      const r = apiData.Result as Record<string, string>
+      const rawA = apiData.Result
+      const r = (typeof rawA === 'string' ? JSON.parse(rawA) : rawA) as Record<string, string>
       await supabaseAdmin.schema(dbSchema).from('C_ORD_OrderList').update({
         InvoiceStatus:       'allowance',
         InvoiceAllowanceNo:  r.AllowanceNo,
