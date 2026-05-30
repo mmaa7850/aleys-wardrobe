@@ -39,6 +39,29 @@ const emptyForm = () => ({
 });
 
 const form = ref(emptyForm());
+const lookupEmail   = ref('')
+const lookupLoading = ref(false)
+const lookupError   = ref('')
+
+async function lookupByEmail() {
+  const email = lookupEmail.value.trim()
+  if (!email) return
+  lookupLoading.value = true
+  lookupError.value   = ''
+  const { data } = await db
+    .from('C_MBR_MemberList')
+    .select('UserID, Name, Email')
+    .eq('Email', email)
+    .maybeSingle()
+  lookupLoading.value = false
+  if (!data?.UserID) {
+    lookupError.value = '找不到此 email 的會員，請確認已在前台註冊'
+    return
+  }
+  form.value.UserId  = data.UserID
+  form.value.Account = data.Name || email
+  lookupError.value  = ''
+}
 
 onMounted(load);
 
@@ -256,9 +279,18 @@ const deleteRow = async (row) => {
             <div v-if="saveError" class="alert alert-danger py-2">{{ saveError }}</div>
 
             <div v-if="mode === 'create'" class="mb-3">
+              <label class="form-label">用 Email 查詢會員</label>
+              <div class="input-group">
+                <input v-model="lookupEmail" type="email" class="form-control" placeholder="輸入前台已註冊的 email" :disabled="lookupLoading || saving" @keydown.enter.prevent="lookupByEmail" />
+                <button class="btn btn-outline-secondary" type="button" :disabled="lookupLoading || saving" @click="lookupByEmail">
+                  {{ lookupLoading ? '查詢中…' : '查詢' }}
+                </button>
+              </div>
+              <div v-if="lookupError" class="text-danger small mt-1">{{ lookupError }}</div>
+              <hr class="my-2" />
               <label class="form-label">UserId <span class="text-danger">*</span></label>
-              <input v-model="form.UserId" type="text" class="form-control font-monospace" placeholder="Supabase Auth UUID" :disabled="saving" />
-              <div class="form-text">至 Supabase Dashboard → Authentication → Users 複製 UUID</div>
+              <input v-model="form.UserId" type="text" class="form-control font-monospace" placeholder="自動填入，或手動貼上 UUID" :disabled="saving" />
+              <div class="form-text">查詢成功後自動填入；或至 Supabase Dashboard → Authentication → Users 複製</div>
             </div>
 
             <div class="mb-3">
