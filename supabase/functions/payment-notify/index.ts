@@ -127,6 +127,15 @@ Deno.serve(async (req) => {
     else console.log('[payment-notify] PaymentStatus updated to', payStatus, '| TradeNo:', result.TradeNo, '| PaymentType:', result.PaymentType)
 
     if (payStatus === 'paid') {
+      // 自動設定訂單狀態為第一個狀態（ID 最小）
+      const { data: firstStatus } = await supabase.schema(dbSchema)
+        .from('S_ORD_StatusList').select('ID').order('ID', { ascending: true }).limit(1).single()
+      if (firstStatus?.ID) {
+        await supabase.schema(dbSchema).from('C_ORD_OrderList')
+          .update({ StatusID: firstStatus.ID, UpdatedDate: new Date().toISOString() })
+          .eq('OrderNo', orderNo)
+      }
+
       // 查詢完整訂單資料
       const { data: orderData, error: orderFetchErr } = await supabase.schema(dbSchema).from('C_ORD_OrderList')
         .select('ID, ShippingName, CustomerPhone, CustomerEmail, CustomerName, FinalAmount, ShippingFee, StoreID, ShippingMethod, WalletDeductAmt, NewebpayAmt, InvoiceStatus, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN, InvoiceBuyerName')
