@@ -56,7 +56,10 @@ function formatDate(iso) {
 }
 
 function payStatusLabel(s) {
-  return s === 'paid' ? '已付款' : s === 'failed' ? '付款失敗' : '待付款'
+  if (s === 'paid')     return '已付款'
+  if (s === 'failed')   return '付款失敗'
+  if (s === 'refunded') return '已退款'
+  return '待付款'
 }
 
 function shippingMethodLabel(m) {
@@ -183,8 +186,8 @@ onMounted(async () => {
             <p class="od-retry-error">付款期限已過，此訂單已失效。如需購買請重新下訂。</p>
           </div>
 
-          <!-- Credit card / WebATM: allow retry -->
-          <div v-else-if="order.PaymentStatus !== 'paid'" class="od-retry-wrap">
+          <!-- Credit card / WebATM: allow retry (not refunded) -->
+          <div v-else-if="order.PaymentStatus !== 'paid' && order.PaymentStatus !== 'refunded'" class="od-retry-wrap">
             <p v-if="retryError" class="od-retry-error">{{ retryError }}</p>
             <button class="od-retry-btn" :disabled="isRetrying" @click="retryPayment">
               <span v-if="isRetrying">處理中...</span>
@@ -258,7 +261,7 @@ onMounted(async () => {
         </section>
 
         <!-- ATM virtual account info (only before payment confirmed) -->
-        <section v-if="order.PaymentStatus !== 'paid' && (order.ATMBankCode || order.ATMAccount)" class="od-card od-atm-card">
+        <section v-if="order.PaymentStatus !== 'paid' && order.PaymentStatus !== 'refunded' && (order.ATMBankCode || order.ATMAccount)" class="od-card od-atm-card">
           <h2 class="od-card__title">ATM 轉帳資訊</h2>
           <p class="od-atm-hint">請於期限內至 ATM 轉帳，完成付款後系統將自動確認。</p>
           <div class="od-info-grid">
@@ -484,9 +487,10 @@ onMounted(async () => {
   margin-top: 2px;
 }
 
-.od-pay-badge--paid    { background: rgba(34,197,94,0.12); color: #15803D; }
-.od-pay-badge--pending { background: rgba(180,180,180,0.15); color: var(--fe-muted); }
-.od-pay-badge--failed  { background: rgba(220,38,38,0.08); color: #DC2626; }
+.od-pay-badge--paid     { background: rgba(34,197,94,0.12); color: #15803D; }
+.od-pay-badge--pending  { background: rgba(180,180,180,0.15); color: var(--fe-muted); }
+.od-pay-badge--failed   { background: rgba(220,38,38,0.08); color: #DC2626; }
+.od-pay-badge--refunded { background: rgba(180,180,180,0.15); color: var(--fe-muted); }
 
 .od-status-badge {
   font-size: 11px;
