@@ -301,7 +301,8 @@ onMounted(async () => {
             </div>
             <div class="od-summary__row">
               <span>運費</span>
-              <span class="od-summary__free">免運費</span>
+              <span v-if="order.ShippingFee > 0">NT$ {{ order.ShippingFee?.toLocaleString() }}</span>
+              <span v-else class="od-summary__free">免運費</span>
             </div>
             <div v-if="order.DiscountAmount > 0" class="od-summary__row od-summary__row--discount">
               <span>優惠折抵</span>
