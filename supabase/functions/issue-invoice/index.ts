@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { createCipheriv } from 'node:crypto'
+import { Buffer } from 'node:buffer'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
