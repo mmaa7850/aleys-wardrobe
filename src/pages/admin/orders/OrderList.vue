@@ -121,6 +121,7 @@ const markShipped = async () => {
       ShippingStatusText: '已出貨',
       ...(shippedStatus ? { StatusID: shippedStatus.ID } : {}),
     };
+    if (shippedStatus) editStatusId.value = shippedStatus.ID;
     shipSuccess.value = true;
   } catch (err) {
     shipError.value = err?.message ?? String(err);
