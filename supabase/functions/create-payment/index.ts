@@ -276,6 +276,20 @@ Deno.serve(async (req) => {
 
     // ── 全額錢包付款：扣庫存後直接回傳成功，不走藍新 ────────────
     if (newebpayAmount === 0) {
+      const now = new Date().toISOString()
+
+      // 查第一個訂單狀態（自動設定，與 payment-notify 行為一致）
+      const { data: firstStatus } = await supabaseAdmin.schema(dbSchema)
+        .from('S_ORD_StatusList').select('ID').order('ID', { ascending: true }).limit(1).single()
+
+      // 補寫付款相關欄位
+      await supabaseAdmin.schema(dbSchema).from('C_ORD_OrderList').update({
+        PaidAt:        now,
+        PaymentMethod: 'wallet',
+        UpdatedDate:   now,
+        ...(firstStatus?.ID ? { StatusID: firstStatus.ID } : {}),
+      }).eq('OrderNo', orderNo)
+
       const { data: orderDataFull } = await supabaseAdmin.schema(dbSchema).from('C_ORD_OrderList')
         .select('ID').eq('OrderNo', orderNo).single()
       if (orderDataFull) {
