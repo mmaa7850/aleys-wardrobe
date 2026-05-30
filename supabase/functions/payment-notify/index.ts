@@ -95,12 +95,28 @@ Deno.serve(async (req) => {
       return new Response('OK', { status: 200 })
     }
 
-    // 更新付款狀態、藍新交易序號、付款方式、付款時間
-    const baseUpdate: Record<string, string | null> = {
+    // 計算藍新手續費
+    // 信用卡/ApplePay/GooglePay：2.8%
+    // ATM 虛擬帳號：1%，單筆上限 NT$20
+    // LINE Pay：2.2% 未稅 × 1.05 含稅 = 2.31%（由 LINE Pay 直接向商家收取）
+    function calcPaymentFee(amt: number, payType: string): number | null {
+      const creditTypes = ['CREDIT','APPLEPAY','GOOGLEPAY','SAMSUNGPAY','UNIONPAY','WEBATM','CREDITAE','FOREIGN']
+      if (creditTypes.includes(payType)) return Math.round(amt * 0.028)
+      if (payType === 'VACC')    return Math.min(Math.round(amt * 0.01), 20)
+      if (payType === 'LINEPAY') return Math.round(amt * 0.0231)  // 2.2% 未稅含稅後
+      return null
+    }
+
+    // 更新付款狀態、藍新交易序號、付款方式、付款時間、手續費
+    const baseUpdate: Record<string, string | number | null> = {
       PaymentStatus: payStatus,
       UpdatedDate:   new Date().toISOString(),
     }
-    if (payStatus === 'paid') baseUpdate.PaidAt = new Date().toISOString()
+    if (payStatus === 'paid') {
+      baseUpdate.PaidAt = new Date().toISOString()
+      const fee = calcPaymentFee(Number(result.Amt ?? result.PayAmt ?? 0), result.PaymentType ?? '')
+      if (fee !== null) baseUpdate.PaymentFee = fee
+    }
     if (result.TradeNo)      baseUpdate.TradeNo      = result.TradeNo
     if (result.PaymentType)  baseUpdate.PaymentMethod = result.PaymentType
 
