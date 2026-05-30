@@ -65,7 +65,10 @@ const INVOICE_STATUS_LABEL = {
   wallet:    '毋需開立',
 };
 
-const isWalletOnly = computed(() => detailOrder.value?.PaymentMethod === 'wallet');
+const isWalletOnly = computed(() =>
+  detailOrder.value?.PaymentMethod === 'wallet' ||
+  (detailOrder.value?.NewebpayAmt === 0 && (detailOrder.value?.WalletDeductAmt ?? 0) > 0)
+);
 
 // ── 標記已出貨（宅配）─────────────────────────────────
 const shipForm = ref({ company: 'tcat', no: '' });
