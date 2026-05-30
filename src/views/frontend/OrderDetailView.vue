@@ -165,7 +165,7 @@ onMounted(async () => {
             </div>
             <div class="od-info-item">
               <span class="od-info-item__label">訂單金額</span>
-              <span class="od-info-item__val od-info-item__val--strong">NT$ {{ order.FinalAmount?.toLocaleString() }}</span>
+              <span class="od-info-item__val od-info-item__val--strong">NT$ {{ (order.WalletDeductAmt > 0 ? (order.NewebpayAmt ?? order.FinalAmount) : order.FinalAmount)?.toLocaleString() }}</span>
             </div>
             <div v-if="order._statusLabel" class="od-info-item">
               <span class="od-info-item__label">訂單狀態</span>
@@ -489,11 +489,12 @@ onMounted(async () => {
 .od-pay-badge--failed  { background: rgba(220,38,38,0.08); color: #DC2626; }
 
 .od-status-badge {
-  display: inline-block;
-  padding: 3px 10px;
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  padding: 4px 12px;
   border-radius: 20px;
-  font-size: 12px;
-  font-weight: 500;
+  width: fit-content;
+  margin-top: 2px;
   background: rgba(200,168,130,0.15);
   color: var(--fe-gold-d, #9a7a52);
 }
