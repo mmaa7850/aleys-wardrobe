@@ -94,8 +94,31 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[cancel-orders] 銷單 ${orders.length} 筆，回補庫存 ${Object.keys(stockMap).length} 個 variant`)
-    return json({ cancelled: orders.length, orderNos: orders.map(o => o.OrderNo) })
+    // 5. 封鎖被銷單的會員（by CustomerEmail）
+    const { data: cancelledOrders } = await admin
+      .schema(dbSchema)
+      .from('C_ORD_OrderList')
+      .select('CustomerEmail')
+      .in('ID', orderIds)
+
+    const emails = [...new Set(
+      (cancelledOrders ?? []).map(o => o.CustomerEmail).filter(Boolean)
+    )]
+
+    let blockedCount = 0
+    if (emails.length) {
+      const { error: blockErr } = await admin
+        .schema(dbSchema)
+        .from('C_MBR_MemberList')
+        .update({ IsBlocked: true, UpdatedDate: new Date().toISOString() })
+        .in('Email', emails)
+
+      if (blockErr) console.error('[cancel-orders] 封鎖會員失敗:', blockErr.message)
+      else blockedCount = emails.length
+    }
+
+    console.log(`[cancel-orders] 銷單 ${orders.length} 筆，回補庫存 ${Object.keys(stockMap).length} 個 variant，封鎖 ${blockedCount} 位會員`)
+    return json({ cancelled: orders.length, blocked: blockedCount, orderNos: orders.map(o => o.OrderNo) })
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

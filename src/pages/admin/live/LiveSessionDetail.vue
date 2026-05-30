@@ -275,6 +275,7 @@ const ORDER_STATUS = {
   success:      { label: '✅ 建單成功', cls: 'text-success' },
   no_stock:     { label: '❌ 庫存不足', cls: 'text-danger'  },
   no_member:    { label: '⚠️ 找不到會員', cls: 'text-warning fw-semibold' },
+  blocked:      { label: '🚫 會員已封鎖', cls: 'text-danger fw-semibold'  },
   error:        { label: '❌ 錯誤', cls: 'text-danger'      },
   closed_manual:{ label: '🔒 手動截標', cls: 'text-muted'   },
 }
@@ -732,6 +733,7 @@ const RESULT_STATUS = {
   success:   { label: '✅ 建單成功', cls: 'text-success' },
   no_stock:  { label: '❌ 庫存不足', cls: 'text-danger' },
   no_member: { label: '⚠️ 找不到會員', cls: 'text-warning fw-semibold' },
+  blocked:   { label: '🚫 會員已封鎖', cls: 'text-danger fw-semibold' },
   error:     { label: '❌ 錯誤', cls: 'text-danger' },
 }
 

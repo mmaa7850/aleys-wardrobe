@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
         const { data: members } = await supabase
           .schema(dbSchema)
           .from('C_MBR_MemberList')
-          .select('ID, UserID, Name, Email, Phone, LineUserID')
+          .select('ID, UserID, Name, Email, Phone, LineUserID, IsBlocked')
           .eq('FbName', fbName)
           .limit(1)
 
@@ -156,6 +156,16 @@ Deno.serve(async (req) => {
             productName: productLabel,
             status: 'no_member',
             reason: `找不到 FbName="${fbName}" 的會員`,
+          })
+          continue
+        }
+
+        if (member.IsBlocked) {
+          results.push({
+            fbName,
+            productName: productLabel,
+            status: 'blocked',
+            reason: '此會員因逾期未付款已被封鎖，無法建立直播訂單',
           })
           continue
         }
