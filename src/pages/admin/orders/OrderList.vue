@@ -296,7 +296,7 @@ const saveDetail = async () => {
 // ── Refund ────────────────────────────────────────────
 const CREDIT_METHODS = new Set(['CREDIT', 'APPLEPAY', 'GOOGLEPAY', 'SAMSUNGPAY', 'WEBATM', 'UNIONPAY', 'CREDITAE', 'FOREIGN']);
 
-const PAYMENT_METHOD_LABEL: Record<string, string> = {
+const PAYMENT_METHOD_LABEL = {
   CREDIT:    '信用卡',
   APPLEPAY:  'Apple Pay',
   GOOGLEPAY: 'Google Pay',
@@ -307,7 +307,7 @@ const PAYMENT_METHOD_LABEL: Record<string, string> = {
   LINEPAY:   'LINE Pay',
   wallet:    '購物金（錢包）',
 };
-const fmtPayMethod = (m: string | null) => m ? (PAYMENT_METHOD_LABEL[m] ?? m) : '-';
+const fmtPayMethod = (m) => m ? (PAYMENT_METHOD_LABEL[m] ?? m) : '-';
 
 const canRefund = computed(() => detailOrder.value?.PaymentStatus === 'paid');
 const canApiRefund = computed(() => {
