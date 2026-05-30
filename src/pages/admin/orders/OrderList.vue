@@ -702,6 +702,11 @@ onMounted(async () => {
 
                       <dt>{{ t("order.orders.labelPaymentFee") }}</dt>
                       <dd>{{ detailOrder.PaymentFee != null ? `NT$ ${detailOrder.PaymentFee.toLocaleString()}` : "-" }}</dd>
+
+                      <template v-if="detailOrder.PaymentFee != null && (detailOrder.NewebpayAmt ?? detailOrder.FinalAmount) > 0">
+                        <dt class="fw-semibold text-dark">淨收金額</dt>
+                        <dd class="fw-bold text-success">NT$ {{ ((detailOrder.NewebpayAmt ?? detailOrder.FinalAmount) - detailOrder.PaymentFee).toLocaleString() }}</dd>
+                      </template>
                     </dl>
                   </div>
                 </div>
