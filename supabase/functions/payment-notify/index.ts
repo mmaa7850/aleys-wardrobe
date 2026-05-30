@@ -95,13 +95,14 @@ Deno.serve(async (req) => {
       return new Response('OK', { status: 200 })
     }
 
-    // 更新付款狀態、藍新交易序號、付款方式
+    // 更新付款狀態、藍新交易序號、付款方式、付款時間
     const baseUpdate: Record<string, string | null> = {
       PaymentStatus: payStatus,
-      UpdatedDate: new Date().toISOString(),
+      UpdatedDate:   new Date().toISOString(),
     }
-    if (result.TradeNo)     baseUpdate.TradeNo      = result.TradeNo
-    if (result.PaymentType) baseUpdate.PaymentMethod = result.PaymentType
+    if (payStatus === 'paid') baseUpdate.PaidAt = new Date().toISOString()
+    if (result.TradeNo)      baseUpdate.TradeNo      = result.TradeNo
+    if (result.PaymentType)  baseUpdate.PaymentMethod = result.PaymentType
 
     const { error: updateErr } = await supabase.schema(dbSchema).from('C_ORD_OrderList')
       .update(baseUpdate)

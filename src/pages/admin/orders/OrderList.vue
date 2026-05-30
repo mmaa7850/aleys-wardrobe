@@ -628,7 +628,7 @@ onMounted(async () => {
                   <div class="card-body">
                     <dl class="info-dl">
                       <dt>{{ t("order.orders.labelPayMethod") }}</dt>
-                      <dd>{{ payMethodMap[detailOrder.PayMethodID] ?? "-" }}</dd>
+                      <dd>{{ detailOrder.PaymentMethod ?? payMethodMap[detailOrder.PayMethodID] ?? "-" }}</dd>
 
                       <dt>{{ t("order.orders.labelPaymentStatus") }}</dt>
                       <dd>
