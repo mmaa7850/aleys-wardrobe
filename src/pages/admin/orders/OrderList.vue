@@ -640,6 +640,14 @@ onMounted(async () => {
                       <dt>{{ t("order.orders.labelCreatedDate") }}</dt>
                       <dd>{{ formatDate(detailOrder.CreatedDate) }}</dd>
 
+                      <dt>訂單金額</dt>
+                      <dd>NT$ {{ detailOrder.FinalAmount?.toLocaleString() }}</dd>
+
+                      <template v-if="detailOrder.WalletDeductAmt > 0">
+                        <dt>實收金額</dt>
+                        <dd class="fw-bold text-primary">NT$ {{ detailOrder.NewebpayAmt?.toLocaleString() }}</dd>
+                      </template>
+
                       <dt>{{ t("order.orders.labelCustomerName") }}</dt>
                       <dd>{{ detailOrder.CustomerName }}</dd>
 

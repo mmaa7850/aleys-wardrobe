@@ -28,7 +28,7 @@ async function fetchOrders() {
   loading.value = true
   const { data } = await db
     .from('C_ORD_OrderList')
-    .select('ID, OrderNo, FinalAmount, PaymentStatus, CreatedDate')
+    .select('ID, OrderNo, FinalAmount, NewebpayAmt, WalletDeductAmt, PaymentStatus, CreatedDate')
     .eq('CustomerEmail', auth.user.email)
     .order('CreatedDate', { ascending: false })
   orders.value = data || []
@@ -96,7 +96,7 @@ onMounted(() => {
         >
           <span class="ol-row__no">{{ o.OrderNo }}</span>
           <span class="ol-row__date">{{ formatDate(o.CreatedDate) }}</span>
-          <span class="ol-row__amount">NT$ {{ Number(o.FinalAmount).toLocaleString() }}</span>
+          <span class="ol-row__amount">NT$ {{ Number(o.WalletDeductAmt > 0 ? (o.NewebpayAmt ?? o.FinalAmount) : o.FinalAmount).toLocaleString() }}</span>
           <span :class="['ol-badge', `ol-badge--${o.PaymentStatus}`]">
             {{ payLabel(o.PaymentStatus) }}
           </span>
