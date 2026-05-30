@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
       .select('ID, OrderNo')
       .eq('PaymentStatus', 'pending')
 
-    if (ordErr) throw ordErr
+    if (ordErr) throw new Error(ordErr.message ?? JSON.stringify(ordErr))
     if (!orders?.length) return json({ cancelled: 0, message: '沒有待取消的訂單' })
 
     const orderIds = orders.map(o => o.ID)
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       .select('VariantID, Qty')
       .in('OrderID', orderIds)
 
-    if (itemErr) throw itemErr
+    if (itemErr) throw new Error(itemErr.message ?? JSON.stringify(itemErr))
 
     // 3. 取消所有 pending 訂單
     const { error: cancelErr } = await admin
@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
       .update({ PaymentStatus: 'cancelled', UpdatedDate: new Date().toISOString() })
       .in('ID', orderIds)
 
-    if (cancelErr) throw cancelErr
+    if (cancelErr) throw new Error(cancelErr.message ?? JSON.stringify(cancelErr))
 
     // 4. 回補庫存（逐一 rpc increment，無 rpc 則用 select+update）
     const stockMap: Record<number, number> = {}

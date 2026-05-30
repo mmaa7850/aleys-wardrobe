@@ -27,11 +27,11 @@ async function triggerCancelOrders() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
     })
     const data = await res.json()
-    if (!res.ok) throw new Error(data.error || '執行失敗')
+    if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data))
     cancelResult.value = `✅ 已銷單 ${data.cancelled} 筆：${(data.orderNos ?? []).join('、') || '（無）'}`
     await load()
   } catch (e) {
-    cancelResult.value = `❌ ${e.message}`
+    cancelResult.value = `❌ ${e instanceof Error ? e.message : JSON.stringify(e)}`
   } finally {
     cancellingAll.value = false
   }
