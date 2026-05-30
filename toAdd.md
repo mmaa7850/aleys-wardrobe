@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-24
+> 更新時間：2026-05-30
 
 ---
 
@@ -24,7 +24,14 @@
 - **錢包系統**：`/wallet` 頁面（餘額/儲值/ATM 待付款顯示）；Edge Functions：`wallet-topup`、`wallet-topup-notify`、`wallet-topup-return`、`wallet-adjust`、`wallet-refund`；結帳頁可折抵錢包；全額折抵不送藍新；DB：`C_MBR_WalletList`/`C_MBR_WalletTopupList`/`C_MBR_WalletTxList`
 - **結帳頁 UX 改善**：錯誤訊息移至各欄位下方（姓名/電話/地址/發票分別顯示）；電話驗證改為台灣格式（`/^0\d{8,9}$/`，允許連字號）；紅色邊框 + inline error text
 - **結帳頁電子發票載具選擇**：紙本（預設）/ 手機條碼 / 自然人憑證 / 捐贈碼 / 公司戶三聯式；前端格式驗證；發票載具欄位存入訂單（`InvoiceCarrierType` 等）
-- **retry-payment 修正**：加入 VACC=1、ATM ExpireDate（3天）、CustomerURL；超商取貨附加 CVSCOM/LgsType；使用 `NewebpayAmt`（扣除錢包後金額）；移除 LoginType 多餘參數
+- **retry-payment 修正**：加入 VACC=1、LINEPAY=1、ATM ExpireDate（3天）、CustomerURL；超商取貨附加 CVSCOM/LgsType；使用 `NewebpayAmt`（扣除錢包後金額）；移除 LoginType 多餘參數
+- **payment-notify 補強**：付款成功自動寫入 `PaidAt`；計算並存入 `PaymentFee`（信用卡2.8%、ATM 1% 上限NT$20、LINE Pay 2.31%）；自動設訂單狀態為第二個狀態（已付款）
+- **create-payment 補強**：訂單建立時即設 StatusID=第一個狀態（待付款）；全額錢包付款補寫 `PaidAt`/`PaymentMethod='wallet'`/`StatusID`=第二個狀態/`UpdatedDate`
+- **訂單狀態自動化**：下單→待付款；付款→已付款；標記已出貨→已出貨；退款→已退款（依 `S_ORD_StatusList.Name` 查找，不硬寫 ID）
+- **後台訂單詳情 UX 大幅改善**：付款方式顯示中文（VACC→ATM虛擬帳號等）；退款按鈕依付款方式顯示對應文字；顧客資訊卡加「訂單金額」+「實收金額」；金流資訊卡加「淨收金額」（實付－手續費）；錢包全額付款顯示「毋需開立」並隱藏開立發票按鈕；訂單列表金額有錢包折抵時顯示 NewebpayAmt
+- **前台訂單詳情 UX 改善**：運費正確從 ShippingFee 讀取；有錢包折抵時訂單總計顯示 NewebpayAmt；新增「訂單狀態」欄位（從 S_ORD_StatusList 查中文名稱）；退款訂單不顯示重新付款/ATM轉帳資訊；payStatusLabel 補 refunded→已退款；訂單列表/會員中心金額同步修正
+- **wallet-topup 加入 LINE Pay**：`LINEPAY=1` 加入儲值付款選項
+- **LINE Pay 儲值/結帳全程測試通過**（沙盒環境）
 
 ---
 
@@ -45,29 +52,30 @@
 - ✅ **手機條碼**：開立成功
 - ✅ **公司戶三聯式**：開立成功（三聯式）
 - ✅ **自然人憑證**：開立成功，InvoiceCarrierNum 正確存入
-- ✅ **捐贈碼**：開立成功，InvoiceCarrierNum 正確存入
-- ⚠️ **後台手動補開/作廢/折讓**：待測試
+- ✅ **捐贈碼**：開立成功，InvoiceLoveCode 正確存入
+- ✅ **後台作廢發票**：作廢成功，InvoiceStatus 變 voided
+- ⚠️ **後台開立折讓**：Buffer 錯誤已修（補 import），待重新測試
+- ⚠️ **後台手動補開發票**：待測試（找 InvoiceStatus=none 的已付款訂單）
 
 **尚需設定（正式上線前）：**
 - Supabase Edge Functions Secrets 切換 `EZPAY_ENV=prod`
 
+**已確認的操作邏輯：**
+- 全額退款 → 先作廢發票，再按退款按鈕（兩個分開操作）✅
+- 部分退款 → 開立折讓（只調整發票，退款金額人工處理）
+- 錢包全額付款訂單 → 無發票（已在儲值時開立）
+
 **待確認的問題：**
 
-> ❓ **Q1：退款 + 發票的操作流程**
-> 目前設計是「退款」和「發票作廢/折讓」分開兩個操作（各自按按鈕）。
-> → 維持分開操作，還是合併成一個按鈕自動處理？
+> ❓ **Q1：部分退款（折讓）的錢要怎麼還給客人？**
+> 目前「開立折讓」只處理發票，不動金流。選項 A：退回錢包；選項 B：人工匯款
+> → **目前預設 B**（系統只開折讓，退款人工處理）。
 
-> ❓ **Q2：部分退款（折讓）的錢要怎麼還給客人？**
-> 目前「開立折讓」只處理發票，不動金流。
-> 選項 A：退回原付款方式（走藍新退款 API）；選項 B：退回客戶錢包；選項 C：人工匯款
-> → **目前預設 C**（系統只開折讓，退款人工處理）。
+> ❓ **Q2：退款後庫存要不要回補？**
+> 目前退款後已扣庫存不自動加回。退回的商品是要重新上架還是報損？
 
-> ❓ **Q3：退款後庫存要不要回補？**
-> 目前退款後已扣庫存不自動加回。
-> → 退回的商品要重新上架還是報損？
-
-> ❓ **Q4：發票開立後是否需要額外通知客人？**
-> 目前 ezPay 會自動寄發票通知給買家（已確認可行）。若需要系統再寄一封自訂信，需串 SMTP。
+> ❓ **Q3：錢包全額付款的訂單發票問題已確認**
+> 儲值時已開立，消費訂單不重複開立。
 
 ---
 

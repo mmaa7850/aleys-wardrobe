@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-24
+> 更新時間：2026-05-30
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -649,6 +649,7 @@ WITH CHECK (
 | Policy | Role | CMD | 條件 |
 |--------|------|-----|------|
 | Admin_Select/Insert_Status | authenticated | SELECT/INSERT | staging.is_admin() |
+| member_read_status | authenticated | SELECT | true（前台訂單詳情顯示訂單狀態名稱用）|
 
 ### H_PRD_ProductList
 | Policy | Role | CMD | 條件 |
