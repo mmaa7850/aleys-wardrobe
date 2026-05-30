@@ -178,9 +178,11 @@ Deno.serve(async (req) => {
       }).eq('MemberID', user.id)
     }
 
-    // 查第一個訂單狀態（建立時即設定，不等付款）
-    const { data: firstStatus } = await supabaseAdmin.schema(dbSchema)
-      .from('S_ORD_StatusList').select('ID').order('ID', { ascending: true }).limit(1).single()
+    // 查前兩個訂單狀態：建立時用第一個（待付款），付款成功（wallet-only）用第二個（待出貨）
+    const { data: statusList } = await supabaseAdmin.schema(dbSchema)
+      .from('S_ORD_StatusList').select('ID').order('ID', { ascending: true }).limit(2)
+    const firstStatus  = statusList?.[0]
+    const secondStatus = statusList?.[1] ?? statusList?.[0]
 
     const { data: order, error: orderErr } = await supabaseAdmin
       .schema(dbSchema)
@@ -283,12 +285,12 @@ Deno.serve(async (req) => {
     if (newebpayAmount === 0) {
       const now = new Date().toISOString()
 
-      // 補寫付款相關欄位（firstStatus 已在建立訂單前查好）
+      // 補寫付款相關欄位（wallet-only = 直接付款成功，設第二個狀態）
       await supabaseAdmin.schema(dbSchema).from('C_ORD_OrderList').update({
         PaidAt:        now,
         PaymentMethod: 'wallet',
         UpdatedDate:   now,
-        ...(firstStatus?.ID ? { StatusID: firstStatus.ID } : {}),
+        ...(secondStatus?.ID ? { StatusID: secondStatus.ID } : {}),
       }).eq('OrderNo', orderNo)
 
       const { data: orderDataFull } = await supabaseAdmin.schema(dbSchema).from('C_ORD_OrderList')

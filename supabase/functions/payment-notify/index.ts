@@ -127,12 +127,13 @@ Deno.serve(async (req) => {
     else console.log('[payment-notify] PaymentStatus updated to', payStatus, '| TradeNo:', result.TradeNo, '| PaymentType:', result.PaymentType)
 
     if (payStatus === 'paid') {
-      // 自動設定訂單狀態為第一個狀態（ID 最小）
-      const { data: firstStatus } = await supabase.schema(dbSchema)
-        .from('S_ORD_StatusList').select('ID').order('ID', { ascending: true }).limit(1).single()
-      if (firstStatus?.ID) {
+      // 付款成功：自動設定為第二個狀態（待出貨/待處理，第一個是待付款）
+      const { data: statusList } = await supabase.schema(dbSchema)
+        .from('S_ORD_StatusList').select('ID').order('ID', { ascending: true }).limit(2)
+      const paidStatusId = statusList?.[1]?.ID ?? statusList?.[0]?.ID
+      if (paidStatusId) {
         await supabase.schema(dbSchema).from('C_ORD_OrderList')
-          .update({ StatusID: firstStatus.ID, UpdatedDate: new Date().toISOString() })
+          .update({ StatusID: paidStatusId, UpdatedDate: new Date().toISOString() })
           .eq('OrderNo', orderNo)
       }
 
