@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const { data: order, error: orderErr } = await supabaseAdmin
       .schema(dbSchema)
       .from('C_ORD_OrderList')
-      .select('ID, OrderNo, FinalAmount, ShippingFee, PaymentStatus, CustomerName, CustomerEmail, InvoiceStatus, InvoiceNo, InvoiceNumber, InvoiceRandomNum, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN, InvoiceBuyerName')
+      .select('ID, OrderNo, FinalAmount, NewebpayAmt, WalletDeductAmt, ShippingFee, PaymentStatus, CustomerName, CustomerEmail, InvoiceStatus, InvoiceNo, InvoiceNumber, InvoiceRandomNum, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN, InvoiceBuyerName')
       .eq('OrderNo', orderNo)
       .single()
 
