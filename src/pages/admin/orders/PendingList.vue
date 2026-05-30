@@ -12,6 +12,31 @@ const errMsg        = ref('')
 
 const notifyStatus = ref({})   // key: memberId 或 email
 
+// ── [TEST] 手動觸發銷單 ───────────────────────────────────
+const cancellingAll = ref(false)
+const cancelResult  = ref('')
+
+async function triggerCancelOrders() {
+  if (!confirm('確定要立即觸發銷單？所有 pending 訂單將被取消並回補庫存。')) return
+  cancellingAll.value = true
+  cancelResult.value  = ''
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cancel-orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || '執行失敗')
+    cancelResult.value = `✅ 已銷單 ${data.cancelled} 筆：${(data.orderNos ?? []).join('、') || '（無）'}`
+    await load()
+  } catch (e) {
+    cancelResult.value = `❌ ${e.message}`
+  } finally {
+    cancellingAll.value = false
+  }
+}
+
 // ── 計算本週週一 00:00 台灣時間對應的 UTC ISO string ──────
 function thisWeekMondayUTC() {
   const now = new Date()
@@ -271,10 +296,23 @@ onMounted(load)
           購物車結帳提醒 ＆ 本週已銷單追蹤
         </p>
       </div>
-      <button class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading">
-        <span v-if="loading" class="spinner-border spinner-border-sm me-1" />
-        重新整理
-      </button>
+      <div class="d-flex gap-2 align-items-center flex-wrap justify-content-end">
+        <!-- [TEST] 測試用，驗證後移除 -->
+        <div class="d-flex flex-column align-items-end gap-1">
+          <button class="btn btn-sm btn-danger" @click="triggerCancelOrders" :disabled="cancellingAll || loading"
+            title="測試用：立即執行銷單，勿在正式環境誤觸">
+            <span v-if="cancellingAll" class="spinner-border spinner-border-sm me-1" />
+            ⚠ 立即觸發銷單（測試）
+          </button>
+          <small v-if="cancelResult" :class="cancelResult.startsWith('✅') ? 'text-success' : 'text-danger'"
+            style="font-size:11px; max-width:280px; text-align:right;">{{ cancelResult }}</small>
+        </div>
+        <!-- [/TEST] -->
+        <button class="btn btn-sm btn-outline-secondary" @click="load" :disabled="loading">
+          <span v-if="loading" class="spinner-border spinner-border-sm me-1" />
+          重新整理
+        </button>
+      </div>
     </div>
 
     <!-- 銷單提示 -->
