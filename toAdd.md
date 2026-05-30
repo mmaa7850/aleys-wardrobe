@@ -37,6 +37,29 @@
 
 ## ⚠️ 已開發，待測試 / 待上線
 
+### 直播代建訂單系統
+
+**程式已完成，尚未端對端測試。**
+
+**已實作範圍：**
+- `/admin/live` 場次列表（建立/管理）
+- 場次詳情三個 Tab：**商品對照表**（代碼↔商品↔直播價）/ **留言解析建單**（貼 FB 留言文字 → 解析 → 批次建單 → LINE 通知）/ **FB 直播監控**（連 FB → 即時輪詢留言 → 自動搶標/截標）
+- `live-import` Edge Function：比對 `FbName` 找會員、扣庫存、建訂單（`OrderSource='live'`）、發 LINE 推播付款連結
+- `live-bid-poll` Edge Function：FB Graph API 輪詢、起標/截標管理
+- DB tables：`C_LIV_SessionList` / `C_LIV_ProductList` / `C_LIV_ActiveBidList` / `C_LIV_ProcessedCommentList`（已執行）
+
+**待測試清單：**
+- ⚠️ 場次建立 / 商品對照表 CRUD
+- ⚠️ 留言貼入解析 → 批次建單 → 確認訂單建立正確
+- ⚠️ LINE 付款通知是否送達
+- ⚠️ 客人點連結 → 進入訂單詳情 → 重新付款流程
+- ⚠️ FB 直播監控（需真實粉專授權）
+
+**已知潛在問題：**
+> ⚠️ 純 LINE 帳號（無 email）的會員，`CustomerEmail` 為空，`OrderDetailView` 用 email 過濾會找不到訂單，付款連結失效。一般有 email 的會員不受影響。
+
+---
+
 ### 電子發票（ezPay）
 
 **程式已完成，部分已測試通過。**
@@ -86,107 +109,6 @@
 ---
 
 ## 🟡 中優先（功能重要，工程量中等）
-
-### 1. 後台直播代建訂單工具（手動版）
-
-直播結束後，小編在後台統一建立訂單，不依賴 FB API，先跑起來再考慮自動化。
-
-**已確認的流程設計：**
-- 直播前公告數量，開始搶購
-- 直播完後開 24 小時限時 FB 貼文，留言者可用直播價購買
-- 貼文關閉後，小編根據**留言先後順序 FIFO** 分配庫存
-- 超出庫存的自動轉預購
-- 小編以 **CSV 上傳**方式批次建單（取代手動一筆筆輸入）
-- CSV 的直播特價欄位直接取代商品原價
-- 建單完成後批次發付款連結給客人（透過 LINE）
-
-**直播前需建立關鍵字對照表：**
-- 每場直播前，後台建立「關鍵字 → 商品+顏色+尺寸」的對照表
-- 留言只接受完全符合關鍵字的，不做模糊比對
-- 此表存於新 table `S_LIV_KeywordList`
-
----
-
-#### FB User ID 對應官網帳號的問題（核心難題）
-
-**問題根源：**
-FB User ID、LINE User ID、Email 是三個完全獨立的系統，沒有共同欄位，**無法自動對應**。
-其他直播商店做法是：第一次客人私訊姓名、電話、地址給 FB / LINE OA，但這份資料是非結構化的文字，系統無法自動解析並與官網帳號綁定。
-
-**唯一能當橋梁的是「電話號碼」：**
-客人私訊的資料含電話，官網會員也有電話欄位（`C_MBR_MemberList.Phone`）。
-用電話做 key 是目前唯一可行的半自動比對方式。
-
-**兩階段解法：**
-
-**階段一：CSV 手動版（現在要做）**
-- FB User ID **完全不需要**，流程如下：
-  ```
-  客人留言 → 客人私訊姓名/電話/地址
-    → 小編整理 CSV（含電話欄位）
-    → 上傳 CSV
-    → 系統用「電話」比對 C_MBR_MemberList
-        ├─ 找到 → 訂單綁定到該會員
-        └─ 找不到 → 建訪客記錄存入 C_LIV_CustomerList
-  ```
-
-**階段二：FB API 自動化（未來）**
-- 客人留言被 FB API 捕捉（含 FB User ID）
-- 系統查 `C_LIV_CustomerList` 有沒有這個 FB User ID
-  - 有（舊客）→ 直接建單
-  - 沒有（新客）→ Bot 自動私訊請客人留資料
-    → 客人回覆（FB DM 的 sender 就是 FB User ID）
-    → 存入 `C_LIV_CustomerList`，用電話比對官網會員，能綁就綁
-
-**需要新增的 DB Table：**
-
-```
-C_LIV_CustomerList        -- 直播客人主檔（FB身份橋梁）
-──────────────────────────────────────────
-ID              bigint
-FBUserID        varchar    -- FB User ID（nullable，手動版不需要）
-Name            varchar    -- 客人姓名
-Phone           varchar    -- 電話（比對官網會員用）
-Address         text       -- 預設地址
-MemberID        bigint     -- 對應官網會員（nullable）
-CreatedDate     timestamptz
-
-S_LIV_KeywordList         -- 直播關鍵字對照表（每場直播前設定）
-──────────────────────────────────────────
-ID              bigint
-SessionID       bigint     -- 所屬直播場次
-Keyword         varchar    -- 客人留言的關鍵字
-ProductID       bigint
-VariantID       bigint     -- 對應商品規格（顏色+尺寸）
-LivePrice       bigint     -- 直播特價
-
-C_LIV_SessionList         -- 直播場次
-──────────────────────────────────────────
-ID              bigint
-Title           varchar    -- 場次名稱
-LiveDate        timestamptz
-Status          varchar    -- planned / active / closed
-CreatedDate     timestamptz
-```
-
-**需使用者確認的問題：**
-
-> ❓ **Q1：預購客人的付款時機？**
-> 選項 A：現在就付款（到貨前先付，訂單狀態維持「待出貨」）
-> 選項 B：到貨後才付款（訂單保持「待付款」，到貨再傳付款連結）
-> → 這會影響訂單狀態設計，**需要確認後才能動工**。
-
-> ❓ **Q2：直播訂單要不要記錄「原價 vs 直播特價」差額？**
-> 目前 CSV 的直播價會直接存入 `UnitPrice`，原始商品售價不會留記錄。
-> → 這樣可以嗎？還是需要知道每場直播折了多少？
-
-> ❓ **Q3：直播訂單要開電子發票嗎？**
-> 直播價通常和官網售價不同，發票金額以直播成交價為準。
-> → 若要開發票，直播代建訂單也需要接 ezPay，等電子發票測試完再一起做。
-
-> ❓ **Q4：先做 CSV 手動版，還是直接做 FB API 自動版？**
-> 建議先做 CSV 版（`C_LIV_CustomerList.FBUserID` 欄位留著但 nullable），
-> 日後 FB 自動化時直接填入，不用改 schema。
 
 ---
 
