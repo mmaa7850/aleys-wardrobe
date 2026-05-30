@@ -111,6 +111,7 @@ Deno.serve(async (req) => {
       Email:           user.email ?? '',
       ExpireDate:      expireDate,
       ItemDesc:        `錢包儲值 NT$${amt}`,
+      LINEPAY:         1,
       MerchantID:      merchantId,
       MerchantOrderNo: topupNo,
       NotifyURL:       `${supabaseUrl}/functions/v1/wallet-topup-notify`,

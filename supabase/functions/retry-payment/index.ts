@@ -129,6 +129,7 @@ Deno.serve(async (req) => {
       Email:           order.CustomerEmail,
       ExpireDate:      expireDate,
       ItemDesc:        itemDesc || '商品購買',
+      LINEPAY:         1,
       MerchantID:      merchantId,
       MerchantOrderNo: merchantOrderNo,
       NotifyURL:       `${Deno.env.get('SUPABASE_URL')}/functions/v1/payment-notify`,
