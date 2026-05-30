@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
       .schema(dbSchema)
       .from('C_ORD_OrderList')
       .select('ID, OrderNo')
-      .eq('PaymentStatus', 'pending')
+      .in('PaymentStatus', ['pending', 'failed'])
 
     if (ordErr) throw new Error(ordErr.message ?? JSON.stringify(ordErr))
     if (!orders?.length) return json({ cancelled: 0, message: '沒有待取消的訂單' })

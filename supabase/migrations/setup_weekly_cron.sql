@@ -21,7 +21,7 @@ SELECT cron.schedule(
       SELECT oi."VariantID", SUM(oi."Qty") AS qty
       FROM   public."C_ORD_OrderItemList"  oi
       JOIN   public."C_ORD_OrderList"      o  ON o."ID" = oi."OrderID"
-      WHERE  o."PaymentStatus" IN ('pending', 'payment_failed')
+      WHERE  o."PaymentStatus" IN ('pending', 'failed')
       AND    oi."VariantID" IS NOT NULL
       GROUP  BY oi."VariantID"
     LOOP
@@ -32,7 +32,7 @@ SELECT cron.schedule(
     UPDATE public."C_ORD_OrderList"
     SET    "PaymentStatus" = 'cancelled',
            "UpdatedDate"   = NOW()
-    WHERE  "PaymentStatus" IN ('pending', 'payment_failed');
+    WHERE  "PaymentStatus" IN ('pending', 'failed');
 
     -- 刪除購物車中的購物金項目（IsReward = true）
     DELETE FROM public."C_CART_CartItemList"
@@ -55,7 +55,7 @@ SELECT cron.schedule(
       SELECT oi."VariantID", SUM(oi."Qty") AS qty
       FROM   staging."C_ORD_OrderItemList"  oi
       JOIN   staging."C_ORD_OrderList"      o  ON o."ID" = oi."OrderID"
-      WHERE  o."PaymentStatus" IN ('pending', 'payment_failed')
+      WHERE  o."PaymentStatus" IN ('pending', 'failed')
       AND    oi."VariantID" IS NOT NULL
       GROUP  BY oi."VariantID"
     LOOP
@@ -65,7 +65,7 @@ SELECT cron.schedule(
     UPDATE staging."C_ORD_OrderList"
     SET    "PaymentStatus" = 'cancelled',
            "UpdatedDate"   = NOW()
-    WHERE  "PaymentStatus" IN ('pending', 'payment_failed');
+    WHERE  "PaymentStatus" IN ('pending', 'failed');
 
     DELETE FROM staging."C_CART_CartItemList"
     WHERE "IsReward" = true;
