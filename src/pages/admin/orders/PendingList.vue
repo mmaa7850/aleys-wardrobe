@@ -375,23 +375,21 @@ onMounted(load)
                 </td>
                 <!-- 商品清單 -->
                 <td class="px-3 py-3" style="max-width:280px;">
-                  <div v-if="row.cartOnly" class="text-muted" style="font-size:12px;">
-                    <span class="badge bg-secondary me-1" style="font-size:10px;">購物車清除</span>
-                    未建立訂單
-                  </div>
-                  <template v-else>
+                  <span v-if="row.cartOnly" class="badge bg-secondary me-1" style="font-size:10px;">購物車清除</span>
+                  <template v-if="row.items.length">
                     <div v-for="(it, i) in row.items.slice(0, 3)" :key="i"
                       class="text-muted" style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                      {{ it.ProductName }}
-                      <span v-if="it.ColorName || it.SizeName" style="color:#aaa;">
-                        （{{ [it.ColorName, it.SizeName].filter(Boolean).join(' / ') }}）
+                      {{ it.ProductName || it.productName }}
+                      <span v-if="it.ColorName || it.colorName || it.SizeName || it.sizeName" style="color:#aaa;">
+                        （{{ [it.ColorName || it.colorName, it.SizeName || it.sizeName].filter(Boolean).join(' / ') }}）
                       </span>
-                      × {{ it.Qty }}
+                      × {{ it.Qty || it.qty }}
                     </div>
                     <div v-if="row.items.length > 3" class="text-muted" style="font-size:11px;">
                       ⋯ 共 {{ row.items.length }} 件
                     </div>
                   </template>
+                  <span v-else class="text-muted" style="font-size:12px;">—</span>
                 </td>
                 <td class="px-3 py-3 text-end fw-semibold" style="color:#c0392b;">
                   <span v-if="row.cartOnly" class="text-muted">—</span>
