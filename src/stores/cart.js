@@ -124,6 +124,7 @@ export const useCartStore = defineStore('cart', {
         .from('C_CART_CartItemList')
         .select('ID, ProductID, VariantID, Qty, Source, LiveSessionID, IsReward, RewardAmt')
         .eq('CartID', this.cartId)
+        .is('CancelledAt', null)
 
       if (error) throw error
       if (!rawItems || rawItems.length === 0) {
