@@ -183,7 +183,7 @@ export const useCartStore = defineStore('cart', {
         { data: variants },
       ] = await Promise.all([
         db.from('C_PRD_ProductList')
-          .select('ID, ProductName, Price, IsPreOrder, PreOrderShipDate, C_PRD_ProductPictureList(StoragePath, IsMain, Type)')
+          .select('ID, ProductName, Price, IsPreOrder, C_PRD_ProductPictureList(StoragePath, IsMain, Type)')
           .in('ID', productIds),
         db.from('C_PRD_ProductVariantList')
           .select('ID, ColorID, SizeID, StockQty')
@@ -239,7 +239,7 @@ export const useCartStore = defineStore('cart', {
           sizeName:      sizeMap[variant.SizeID] || '',
           stockQty:      variant.StockQty ?? 0,
           isPreOrder:    !!(product.IsPreOrder) && (variant.StockQty ?? 0) <= 0,
-          preOrderShipDate: product.PreOrderShipDate || null,
+          preOrderShipDate: null,
           imgUrl:        media?.url || null,
           imgType:       media?.type || 'image',
           isReward:      false,

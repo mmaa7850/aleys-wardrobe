@@ -75,7 +75,6 @@ const form = ref({
     OriginPrice: null,
     IsActive: false,
     IsPreOrder: false,
-    PreOrderShipDate: '',
     PreOrderNote: '',
     CreatedDate: null,
     UpdatedDate: null,
@@ -176,7 +175,6 @@ const createDraftIfNeeded = async () => {
         form.value.OriginPrice = payload.OriginPrice;
         form.value.IsActive = payload.IsActive;
         form.value.IsPreOrder = payload.IsPreOrder ?? false;
-        form.value.PreOrderShipDate = payload.PreOrderShipDate ?? '';
         form.value.PreOrderNote = payload.PreOrderNote ?? '';
         form.value.CreatedDate = payload.CreatedDate;
         form.value.UpdatedDate = payload.UpdatedDate;
@@ -232,7 +230,7 @@ const loadProduct = async (id) => {
         const { data, error } = await db
             .from(tableName)
             .select(
-                'ID,"ProductName","Category","Price","OriginPrice","IsActive","IsPreOrder","PreOrderShipDate","PreOrderNote","CreatedDate","UpdatedDate","SubTitle","Description","Material","WashingMethod","SEOTitle","SEODescription"'
+                'ID,"ProductName","Category","Price","OriginPrice","IsActive","IsPreOrder","PreOrderNote","CreatedDate","UpdatedDate","SubTitle","Description","Material","WashingMethod","SEOTitle","SEODescription"'
             )
             .eq("ID", id)
             .single();
@@ -310,7 +308,6 @@ const saveDraft = async () => {
             OriginPrice: toNumberOrNull(form.value.OriginPrice),
             IsActive: !!form.value.IsActive,
             IsPreOrder: !!form.value.IsPreOrder,
-            PreOrderShipDate: form.value.IsPreOrder ? (form.value.PreOrderShipDate || null) : null,
             PreOrderNote: form.value.IsPreOrder ? (form.value.PreOrderNote?.trim() || null) : null,
             UpdatedDate: now,
 
@@ -1146,14 +1143,9 @@ onMounted(async () => {
 
                             <template v-if="form.IsPreOrder">
                                 <div class="col-12 col-md-6">
-                                    <label class="form-label">預計出貨日（選填）</label>
-                                    <input v-model="form.PreOrderShipDate" type="date" class="form-control"
-                                        :disabled="saving" />
-                                </div>
-                                <div class="col-12 col-md-6">
                                     <label class="form-label">預購說明（選填）</label>
                                     <input v-model="form.PreOrderNote" type="text" class="form-control"
-                                        placeholder="e.g. 下單後 14 天出貨" :disabled="saving" />
+                                        placeholder="e.g. 限量預購" :disabled="saving" />
                                 </div>
                             </template>
 

@@ -124,7 +124,7 @@ async function fetchData() {
       .select(`
         ID, ProductName, ProductTitle, SubTitle, Description,
         Material, WashingMethod, OriginPrice, Price,
-        IsPreOrder, PreOrderShipDate, PreOrderNote,
+        IsPreOrder, PreOrderNote,
         C_PRD_ProductPictureList(ID, StoragePath, AltText, IsMain, SortOrder, Type),
         C_PRD_ProductVariantList(ID, ColorID, SizeID, StockQty, IsActive)
       `)
@@ -285,7 +285,7 @@ onMounted(async () => {
         <!-- Pre-order notice（庫存售完 + IsPreOrder = true 才顯示）-->
         <div v-if="isActivePreOrder" class="pd-preorder">
           <span class="pd-preorder__badge">預購中</span>
-          <span class="pd-preorder__date">三週內出貨</span>
+          <span class="pd-preorder__date">2-3 週內出貨</span>
           <p v-if="product.PreOrderNote" class="pd-preorder__note">{{ product.PreOrderNote }}</p>
         </div>
 
