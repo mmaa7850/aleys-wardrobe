@@ -34,6 +34,23 @@ SELECT cron.schedule(
            "UpdatedDate"   = NOW()
     WHERE  "PaymentStatus" IN ('pending', 'failed');
 
+    -- 清除購物車現貨品（非預購），並回補庫存
+    FOR r IN
+      SELECT ci."ID", ci."VariantID", ci."Qty"
+      FROM   public."C_CART_CartItemList" ci
+      JOIN   public."C_PRD_ProductList"   p  ON p."ID" = ci."ProductID"
+      WHERE  ci."IsReward" = false
+      AND    p."IsPreOrder" = false
+    LOOP
+      PERFORM public.restore_stock(r."VariantID", r."Qty"::int);
+    END LOOP;
+
+    DELETE FROM public."C_CART_CartItemList" ci
+    USING public."C_PRD_ProductList" p
+    WHERE ci."ProductID" = p."ID"
+    AND   ci."IsReward"  = false
+    AND   p."IsPreOrder" = false;
+
     -- 刪除購物車中的購物金項目（IsReward = true）
     DELETE FROM public."C_CART_CartItemList"
     WHERE "IsReward" = true;
@@ -67,6 +84,24 @@ SELECT cron.schedule(
            "UpdatedDate"   = NOW()
     WHERE  "PaymentStatus" IN ('pending', 'failed');
 
+    -- 清除購物車現貨品（非預購），並回補庫存
+    FOR r IN
+      SELECT ci."ID", ci."VariantID", ci."Qty"
+      FROM   staging."C_CART_CartItemList" ci
+      JOIN   staging."C_PRD_ProductList"   p  ON p."ID" = ci."ProductID"
+      WHERE  ci."IsReward" = false
+      AND    p."IsPreOrder" = false
+    LOOP
+      PERFORM staging.restore_stock(r."VariantID", r."Qty"::int);
+    END LOOP;
+
+    DELETE FROM staging."C_CART_CartItemList" ci
+    USING staging."C_PRD_ProductList" p
+    WHERE ci."ProductID" = p."ID"
+    AND   ci."IsReward"  = false
+    AND   p."IsPreOrder" = false;
+
+    -- 刪除購物車中的購物金項目（IsReward = true）
     DELETE FROM staging."C_CART_CartItemList"
     WHERE "IsReward" = true;
   END;

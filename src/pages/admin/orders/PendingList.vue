@@ -28,7 +28,7 @@ async function triggerCancelOrders() {
     })
     const data = await res.json()
     if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data))
-    cancelResult.value = `✅ 已銷單 ${data.cancelled} 筆：${(data.orderNos ?? []).join('、') || '（無）'}`
+    cancelResult.value = `✅ 銷訂單 ${data.cancelled} 筆，清購物車 ${data.cartCleared} 筆，封鎖 ${data.blocked} 位會員`
     await load()
   } catch (e) {
     cancelResult.value = `❌ ${e instanceof Error ? e.message : JSON.stringify(e)}`

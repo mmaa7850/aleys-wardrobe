@@ -40,85 +40,132 @@ Deno.serve(async (req) => {
 
     if (!adminUser?.IsAdmin || !adminUser?.IsActive) return json({ error: '無管理員權限' }, 403)
 
-    // 1. 找所有 pending 訂單
+    // ── 共用：restore_stock RPC ───────────────────────────────
+    async function restoreStock(variantId: number, qty: number) {
+      await admin.schema(dbSchema).rpc('restore_stock', {
+        p_variant_id: variantId,
+        p_qty: qty,
+      })
+    }
+
+    // ══ Part A：取消 pending/failed 訂單 ══════════════════════
+
     const { data: orders, error: ordErr } = await admin
       .schema(dbSchema)
       .from('C_ORD_OrderList')
-      .select('ID, OrderNo')
+      .select('ID, OrderNo, CustomerEmail')
       .in('PaymentStatus', ['pending', 'failed'])
 
     if (ordErr) throw new Error(ordErr.message ?? JSON.stringify(ordErr))
-    if (!orders?.length) return json({ cancelled: 0, message: '沒有待取消的訂單' })
 
-    const orderIds = orders.map(o => o.ID)
+    let cancelledCount = 0
+    let blockedCount   = 0
 
-    // 2. 取訂單明細（回補庫存用）
-    const { data: items, error: itemErr } = await admin
-      .schema(dbSchema)
-      .from('C_ORD_OrderItemList')
-      .select('VariantID, Qty')
-      .in('OrderID', orderIds)
+    if (orders?.length) {
+      const orderIds = orders.map(o => o.ID)
 
-    if (itemErr) throw new Error(itemErr.message ?? JSON.stringify(itemErr))
-
-    // 3. 取消所有 pending 訂單
-    const { error: cancelErr } = await admin
-      .schema(dbSchema)
-      .from('C_ORD_OrderList')
-      .update({ PaymentStatus: 'cancelled', UpdatedDate: new Date().toISOString() })
-      .in('ID', orderIds)
-
-    if (cancelErr) throw new Error(cancelErr.message ?? JSON.stringify(cancelErr))
-
-    // 4. 回補庫存（逐一 rpc increment，無 rpc 則用 select+update）
-    const stockMap: Record<number, number> = {}
-    for (const item of items ?? []) {
-      if (!item.VariantID) continue
-      stockMap[item.VariantID] = (stockMap[item.VariantID] ?? 0) + item.Qty
-    }
-
-    for (const [variantId, qty] of Object.entries(stockMap)) {
-      const { data: v } = await admin
+      // 取訂單明細，回補庫存
+      const { data: orderItems, error: itemErr } = await admin
         .schema(dbSchema)
-        .from('C_PRD_ProductVariantList')
-        .select('StockQty')
-        .eq('ID', Number(variantId))
-        .single()
+        .from('C_ORD_OrderItemList')
+        .select('VariantID, Qty')
+        .in('OrderID', orderIds)
 
-      if (v) {
-        await admin
+      if (itemErr) throw new Error(itemErr.message ?? JSON.stringify(itemErr))
+
+      const orderStockMap: Record<number, number> = {}
+      for (const item of orderItems ?? []) {
+        if (!item.VariantID) continue
+        orderStockMap[item.VariantID] = (orderStockMap[item.VariantID] ?? 0) + item.Qty
+      }
+      for (const [vid, qty] of Object.entries(orderStockMap)) {
+        await restoreStock(Number(vid), qty)
+      }
+
+      // 取消訂單
+      const { error: cancelErr } = await admin
+        .schema(dbSchema)
+        .from('C_ORD_OrderList')
+        .update({ PaymentStatus: 'cancelled', UpdatedDate: new Date().toISOString() })
+        .in('ID', orderIds)
+
+      if (cancelErr) throw new Error(cancelErr.message ?? JSON.stringify(cancelErr))
+      cancelledCount = orders.length
+
+      // 封鎖會員
+      const emails = [...new Set(orders.map(o => o.CustomerEmail).filter(Boolean))]
+      if (emails.length) {
+        const { error: blockErr } = await admin
           .schema(dbSchema)
-          .from('C_PRD_ProductVariantList')
-          .update({ StockQty: (v.StockQty ?? 0) + qty })
-          .eq('ID', Number(variantId))
+          .from('C_MBR_MemberList')
+          .update({ IsBlocked: true, UpdatedDate: new Date().toISOString() })
+          .in('Email', emails)
+
+        if (blockErr) console.error('[cancel-orders] 封鎖會員失敗:', blockErr.message)
+        else blockedCount = emails.length
       }
     }
 
-    // 5. 封鎖被銷單的會員（by CustomerEmail）
-    const { data: cancelledOrders } = await admin
+    // ══ Part B：清購物車現貨品（預購除外）══════════════════════
+
+    // 1. 取全部非購物金的購物車明細
+    const { data: cartItems, error: cartErr } = await admin
       .schema(dbSchema)
-      .from('C_ORD_OrderList')
-      .select('CustomerEmail')
-      .in('ID', orderIds)
+      .from('C_CART_CartItemList')
+      .select('ID, ProductID, VariantID, Qty')
+      .eq('IsReward', false)
 
-    const emails = [...new Set(
-      (cancelledOrders ?? []).map(o => o.CustomerEmail).filter(Boolean)
-    )]
+    if (cartErr) throw new Error(cartErr.message ?? JSON.stringify(cartErr))
 
-    let blockedCount = 0
-    if (emails.length) {
-      const { error: blockErr } = await admin
+    let cartCleared = 0
+
+    if (cartItems?.length) {
+      // 2. 查商品是否為預購
+      const productIds = [...new Set(cartItems.map(i => i.ProductID).filter(Boolean))]
+      const { data: products } = await admin
         .schema(dbSchema)
-        .from('C_MBR_MemberList')
-        .update({ IsBlocked: true, UpdatedDate: new Date().toISOString() })
-        .in('Email', emails)
+        .from('C_PRD_ProductList')
+        .select('ID, IsPreOrder')
+        .in('ID', productIds)
 
-      if (blockErr) console.error('[cancel-orders] 封鎖會員失敗:', blockErr.message)
-      else blockedCount = emails.length
+      const preOrderSet = new Set(
+        (products ?? []).filter(p => p.IsPreOrder).map(p => p.ID)
+      )
+
+      // 3. 篩出要清除的品項（非預購）
+      const toDelete = cartItems.filter(i => !preOrderSet.has(i.ProductID))
+
+      if (toDelete.length) {
+        // 4. 回補庫存
+        const cartStockMap: Record<number, number> = {}
+        for (const item of toDelete) {
+          if (!item.VariantID) continue
+          cartStockMap[item.VariantID] = (cartStockMap[item.VariantID] ?? 0) + item.Qty
+        }
+        for (const [vid, qty] of Object.entries(cartStockMap)) {
+          await restoreStock(Number(vid), qty)
+        }
+
+        // 5. 刪除購物車明細
+        const deleteIds = toDelete.map(i => i.ID)
+        const { error: delErr } = await admin
+          .schema(dbSchema)
+          .from('C_CART_CartItemList')
+          .delete()
+          .in('ID', deleteIds)
+
+        if (delErr) throw new Error(delErr.message ?? JSON.stringify(delErr))
+        cartCleared = deleteIds.length
+      }
     }
 
-    console.log(`[cancel-orders] 銷單 ${orders.length} 筆，回補庫存 ${Object.keys(stockMap).length} 個 variant，封鎖 ${blockedCount} 位會員`)
-    return json({ cancelled: orders.length, blocked: blockedCount, orderNos: orders.map(o => o.OrderNo) })
+    console.log(`[cancel-orders] 銷訂單 ${cancelledCount} 筆，清購物車 ${cartCleared} 筆，封鎖 ${blockedCount} 位會員`)
+    return json({
+      cancelled:   cancelledCount,
+      cartCleared: cartCleared,
+      blocked:     blockedCount,
+      orderNos:    (orders ?? []).map(o => o.OrderNo),
+    })
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
