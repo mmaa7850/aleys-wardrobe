@@ -149,79 +149,17 @@ async function loadCart() {
   }
 }
 
-// ── Tab 2：本週被封鎖名單（銷訂單 + 清購物車合併）─────────
+// ── Tab 2：本週被封鎖名單（呼叫 edge function）────────────
 async function loadCancelled() {
   try {
-    const since = thisWeekMondayUTC()
-
-    // 1. 本週被封鎖的會員（IsBlocked=true 且 UpdatedDate >= 本週一）
-    const { data: blockedMembers, error: mbrErr } = await db
-      .from('C_MBR_MemberList')
-      .select('ID, FbName, Email, LineUserID, UpdatedDate, CancelledCartNote')
-      .eq('IsBlocked', true)
-      .gte('UpdatedDate', since)
-
-    if (mbrErr) throw mbrErr
-    if (!blockedMembers?.length) { cancelledRows.value = []; return }
-
-    // 2. 查這些會員的本週已取消訂單（有的話顯示商品）
-    const emails = blockedMembers.map(m => m.Email).filter(Boolean)
-    const { data: orders } = await db
-      .from('C_ORD_OrderList')
-      .select('ID, OrderNo, CustomerEmail, FinalAmount, UpdatedDate')
-      .eq('PaymentStatus', 'cancelled')
-      .gte('UpdatedDate', since)
-      .in('CustomerEmail', emails)
-
-    const orderIds = (orders ?? []).map(o => o.ID)
-    let itemsByOrder = {}
-
-    if (orderIds.length) {
-      const { data: orderItems } = await db
-        .from('C_ORD_OrderItemList')
-        .select('OrderID, ProductName, ColorName, SizeName, Qty')
-        .in('OrderID', orderIds)
-
-      for (const it of orderItems ?? []) {
-        if (!itemsByOrder[it.OrderID]) itemsByOrder[it.OrderID] = []
-        itemsByOrder[it.OrderID].push(it)
-      }
-    }
-
-    // 3. 彙整：依會員整理訂單與商品清單
-    const ordersByEmail = {}
-    for (const ord of orders ?? []) {
-      if (!ordersByEmail[ord.CustomerEmail]) ordersByEmail[ord.CustomerEmail] = []
-      ordersByEmail[ord.CustomerEmail].push(ord)
-    }
-
-    cancelledRows.value = blockedMembers.map(m => {
-      const memberOrders = ordersByEmail[m.Email] ?? []
-      const orderItems   = memberOrders.flatMap(o => (itemsByOrder[o.ID] ?? []).map(it => ({
-        ProductName: it.ProductName, ColorName: it.ColorName, SizeName: it.SizeName, qty: it.Qty,
-      })))
-      // cartOnly 會員直接用 CancelledCartNote
-      const cartNoteItems = (m.CancelledCartNote ?? []).map(n => ({
-        ProductName: n.productName, ColorName: n.colorName, SizeName: n.sizeName, qty: n.qty,
-      }))
-      const items       = memberOrders.length ? orderItems : cartNoteItems
-      const totalAmount = memberOrders.reduce((s, o) => s + (o.FinalAmount ?? 0), 0)
-
-      return {
-        key:        `cancelled_${m.ID}`,
-        memberId:   m.ID,
-        fbName:     m.FbName || m.Email || '',
-        email:      m.Email || '',
-        lineUserId: m.LineUserID || null,
-        hasLine:    !!m.LineUserID,
-        orderCount: memberOrders.length,
-        totalAmount,
-        items,
-        cancelledAt: m.UpdatedDate,
-        cartOnly:   memberOrders.length === 0,
-      }
-    }).sort((a, b) => new Date(b.cancelledAt) - new Date(a.cancelledAt))
-
+    const { data: { session } } = await supabase.auth.getSession()
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-blocked-members`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` } }
+    )
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || '載入失敗')
+    cancelledRows.value = data.members ?? []
   } catch (e) {
     throw e
   }

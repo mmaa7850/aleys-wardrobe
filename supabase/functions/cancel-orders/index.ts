@@ -146,52 +146,17 @@ Deno.serve(async (req) => {
         if (delErr) throw new Error(delErr.message ?? JSON.stringify(delErr))
         cartCleared = deleteIds.length
 
-        // 取商品名稱 / 規格（供寫入 CancelledCartNote）
-        const [{ data: prodNames }, { data: varSpecs }] = await Promise.all([
-          admin.schema(dbSchema).from('C_PRD_ProductList')
-            .select('ID, ProductName').in('ID', productIds),
-          admin.schema(dbSchema).from('C_PRD_ProductVariantList')
-            .select('ID, ColorName, SizeName').in('ID', variantIds),
-        ])
-        const prodNameMap = Object.fromEntries((prodNames ?? []).map(p => [p.ID, p.ProductName]))
-        const varSpecMap  = Object.fromEntries((varSpecs  ?? []).map(v => [v.ID, v]))
-
-        // 收集被清購物車的會員，同時建立商品摘要（CartItem → Cart → Member）
+        // 收集被清購物車的會員 email（CartItem → Cart → Member）
         const cartIds = [...new Set(toDelete.map(i => i.CartID).filter(Boolean))]
         if (cartIds.length) {
           const { data: carts } = await admin
-            .schema(dbSchema).from('C_CART_CartList').select('ID, MemberID').in('ID', cartIds)
-
-          const cartToMember: Record<number, number> = Object.fromEntries(
-            (carts ?? []).map(c => [c.ID, c.MemberID])
-          )
-
-          // 依會員分組商品摘要
-          const noteByMember: Record<number, object[]> = {}
-          for (const item of toDelete) {
-            const mid = cartToMember[item.CartID]
-            if (!mid) continue
-            if (!noteByMember[mid]) noteByMember[mid] = []
-            const spec = varSpecMap[item.VariantID]
-            noteByMember[mid].push({
-              productName: prodNameMap[item.ProductID] || '–',
-              colorName:   spec?.ColorName || '',
-              sizeName:    spec?.SizeName  || '',
-              qty:         item.Qty,
-            })
-          }
-
-          const memberIds = Object.keys(noteByMember).map(Number)
+            .schema(dbSchema).from('C_CART_CartList').select('MemberID').in('ID', cartIds)
+          const memberIds = [...new Set((carts ?? []).map(c => c.MemberID).filter(Boolean))]
           if (memberIds.length) {
             const { data: cartMembers } = await admin
-              .schema(dbSchema).from('C_MBR_MemberList').select('ID, Email').in('ID', memberIds)
-
+              .schema(dbSchema).from('C_MBR_MemberList').select('Email').in('ID', memberIds)
             for (const m of cartMembers ?? []) {
               if (m.Email) emailsToBlock.add(m.Email)
-              // 寫入 CancelledCartNote
-              await admin.schema(dbSchema).from('C_MBR_MemberList').update({
-                CancelledCartNote: noteByMember[m.ID] ?? [],
-              }).eq('ID', m.ID)
             }
           }
         }
