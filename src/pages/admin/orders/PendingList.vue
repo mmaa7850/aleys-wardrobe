@@ -74,6 +74,7 @@ async function loadCart() {
       .from('C_CART_CartItemList')
       .select('ID, CartID, ProductID, VariantID, Qty')
       .eq('IsReward', false)
+      .is('CancelledAt', null)
 
     if (ciErr) throw ciErr
     if (!cartItems?.length) { cartRows.value = []; return }
@@ -187,7 +188,56 @@ async function loadCancelled() {
       }
     }
 
-    // 3. 彙整：依會員整理訂單與商品清單
+    // 3. 查本週被軟刪除的購物車品項（cartOnly 會員用）
+    const memberIds = blockedMembers.map(m => m.ID)
+    const { data: memberCarts } = await db
+      .from('C_CART_CartList').select('ID, MemberID').in('MemberID', memberIds)
+
+    const cartIdsByMember = {}
+    for (const c of memberCarts ?? []) {
+      if (!cartIdsByMember[c.MemberID]) cartIdsByMember[c.MemberID] = []
+      cartIdsByMember[c.MemberID].push(c.ID)
+    }
+
+    const allCartIds = (memberCarts ?? []).map(c => c.ID)
+    let cancelledCartItems = []
+    if (allCartIds.length) {
+      const { data: cCartItems } = await db
+        .from('C_CART_CartItemList')
+        .select('ID, CartID, ProductID, VariantID, Qty, CancelledAt')
+        .in('CartID', allCartIds)
+        .gte('CancelledAt', since)
+        .not('CancelledAt', 'is', null)
+
+      if (cCartItems?.length) {
+        const pIds = [...new Set(cCartItems.map(i => i.ProductID).filter(Boolean))]
+        const vIds = [...new Set(cCartItems.map(i => i.VariantID).filter(Boolean))]
+        const [{ data: prods }, { data: vars }] = await Promise.all([
+          db.from('C_PRD_ProductList').select('ID, Name').in('ID', pIds),
+          db.from('C_PRD_ProductVariantList').select('ID, ColorName, SizeName').in('ID', vIds),
+        ])
+        const prodMap = Object.fromEntries((prods ?? []).map(p => [p.ID, p]))
+        const varMap  = Object.fromEntries((vars  ?? []).map(v => [v.ID, v]))
+        cancelledCartItems = cCartItems.map(i => ({
+          ...i,
+          ProductName: prodMap[i.ProductID]?.Name || '–',
+          ColorName:   varMap[i.VariantID]?.ColorName || '',
+          SizeName:    varMap[i.VariantID]?.SizeName  || '',
+        }))
+      }
+    }
+
+    // 依 MemberID 分組購物車品項
+    const cartItemsByMember = {}
+    for (const ci of cancelledCartItems) {
+      const cart = (memberCarts ?? []).find(c => c.ID === ci.CartID)
+      if (!cart) continue
+      const mid = cart.MemberID
+      if (!cartItemsByMember[mid]) cartItemsByMember[mid] = []
+      cartItemsByMember[mid].push(ci)
+    }
+
+    // 4. 彙整：依會員整理訂單與商品清單
     const ordersByEmail = {}
     for (const ord of orders ?? []) {
       if (!ordersByEmail[ord.CustomerEmail]) ordersByEmail[ord.CustomerEmail] = []
@@ -196,8 +246,10 @@ async function loadCancelled() {
 
     cancelledRows.value = blockedMembers.map(m => {
       const memberOrders = ordersByEmail[m.Email] ?? []
-      const items = memberOrders.flatMap(o => itemsByOrder[o.ID] ?? [])
-      const totalAmount = memberOrders.reduce((s, o) => s + (o.FinalAmount ?? 0), 0)
+      const orderItems   = memberOrders.flatMap(o => itemsByOrder[o.ID] ?? [])
+      const cartItems2   = cartItemsByMember[m.ID] ?? []
+      const items        = memberOrders.length ? orderItems : cartItems2
+      const totalAmount  = memberOrders.reduce((s, o) => s + (o.FinalAmount ?? 0), 0)
 
       return {
         key:        `cancelled_${m.ID}`,
@@ -210,7 +262,7 @@ async function loadCancelled() {
         totalAmount,
         items,
         cancelledAt: m.UpdatedDate,
-        cartOnly:   memberOrders.length === 0,  // 只有購物車被清，沒有訂單
+        cartOnly:   memberOrders.length === 0,
       }
     }).sort((a, b) => new Date(b.cancelledAt) - new Date(a.cancelledAt))
 

@@ -137,10 +137,12 @@ Deno.serve(async (req) => {
           await restoreStock(Number(vid), qty)
         }
 
-        // 刪除購物車明細
+        // 軟刪除：標記 CancelledAt（保留紀錄供 Tab2 顯示）
         const deleteIds = toDelete.map(i => i.ID)
         const { error: delErr } = await admin
-          .schema(dbSchema).from('C_CART_CartItemList').delete().in('ID', deleteIds)
+          .schema(dbSchema).from('C_CART_CartItemList')
+          .update({ CancelledAt: new Date().toISOString() })
+          .in('ID', deleteIds)
         if (delErr) throw new Error(delErr.message ?? JSON.stringify(delErr))
         cartCleared = deleteIds.length
 

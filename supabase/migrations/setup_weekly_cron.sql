@@ -46,13 +46,15 @@ SELECT cron.schedule(
       PERFORM public.restore_stock(r."VariantID", r."Qty"::int);
     END LOOP;
 
-    DELETE FROM public."C_CART_CartItemList" ci
-    USING public."C_PRD_ProductList"        p,
-          public."C_PRD_ProductVariantList" v
-    WHERE ci."ProductID" = p."ID"
-    AND   ci."VariantID" = v."ID"
-    AND   ci."IsReward"  = false
-    AND   NOT (p."IsPreOrder" = true AND v."StockQty" <= 0);
+    UPDATE public."C_CART_CartItemList" ci
+    SET    "CancelledAt" = NOW()
+    FROM   public."C_PRD_ProductList"        p,
+           public."C_PRD_ProductVariantList" v
+    WHERE  ci."ProductID" = p."ID"
+    AND    ci."VariantID" = v."ID"
+    AND    ci."IsReward"  = false
+    AND    ci."CancelledAt" IS NULL
+    AND    NOT (p."IsPreOrder" = true AND v."StockQty" <= 0);
 
     -- 刪除購物車中的購物金項目（IsReward = true）
     DELETE FROM public."C_CART_CartItemList"
@@ -99,13 +101,15 @@ SELECT cron.schedule(
       PERFORM staging.restore_stock(r."VariantID", r."Qty"::int);
     END LOOP;
 
-    DELETE FROM staging."C_CART_CartItemList" ci
-    USING staging."C_PRD_ProductList"        p,
-          staging."C_PRD_ProductVariantList" v
-    WHERE ci."ProductID" = p."ID"
-    AND   ci."VariantID" = v."ID"
-    AND   ci."IsReward"  = false
-    AND   NOT (p."IsPreOrder" = true AND v."StockQty" <= 0);
+    UPDATE staging."C_CART_CartItemList" ci
+    SET    "CancelledAt" = NOW()
+    FROM   staging."C_PRD_ProductList"        p,
+           staging."C_PRD_ProductVariantList" v
+    WHERE  ci."ProductID" = p."ID"
+    AND    ci."VariantID" = v."ID"
+    AND    ci."IsReward"  = false
+    AND    ci."CancelledAt" IS NULL
+    AND    NOT (p."IsPreOrder" = true AND v."StockQty" <= 0);
 
     -- 刪除購物車中的購物金項目（IsReward = true）
     DELETE FROM staging."C_CART_CartItemList"
