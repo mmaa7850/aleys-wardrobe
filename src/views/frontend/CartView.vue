@@ -52,12 +52,15 @@ onMounted(async () => {
           <div class="cart-section-label">現貨商品</div>
           <div class="cart-items__header">
             <span></span>
+            <span></span>
             <span>商品</span>
             <span class="d-hide-sm">單價</span>
             <span>數量</span>
             <span class="d-hide-sm">小計</span>
+            <span></span>
           </div>
           <div v-for="item in cart.stockItems" :key="item.id" class="cart-item">
+            <div></div><!-- check placeholder -->
             <div class="cart-item__img-wrap">
               <RouterLink :to="`/products/${item.productId}`">
                 <video v-if="item.imgType === 'video' && item.imgUrl" :src="item.imgUrl" class="cart-item__img" muted preload="metadata" />
@@ -83,6 +86,7 @@ onMounted(async () => {
               <button class="qty-btn" disabled>+</button>
             </div>
             <div class="cart-item__subtotal d-hide-sm">NT$ {{ (item.unitPrice * item.qty).toLocaleString() }}</div>
+            <div></div><!-- remove placeholder -->
           </div>
         </div>
 
@@ -103,6 +107,7 @@ onMounted(async () => {
           <div class="cart-section-label cart-section-label--preorder">預購商品</div>
           <div class="cart-items__header">
             <span></span>
+            <span></span>
             <span>商品</span>
             <span class="d-hide-sm">單價</span>
             <span>數量</span>
@@ -110,6 +115,7 @@ onMounted(async () => {
             <span></span>
           </div>
           <div v-for="item in cart.preorderItems" :key="item.id" class="cart-item">
+            <div></div><!-- check placeholder -->
             <div class="cart-item__img-wrap">
               <RouterLink :to="`/products/${item.productId}`">
                 <video v-if="item.imgType === 'video' && item.imgUrl" :src="item.imgUrl" class="cart-item__img" muted preload="metadata" />
