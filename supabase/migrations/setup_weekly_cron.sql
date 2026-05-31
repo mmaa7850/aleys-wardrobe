@@ -34,22 +34,25 @@ SELECT cron.schedule(
            "UpdatedDate"   = NOW()
     WHERE  "PaymentStatus" IN ('pending', 'failed');
 
-    -- 清除購物車現貨品（非預購），並回補庫存
+    -- 清除購物車現貨品（IsPreOrder=true 且 StockQty=0 的真預購除外），並回補庫存
     FOR r IN
       SELECT ci."ID", ci."VariantID", ci."Qty"
-      FROM   public."C_CART_CartItemList" ci
-      JOIN   public."C_PRD_ProductList"   p  ON p."ID" = ci."ProductID"
+      FROM   public."C_CART_CartItemList"        ci
+      JOIN   public."C_PRD_ProductList"          p  ON p."ID"  = ci."ProductID"
+      JOIN   public."C_PRD_ProductVariantList"   v  ON v."ID"  = ci."VariantID"
       WHERE  ci."IsReward" = false
-      AND    p."IsPreOrder" = false
+      AND    NOT (p."IsPreOrder" = true AND v."StockQty" <= 0)
     LOOP
       PERFORM public.restore_stock(r."VariantID", r."Qty"::int);
     END LOOP;
 
     DELETE FROM public."C_CART_CartItemList" ci
-    USING public."C_PRD_ProductList" p
+    USING public."C_PRD_ProductList"        p,
+          public."C_PRD_ProductVariantList" v
     WHERE ci."ProductID" = p."ID"
+    AND   ci."VariantID" = v."ID"
     AND   ci."IsReward"  = false
-    AND   p."IsPreOrder" = false;
+    AND   NOT (p."IsPreOrder" = true AND v."StockQty" <= 0);
 
     -- 刪除購物車中的購物金項目（IsReward = true）
     DELETE FROM public."C_CART_CartItemList"
@@ -84,22 +87,25 @@ SELECT cron.schedule(
            "UpdatedDate"   = NOW()
     WHERE  "PaymentStatus" IN ('pending', 'failed');
 
-    -- 清除購物車現貨品（非預購），並回補庫存
+    -- 清除購物車現貨品（IsPreOrder=true 且 StockQty=0 的真預購除外），並回補庫存
     FOR r IN
       SELECT ci."ID", ci."VariantID", ci."Qty"
-      FROM   staging."C_CART_CartItemList" ci
-      JOIN   staging."C_PRD_ProductList"   p  ON p."ID" = ci."ProductID"
+      FROM   staging."C_CART_CartItemList"        ci
+      JOIN   staging."C_PRD_ProductList"          p  ON p."ID"  = ci."ProductID"
+      JOIN   staging."C_PRD_ProductVariantList"   v  ON v."ID"  = ci."VariantID"
       WHERE  ci."IsReward" = false
-      AND    p."IsPreOrder" = false
+      AND    NOT (p."IsPreOrder" = true AND v."StockQty" <= 0)
     LOOP
       PERFORM staging.restore_stock(r."VariantID", r."Qty"::int);
     END LOOP;
 
     DELETE FROM staging."C_CART_CartItemList" ci
-    USING staging."C_PRD_ProductList" p
+    USING staging."C_PRD_ProductList"        p,
+          staging."C_PRD_ProductVariantList" v
     WHERE ci."ProductID" = p."ID"
+    AND   ci."VariantID" = v."ID"
     AND   ci."IsReward"  = false
-    AND   p."IsPreOrder" = false;
+    AND   NOT (p."IsPreOrder" = true AND v."StockQty" <= 0);
 
     -- 刪除購物車中的購物金項目（IsReward = true）
     DELETE FROM staging."C_CART_CartItemList"

@@ -120,20 +120,29 @@ Deno.serve(async (req) => {
     let cartCleared = 0
 
     if (cartItems?.length) {
-      // 2. 查商品是否為預購
+      // 2. 查商品 IsPreOrder 及 variant 目前庫存
       const productIds = [...new Set(cartItems.map(i => i.ProductID).filter(Boolean))]
-      const { data: products } = await admin
-        .schema(dbSchema)
-        .from('C_PRD_ProductList')
-        .select('ID, IsPreOrder')
-        .in('ID', productIds)
+      const variantIds = [...new Set(cartItems.map(i => i.VariantID).filter(Boolean))]
 
-      const preOrderSet = new Set(
-        (products ?? []).filter(p => p.IsPreOrder).map(p => p.ID)
-      )
+      const [{ data: products }, { data: variants }] = await Promise.all([
+        admin.schema(dbSchema).from('C_PRD_ProductList')
+          .select('ID, IsPreOrder').in('ID', productIds),
+        admin.schema(dbSchema).from('C_PRD_ProductVariantList')
+          .select('ID, StockQty').in('ID', variantIds),
+      ])
 
-      // 3. 篩出要清除的品項（非預購）
-      const toDelete = cartItems.filter(i => !preOrderSet.has(i.ProductID))
+      const productMap = Object.fromEntries((products ?? []).map(p => [p.ID, p]))
+      const variantMap = Object.fromEntries((variants ?? []).map(v => [v.ID, v]))
+
+      // 3. 篩出要清除的品項
+      //    略過：IsPreOrder=true 且 StockQty=0（真正無庫存的預購）
+      //    清除：IsPreOrder=false，或 IsPreOrder=true 但有庫存（現貨下單）
+      const toDelete = cartItems.filter(i => {
+        const p = productMap[i.ProductID]
+        const v = variantMap[i.VariantID]
+        const isTruePreOrder = p?.IsPreOrder && (v?.StockQty ?? 0) <= 0
+        return !isTruePreOrder
+      })
 
       if (toDelete.length) {
         // 4. 回補庫存
