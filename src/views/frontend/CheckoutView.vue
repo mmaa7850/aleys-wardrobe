@@ -277,6 +277,7 @@ async function submitOrder() {
           invoiceBuyerUBN:    invoiceCarrierType.value === 'B2B' ? invoiceBuyerUBN.value  : null,
           invoiceBuyerName:   invoiceCarrierType.value === 'B2B' ? invoiceBuyerName.value : null,
           walletDeductAmt:    walletDeductAmt.value,
+          orderType:          checkoutType.value,
           items: cart.selectedItems.map(i => ({
             productId: i.productId,
             productName: i.productName,

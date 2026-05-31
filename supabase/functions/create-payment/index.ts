@@ -60,7 +60,8 @@ Deno.serve(async (req) => {
       couponCode, email, itemDesc, recipientName, recipientPhone, customerNote, items,
       invoiceCarrierType = null, invoiceCarrierNum = null,
       invoiceLoveCode = null, invoiceBuyerUBN = null, invoiceBuyerName = null,
-      walletDeductAmt = 0,  // 本次從錢包扣款的金額
+      walletDeductAmt = 0,
+      orderType = 'stock',  // 'stock' | 'preorder'
     } = body
 
     if (!orderNo || !amount || !email) {
@@ -213,6 +214,7 @@ Deno.serve(async (req) => {
         InvoiceLoveCode:    invoiceLoveCode,
         InvoiceBuyerUBN:    invoiceBuyerUBN,
         InvoiceBuyerName:   invoiceBuyerName,
+        OrderType:          orderType,
         ...(firstStatus?.ID ? { StatusID: firstStatus.ID } : {}),
       })
       .select('ID')

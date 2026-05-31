@@ -37,7 +37,7 @@ async function fetchOrders() {
   ordersLoading.value = true
   const { data } = await db
     .from('C_ORD_OrderList')
-    .select('ID, OrderNo, FinalAmount, NewebpayAmt, WalletDeductAmt, PaymentStatus, CreatedDate')
+    .select('ID, OrderNo, FinalAmount, NewebpayAmt, WalletDeductAmt, PaymentStatus, CreatedDate, OrderType')
     .eq('CustomerEmail', auth.user.email)
     .order('CreatedDate', { ascending: false })
     .limit(3)
@@ -220,7 +220,10 @@ onMounted(() => {
             :to="'/orders/' + o.OrderNo"
             class="ac-order-row"
           >
-            <div class="ac-order-row__no">{{ o.OrderNo }}</div>
+            <div class="ac-order-row__no">
+              {{ o.OrderNo }}
+              <span v-if="o.OrderType === 'preorder'" class="ac-pay-badge ac-pay-badge--preorder" style="font-size:10px; margin-left:6px;">預購</span>
+            </div>
             <div class="ac-order-row__date">{{ formatDate(o.CreatedDate) }}</div>
             <div class="ac-order-row__amount">NT$ {{ Number(o.WalletDeductAmt > 0 ? (o.NewebpayAmt ?? o.FinalAmount) : o.FinalAmount).toLocaleString() }}</div>
             <span :class="['ac-pay-badge', `ac-pay-badge--${o.PaymentStatus}`]">
@@ -603,9 +606,10 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.ac-pay-badge--paid    { background: rgba(34,197,94,0.12); color: #15803D; }
-.ac-pay-badge--pending { background: rgba(180,180,180,0.15); color: var(--fe-muted); }
-.ac-pay-badge--failed  { background: rgba(220,38,38,0.08); color: #DC2626; }
+.ac-pay-badge--paid     { background: rgba(34,197,94,0.12); color: #15803D; }
+.ac-pay-badge--pending  { background: rgba(180,180,180,0.15); color: var(--fe-muted); }
+.ac-pay-badge--failed   { background: rgba(220,38,38,0.08); color: #DC2626; }
+.ac-pay-badge--preorder { background: rgba(200,168,130,0.15); color: #c8a882; }
 
 /* Wishlist link */
 .ac-wishlist-link {

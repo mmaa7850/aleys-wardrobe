@@ -28,7 +28,7 @@ async function fetchOrders() {
   loading.value = true
   const { data } = await db
     .from('C_ORD_OrderList')
-    .select('ID, OrderNo, FinalAmount, NewebpayAmt, WalletDeductAmt, PaymentStatus, CreatedDate')
+    .select('ID, OrderNo, FinalAmount, NewebpayAmt, WalletDeductAmt, PaymentStatus, CreatedDate, OrderType')
     .eq('CustomerEmail', auth.user.email)
     .order('CreatedDate', { ascending: false })
   orders.value = data || []
@@ -94,7 +94,10 @@ onMounted(() => {
           :to="'/orders/' + o.OrderNo"
           class="ol-row"
         >
-          <span class="ol-row__no">{{ o.OrderNo }}</span>
+          <span class="ol-row__no">
+            {{ o.OrderNo }}
+            <span v-if="o.OrderType === 'preorder'" class="ol-badge ol-badge--preorder" style="font-size:10px; margin-left:6px;">預購</span>
+          </span>
           <span class="ol-row__date">{{ formatDate(o.CreatedDate) }}</span>
           <span class="ol-row__amount">NT$ {{ Number(o.WalletDeductAmt > 0 ? (o.NewebpayAmt ?? o.FinalAmount) : o.FinalAmount).toLocaleString() }}</span>
           <span :class="['ol-badge', `ol-badge--${o.PaymentStatus}`]">
@@ -261,6 +264,7 @@ onMounted(() => {
 .ol-badge--pending  { background: rgba(180,180,180,0.15); color: var(--fe-muted); }
 .ol-badge--failed   { background: rgba(220,38,38,0.08);  color: #DC2626; }
 .ol-badge--refunded { background: rgba(99,102,241,0.1);  color: #4338CA; }
+.ol-badge--preorder { background: rgba(200,168,130,0.15); color: #c8a882; }
 
 .ol-row__arrow { color: var(--fe-muted); display: flex; justify-content: flex-end; }
 
