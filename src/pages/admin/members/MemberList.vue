@@ -107,10 +107,29 @@ async function openCart(member) {
 
 async function removeCartItem(item) {
   if (!confirm(`確定移除「${item.productName}」？庫存將自動回補。`)) return
-  removingId.value = item.id
+  removingId.value = item.variantId
   try {
-    await callCartApi({ action: 'remove', cartItemId: item.id })
-    cartItems.value = cartItems.value.filter(i => i.id !== item.id)
+    await callCartApi({ action: 'remove', itemIds: item.ids })
+    cartItems.value = cartItems.value.filter(i => i.variantId !== item.variantId)
+  } catch (e) {
+    cartError.value = e.message
+  } finally {
+    removingId.value = null
+  }
+}
+
+async function updateCartQty(item, newQty) {
+  newQty = Number(newQty)
+  if (isNaN(newQty) || newQty < 0) return
+  if (newQty === item.qty) return
+  removingId.value = item.variantId
+  try {
+    await callCartApi({ action: 'update-qty', itemIds: item.ids, variantId: item.variantId, newQty })
+    if (newQty === 0) {
+      cartItems.value = cartItems.value.filter(i => i.variantId !== item.variantId)
+    } else {
+      item.qty = newQty
+    }
   } catch (e) {
     cartError.value = e.message
   } finally {
@@ -360,17 +379,31 @@ const sourceLabel = (s) => ({
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in cartItems" :key="item.id">
+              <tr v-for="item in cartItems" :key="item.variantId">
                 <td class="px-3 py-2 fw-semibold">{{ item.productName }}</td>
                 <td class="px-3 py-2 text-muted">
                   {{ [item.colorName, item.sizeName].filter(Boolean).join(' / ') || '—' }}
                 </td>
-                <td class="px-3 py-2 text-center">{{ item.qty }}</td>
+                <td class="px-3 py-2">
+                  <div class="d-flex align-items-center gap-1 justify-content-center">
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                      :disabled="removingId === item.variantId || item.qty <= 1"
+                      @click="updateCartQty(item, item.qty - 1)">−</button>
+                    <input type="number" class="form-control form-control-sm text-center"
+                      style="width:52px;"
+                      :value="item.qty" min="0"
+                      :disabled="removingId === item.variantId"
+                      @change="e => updateCartQty(item, e.target.value)" />
+                    <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+                      :disabled="removingId === item.variantId"
+                      @click="updateCartQty(item, item.qty + 1)">＋</button>
+                  </div>
+                </td>
                 <td class="px-3 py-2 text-center">
                   <button class="btn btn-sm btn-outline-danger py-0 px-2"
-                    :disabled="removingId === item.id"
+                    :disabled="removingId === item.variantId"
                     @click="removeCartItem(item)">
-                    <span v-if="removingId === item.id" class="spinner-border spinner-border-sm" />
+                    <span v-if="removingId === item.variantId" class="spinner-border spinner-border-sm" />
                     <span v-else>移除</span>
                   </button>
                 </td>
