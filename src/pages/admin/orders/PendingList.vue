@@ -213,14 +213,14 @@ async function loadCancelled() {
         const pIds = [...new Set(cCartItems.map(i => i.ProductID).filter(Boolean))]
         const vIds = [...new Set(cCartItems.map(i => i.VariantID).filter(Boolean))]
         const [{ data: prods }, { data: vars }] = await Promise.all([
-          db.from('C_PRD_ProductList').select('ID, Name').in('ID', pIds),
+          db.from('C_PRD_ProductList').select('ID, ProductName').in('ID', pIds),
           db.from('C_PRD_ProductVariantList').select('ID, ColorName, SizeName').in('ID', vIds),
         ])
         const prodMap = Object.fromEntries((prods ?? []).map(p => [p.ID, p]))
         const varMap  = Object.fromEntries((vars  ?? []).map(v => [v.ID, v]))
         cancelledCartItems = cCartItems.map(i => ({
           ...i,
-          ProductName: prodMap[i.ProductID]?.Name || '–',
+          ProductName: prodMap[i.ProductID]?.ProductName || '–',
           ColorName:   varMap[i.VariantID]?.ColorName || '',
           SizeName:    varMap[i.VariantID]?.SizeName  || '',
         }))
