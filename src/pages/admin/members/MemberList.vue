@@ -122,14 +122,11 @@ async function updateCartQty(item, newQty) {
   newQty = Number(newQty)
   if (isNaN(newQty) || newQty < 0) return
   if (newQty === item.qty) return
+  if (newQty === 0) { removeCartItem(item); return }  // 歸零 = 移除
   removingId.value = item.variantId
   try {
     await callCartApi({ action: 'update-qty', itemIds: item.ids, variantId: item.variantId, newQty })
-    if (newQty === 0) {
-      cartItems.value = cartItems.value.filter(i => i.variantId !== item.variantId)
-    } else {
-      item.qty = newQty
-    }
+    item.qty = newQty
   } catch (e) {
     cartError.value = e.message
   } finally {

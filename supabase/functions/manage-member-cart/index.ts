@@ -110,8 +110,7 @@ Deno.serve(async (req) => {
       const variant = variantId as number
       const qty     = newQty as number
 
-      if (!ids?.length || !variant || qty == null) return json({ error: '缺少必要參數' }, 400)
-      if (qty < 0) return json({ error: '數量不可為負數' }, 400)
+      if (!ids?.length || !variant || qty == null || qty < 0) return json({ error: '缺少必要參數' }, 400)
 
       // 取目前所有列的總數量
       const { data: rows } = await admin
