@@ -17,10 +17,9 @@ const checkoutType = computed(() => route.query.type === 'preorder' ? 'preorder'
 const auth   = useAuthStore()
 const wallet = useWalletStore()
 
-// ── 錢包付款（預購不支援錢包折抵）────────────────────────────
+// ── 錢包付款 ────────────────────────────────────────────────
 const useWallet   = ref(false)
 const walletDeductAmt = computed(() => {
-  if (checkoutType.value === 'preorder') return 0
   if (!useWallet.value || wallet.balance <= 0) return 0
   return Math.min(wallet.balance, finalTotal.value)
 })

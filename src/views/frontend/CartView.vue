@@ -144,9 +144,9 @@ onMounted(async () => {
 
         <div class="cart-summary">
           <h2 class="cart-summary__title">預購訂單摘要</h2>
-          <p class="cart-summary__preorder-note">預購商品將於到貨後另行寄出，運費免收</p>
+          <p class="cart-summary__preorder-note">預購商品將於到貨後另行寄出</p>
           <div class="cart-summary__row"><span>商品小計</span><span>NT$ {{ cart.preorderTotal.toLocaleString() }}</span></div>
-          <div class="cart-summary__row"><span>運費</span><span style="color:#c8a882;">免費</span></div>
+          <div class="cart-summary__row"><span>運費</span><span class="cart-summary__shipping-tbd">結帳時選擇</span></div>
           <div class="cart-summary__divider"></div>
           <div class="cart-summary__row cart-summary__row--total"><span>小計</span><span>NT$ {{ cart.preorderTotal.toLocaleString() }}</span></div>
           <button class="cart-summary__checkout-btn" @click="router.push('/checkout?type=preorder')">前往結帳（預購）</button>
