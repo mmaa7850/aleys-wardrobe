@@ -40,13 +40,15 @@ Deno.serve(async (req) => {
 
     if (!adminUser?.IsAdmin || !adminUser?.IsActive) return json({ error: '無管理員權限' }, 403)
 
-    // ── 共用：restore_stock RPC ───────────────────────────────
     async function restoreStock(variantId: number, qty: number) {
-      await admin.schema(dbSchema).rpc('restore_stock', {
-        p_variant_id: variantId,
-        p_qty: qty,
-      })
+      await admin.schema(dbSchema).rpc('restore_stock', { p_variant_id: variantId, p_qty: qty })
     }
+
+    // 跨 Part A/B 收集要封鎖的 email
+    const emailsToBlock = new Set<string>()
+
+    let cancelledCount = 0
+    let cartCleared    = 0
 
     // ══ Part A：取消 pending/failed 訂單 ══════════════════════
 
@@ -58,13 +60,10 @@ Deno.serve(async (req) => {
 
     if (ordErr) throw new Error(ordErr.message ?? JSON.stringify(ordErr))
 
-    let cancelledCount = 0
-    let blockedCount   = 0
-
     if (orders?.length) {
       const orderIds = orders.map(o => o.ID)
 
-      // 取訂單明細，回補庫存
+      // 回補訂單庫存
       const { data: orderItems, error: itemErr } = await admin
         .schema(dbSchema)
         .from('C_ORD_OrderItemList')
@@ -92,60 +91,43 @@ Deno.serve(async (req) => {
       if (cancelErr) throw new Error(cancelErr.message ?? JSON.stringify(cancelErr))
       cancelledCount = orders.length
 
-      // 封鎖會員
-      const emails = [...new Set(orders.map(o => o.CustomerEmail).filter(Boolean))]
-      if (emails.length) {
-        const { error: blockErr } = await admin
-          .schema(dbSchema)
-          .from('C_MBR_MemberList')
-          .update({ IsBlocked: true, UpdatedDate: new Date().toISOString() })
-          .in('Email', emails)
-
-        if (blockErr) console.error('[cancel-orders] 封鎖會員失敗:', blockErr.message)
-        else blockedCount = emails.length
+      // 收集 email
+      for (const o of orders) {
+        if (o.CustomerEmail) emailsToBlock.add(o.CustomerEmail)
       }
     }
 
-    // ══ Part B：清購物車現貨品（預購除外）══════════════════════
+    // ══ Part B：清購物車現貨品（真預購除外）══════════════════════
 
-    // 1. 取全部非購物金的購物車明細
     const { data: cartItems, error: cartErr } = await admin
       .schema(dbSchema)
       .from('C_CART_CartItemList')
-      .select('ID, ProductID, VariantID, Qty')
+      .select('ID, CartID, ProductID, VariantID, Qty')
       .eq('IsReward', false)
 
     if (cartErr) throw new Error(cartErr.message ?? JSON.stringify(cartErr))
 
-    let cartCleared = 0
-
     if (cartItems?.length) {
-      // 2. 查商品 IsPreOrder 及 variant 目前庫存
       const productIds = [...new Set(cartItems.map(i => i.ProductID).filter(Boolean))]
       const variantIds = [...new Set(cartItems.map(i => i.VariantID).filter(Boolean))]
 
       const [{ data: products }, { data: variants }] = await Promise.all([
-        admin.schema(dbSchema).from('C_PRD_ProductList')
-          .select('ID, IsPreOrder').in('ID', productIds),
-        admin.schema(dbSchema).from('C_PRD_ProductVariantList')
-          .select('ID, StockQty').in('ID', variantIds),
+        admin.schema(dbSchema).from('C_PRD_ProductList').select('ID, IsPreOrder').in('ID', productIds),
+        admin.schema(dbSchema).from('C_PRD_ProductVariantList').select('ID, StockQty').in('ID', variantIds),
       ])
 
       const productMap = Object.fromEntries((products ?? []).map(p => [p.ID, p]))
       const variantMap = Object.fromEntries((variants ?? []).map(v => [v.ID, v]))
 
-      // 3. 篩出要清除的品項
-      //    略過：IsPreOrder=true 且 StockQty=0（真正無庫存的預購）
-      //    清除：IsPreOrder=false，或 IsPreOrder=true 但有庫存（現貨下單）
+      // 略過：IsPreOrder=true 且 StockQty=0（真正無庫存的預購）
       const toDelete = cartItems.filter(i => {
         const p = productMap[i.ProductID]
         const v = variantMap[i.VariantID]
-        const isTruePreOrder = p?.IsPreOrder && (v?.StockQty ?? 0) <= 0
-        return !isTruePreOrder
+        return !(p?.IsPreOrder && (v?.StockQty ?? 0) <= 0)
       })
 
       if (toDelete.length) {
-        // 4. 回補庫存
+        // 回補庫存
         const cartStockMap: Record<number, number> = {}
         for (const item of toDelete) {
           if (!item.VariantID) continue
@@ -155,26 +137,47 @@ Deno.serve(async (req) => {
           await restoreStock(Number(vid), qty)
         }
 
-        // 5. 刪除購物車明細
+        // 刪除購物車明細
         const deleteIds = toDelete.map(i => i.ID)
         const { error: delErr } = await admin
-          .schema(dbSchema)
-          .from('C_CART_CartItemList')
-          .delete()
-          .in('ID', deleteIds)
-
+          .schema(dbSchema).from('C_CART_CartItemList').delete().in('ID', deleteIds)
         if (delErr) throw new Error(delErr.message ?? JSON.stringify(delErr))
         cartCleared = deleteIds.length
+
+        // 收集被清購物車的會員 email（CartItem → Cart → Member）
+        const cartIds = [...new Set(toDelete.map(i => i.CartID).filter(Boolean))]
+        if (cartIds.length) {
+          const { data: carts } = await admin
+            .schema(dbSchema).from('C_CART_CartList').select('MemberID').in('ID', cartIds)
+
+          const memberIds = [...new Set((carts ?? []).map(c => c.MemberID).filter(Boolean))]
+          if (memberIds.length) {
+            const { data: cartMembers } = await admin
+              .schema(dbSchema).from('C_MBR_MemberList').select('Email').in('ID', memberIds)
+            for (const m of cartMembers ?? []) {
+              if (m.Email) emailsToBlock.add(m.Email)
+            }
+          }
+        }
       }
     }
 
+    // ══ 統一封鎖（訂單 + 購物車被清的會員）══════════════════════
+
+    let blockedCount = 0
+    if (emailsToBlock.size > 0) {
+      const { error: blockErr } = await admin
+        .schema(dbSchema)
+        .from('C_MBR_MemberList')
+        .update({ IsBlocked: true, UpdatedDate: new Date().toISOString() })
+        .in('Email', [...emailsToBlock])
+
+      if (blockErr) console.error('[cancel-orders] 封鎖會員失敗:', blockErr.message)
+      else blockedCount = emailsToBlock.size
+    }
+
     console.log(`[cancel-orders] 銷訂單 ${cancelledCount} 筆，清購物車 ${cartCleared} 筆，封鎖 ${blockedCount} 位會員`)
-    return json({
-      cancelled:   cancelledCount,
-      cartCleared: cartCleared,
-      blocked:     blockedCount,
-      orderNos:    (orders ?? []).map(o => o.OrderNo),
-    })
+    return json({ cancelled: cancelledCount, cartCleared, blocked: blockedCount, orderNos: (orders ?? []).map(o => o.OrderNo) })
 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
