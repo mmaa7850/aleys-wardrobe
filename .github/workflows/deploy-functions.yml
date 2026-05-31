@@ -45,3 +45,4 @@ jobs:
           supabase functions deploy live-bid-poll         --project-ref xyqznatwbfuscocycqtb
           supabase functions deploy cancel-orders         --project-ref xyqznatwbfuscocycqtb
           supabase functions deploy get-blocked-members   --project-ref xyqznatwbfuscocycqtb
+          supabase functions deploy manage-member-cart    --project-ref xyqznatwbfuscocycqtb

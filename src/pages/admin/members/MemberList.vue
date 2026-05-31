@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, nextTick } from "vue";
 import { Modal } from "bootstrap";
 import { db } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 const members = ref([]);
 const levels = ref([]);
@@ -67,6 +68,55 @@ async function saveEdit() {
 onMounted(async () => {
   await Promise.all([loadLevels(), loadMembers()]);
 });
+
+// ── 購物車管理 Modal ──────────────────────────────────────────
+const cartModalEl   = ref(null)
+const cartMember    = ref(null)
+const cartItems     = ref([])
+const cartLoading   = ref(false)
+const cartError     = ref('')
+const removingId    = ref(null)
+
+async function callCartApi(body) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manage-member-cart`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify(body) }
+  )
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || '操作失敗')
+  return data
+}
+
+async function openCart(member) {
+  cartMember.value  = member
+  cartItems.value   = []
+  cartError.value   = ''
+  cartLoading.value = true
+  await nextTick()
+  Modal.getOrCreateInstance(cartModalEl.value).show()
+  try {
+    const data = await callCartApi({ action: 'get', memberId: member.ID })
+    cartItems.value = data.items ?? []
+  } catch (e) {
+    cartError.value = e.message
+  } finally {
+    cartLoading.value = false
+  }
+}
+
+async function removeCartItem(item) {
+  if (!confirm(`確定移除「${item.productName}」？庫存將自動回補。`)) return
+  removingId.value = item.id
+  try {
+    await callCartApi({ action: 'remove', cartItemId: item.id })
+    cartItems.value = cartItems.value.filter(i => i.id !== item.id)
+  } catch (e) {
+    cartError.value = e.message
+  } finally {
+    removingId.value = null
+  }
+}
 
 async function loadLevels() {
   const { data } = await db
@@ -225,8 +275,9 @@ const sourceLabel = (s) => ({
                   </span>
                 </td>
                 <td class="text-muted small">{{ formatDate(m.CreatedDate) }}</td>
-                <td>
+                <td class="d-flex gap-1">
                   <button class="btn btn-sm btn-outline-primary py-0 px-2" @click="openEdit(m)">編輯</button>
+                  <button class="btn btn-sm btn-outline-secondary py-0 px-2" @click="openCart(m)">購物車</button>
                 </td>
               </tr>
             </tbody>
@@ -275,6 +326,60 @@ const sourceLabel = (s) => ({
           <button type="button" class="btn btn-primary" :disabled="editSaving" @click="saveEdit">
             {{ editSaving ? '儲存中...' : '儲存' }}
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 購物車管理 Modal -->
+  <div class="modal fade" ref="cartModalEl" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            購物車管理
+            <span class="text-muted fw-normal" style="font-size:14px;">— {{ cartMember?.FbName || cartMember?.Name || cartMember?.Email }}</span>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div v-if="cartLoading" class="text-center py-4">
+            <span class="spinner-border spinner-border-sm me-2" />載入中…
+          </div>
+          <div v-else-if="cartError" class="alert alert-danger py-2" style="font-size:13px;">{{ cartError }}</div>
+          <div v-else-if="!cartItems.length" class="text-center py-4 text-muted" style="font-size:14px;">
+            購物車是空的
+          </div>
+          <table v-else class="table table-hover align-middle mb-0" style="font-size:13px;">
+            <thead style="background:#f9f6f2; font-size:12px; color:#6b5c4e;">
+              <tr>
+                <th class="px-3 py-2">商品</th>
+                <th class="px-3 py-2">顏色 / 尺寸</th>
+                <th class="px-3 py-2 text-center">數量</th>
+                <th class="px-3 py-2 text-center">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in cartItems" :key="item.id">
+                <td class="px-3 py-2 fw-semibold">{{ item.productName }}</td>
+                <td class="px-3 py-2 text-muted">
+                  {{ [item.colorName, item.sizeName].filter(Boolean).join(' / ') || '—' }}
+                </td>
+                <td class="px-3 py-2 text-center">{{ item.qty }}</td>
+                <td class="px-3 py-2 text-center">
+                  <button class="btn btn-sm btn-outline-danger py-0 px-2"
+                    :disabled="removingId === item.id"
+                    @click="removeCartItem(item)">
+                    <span v-if="removingId === item.id" class="spinner-border spinner-border-sm" />
+                    <span v-else>移除</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">關閉</button>
         </div>
       </div>
     </div>
