@@ -148,79 +148,72 @@ async function loadCart() {
   }
 }
 
-// ── Tab 2：本週已銷單 ──────────────────────────────────────
+// ── Tab 2：本週被封鎖名單（銷訂單 + 清購物車合併）─────────
 async function loadCancelled() {
   try {
     const since = thisWeekMondayUTC()
 
-    // 1. 本週銷單的訂單
-    const { data: orders, error: ordErr } = await db
-      .from('C_ORD_OrderList')
-      .select('ID, OrderNo, CustomerEmail, CustomerName, FinalAmount, UpdatedDate')
-      .eq('PaymentStatus', 'cancelled')
+    // 1. 本週被封鎖的會員（IsBlocked=true 且 UpdatedDate >= 本週一）
+    const { data: blockedMembers, error: mbrErr } = await db
+      .from('C_MBR_MemberList')
+      .select('ID, FbName, Email, LineUserID, UpdatedDate')
+      .eq('IsBlocked', true)
       .gte('UpdatedDate', since)
-      .order('UpdatedDate', { ascending: false })
-
-    if (ordErr) throw ordErr
-    if (!orders?.length) { cancelledRows.value = []; return }
-
-    // 2. 訂單明細
-    const orderIds = orders.map(o => o.ID)
-    const { data: orderItems, error: itemErr } = await db
-      .from('C_ORD_OrderItemList')
-      .select('OrderID, ProductName, ColorName, SizeName, Qty, UnitPrice')
-      .in('OrderID', orderIds)
-
-    if (itemErr) throw itemErr
-
-    const itemsByOrder = {}
-    for (const it of orderItems ?? []) {
-      if (!itemsByOrder[it.OrderID]) itemsByOrder[it.OrderID] = []
-      itemsByOrder[it.OrderID].push(it)
-    }
-
-    // 3. 會員資料（by email）
-    const emails = [...new Set(orders.map(o => o.CustomerEmail).filter(Boolean))]
-    const { data: members, error: mbrErr } = await db
-      .from('C_MBR_MemberList').select('ID, FbName, Email, LineUserID').in('Email', emails)
 
     if (mbrErr) throw mbrErr
-    const memberMap = Object.fromEntries((members ?? []).map(m => [m.Email, m]))
+    if (!blockedMembers?.length) { cancelledRows.value = []; return }
 
-    // 4. 依 email 彙整
-    const grouped = {}
-    for (const ord of orders) {
-      const email = ord.CustomerEmail
-      if (!email) continue
-      const member = memberMap[email]
+    // 2. 查這些會員的本週已取消訂單（有的話顯示商品）
+    const emails = blockedMembers.map(m => m.Email).filter(Boolean)
+    const { data: orders } = await db
+      .from('C_ORD_OrderList')
+      .select('ID, OrderNo, CustomerEmail, FinalAmount, UpdatedDate')
+      .eq('PaymentStatus', 'cancelled')
+      .gte('UpdatedDate', since)
+      .in('CustomerEmail', emails)
 
-      if (!grouped[email]) {
-        grouped[email] = {
-          key: `cancelled_${email}`,
-          memberId:   member?.ID ?? email,
-          fbName:     member?.FbName || ord.CustomerName || '',
-          email,
-          lineUserId: member?.LineUserID || null,
-          hasLine:    !!member?.LineUserID,
-          orderCount: 0, totalAmount: 0,
-          items: [],         // 彙整所有商品
-          cancelledAt: ord.UpdatedDate,
-        }
-      }
-      grouped[email].orderCount  += 1
-      grouped[email].totalAmount += ord.FinalAmount ?? 0
+    const orderIds = (orders ?? []).map(o => o.ID)
+    let itemsByOrder = {}
 
-      for (const it of itemsByOrder[ord.ID] ?? []) {
-        grouped[email].items.push({
-          name:      it.ProductName,
-          colorName: it.ColorName,
-          sizeName:  it.SizeName,
-          qty:       it.Qty,
-        })
+    if (orderIds.length) {
+      const { data: orderItems } = await db
+        .from('C_ORD_OrderItemList')
+        .select('OrderID, ProductName, ColorName, SizeName, Qty')
+        .in('OrderID', orderIds)
+
+      for (const it of orderItems ?? []) {
+        if (!itemsByOrder[it.OrderID]) itemsByOrder[it.OrderID] = []
+        itemsByOrder[it.OrderID].push(it)
       }
     }
 
-    cancelledRows.value = Object.values(grouped)
+    // 3. 彙整：依會員整理訂單與商品清單
+    const ordersByEmail = {}
+    for (const ord of orders ?? []) {
+      if (!ordersByEmail[ord.CustomerEmail]) ordersByEmail[ord.CustomerEmail] = []
+      ordersByEmail[ord.CustomerEmail].push(ord)
+    }
+
+    cancelledRows.value = blockedMembers.map(m => {
+      const memberOrders = ordersByEmail[m.Email] ?? []
+      const items = memberOrders.flatMap(o => itemsByOrder[o.ID] ?? [])
+      const totalAmount = memberOrders.reduce((s, o) => s + (o.FinalAmount ?? 0), 0)
+
+      return {
+        key:        `cancelled_${m.ID}`,
+        memberId:   m.ID,
+        fbName:     m.FbName || m.Email || '',
+        email:      m.Email || '',
+        lineUserId: m.LineUserID || null,
+        hasLine:    !!m.LineUserID,
+        orderCount: memberOrders.length,
+        totalAmount,
+        items,
+        cancelledAt: m.UpdatedDate,
+        cartOnly:   memberOrders.length === 0,  // 只有購物車被清，沒有訂單
+      }
+    }).sort((a, b) => new Date(b.cancelledAt) - new Date(a.cancelledAt))
+
   } catch (e) {
     throw e
   }
@@ -334,7 +327,7 @@ onMounted(load)
       </li>
       <li class="nav-item">
         <button class="nav-link" :class="{ active: activeTab === 'cancelled' }" @click="activeTab = 'cancelled'">
-          本週已銷單
+          本週被封鎖名單
           <span v-if="cancelledRows.length" class="badge rounded-pill ms-1"
             style="background:#c0392b; color:#fff; font-size:11px;">{{ cancelledRows.length }}</span>
         </button>
@@ -436,20 +429,27 @@ onMounted(load)
                 </td>
                 <!-- 商品清單 -->
                 <td class="px-3 py-3" style="max-width:280px;">
-                  <div v-for="(it, i) in row.items.slice(0, 3)" :key="i"
-                    class="text-muted" style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                    {{ it.name }}
-                    <span v-if="it.colorName || it.sizeName" style="color:#aaa;">
-                      （{{ [it.colorName, it.sizeName].filter(Boolean).join(' / ') }}）
-                    </span>
-                    × {{ it.qty }}
+                  <div v-if="row.cartOnly" class="text-muted" style="font-size:12px;">
+                    <span class="badge bg-secondary me-1" style="font-size:10px;">購物車清除</span>
+                    未建立訂單
                   </div>
-                  <div v-if="row.items.length > 3" class="text-muted" style="font-size:11px;">
-                    ⋯ 共 {{ row.items.length }} 件
-                  </div>
+                  <template v-else>
+                    <div v-for="(it, i) in row.items.slice(0, 3)" :key="i"
+                      class="text-muted" style="font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                      {{ it.ProductName }}
+                      <span v-if="it.ColorName || it.SizeName" style="color:#aaa;">
+                        （{{ [it.ColorName, it.SizeName].filter(Boolean).join(' / ') }}）
+                      </span>
+                      × {{ it.Qty }}
+                    </div>
+                    <div v-if="row.items.length > 3" class="text-muted" style="font-size:11px;">
+                      ⋯ 共 {{ row.items.length }} 件
+                    </div>
+                  </template>
                 </td>
                 <td class="px-3 py-3 text-end fw-semibold" style="color:#c0392b;">
-                  NT${{ row.totalAmount.toLocaleString() }}
+                  <span v-if="row.cartOnly" class="text-muted">—</span>
+                  <span v-else>NT${{ row.totalAmount.toLocaleString() }}</span>
                 </td>
                 <td class="px-3 py-3 text-muted" style="font-size:12px;">
                   {{ fmtDate(row.cancelledAt) }}
@@ -476,7 +476,7 @@ onMounted(load)
           </table>
         </div>
         <div class="px-3 py-2 text-muted" style="font-size:12px; border-top:1px solid #f0ece7;">
-          本週共 {{ cancelledRows.length }} 位顧客、{{ cancelledRows.reduce((s, r) => s + r.orderCount, 0) }} 筆訂單被銷單
+          本週共 {{ cancelledRows.length }} 位會員被封鎖（{{ cancelledRows.filter(r => !r.cartOnly).length }} 筆訂單銷單、{{ cancelledRows.filter(r => r.cartOnly).length }} 位僅清購物車）
         </div>
       </div>
     </template>
