@@ -124,7 +124,7 @@ export const useCartStore = defineStore('cart', {
         .from('C_CART_CartItemList')
         .select('ID, ProductID, VariantID, Qty, Source, LiveSessionID, IsReward, RewardAmt')
         .eq('CartID', this.cartId)
-        .is('CancelledAt', null)
+        .is('CancelledAt', null)  // 排除週期銷單軟刪除的品項（管理員手動移除為硬刪，不影響此）
 
       if (error) throw error
       if (!rawItems || rawItems.length === 0) {

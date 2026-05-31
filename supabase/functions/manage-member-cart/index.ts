@@ -124,17 +124,17 @@ Deno.serve(async (req) => {
         // 全部移除
         await admin.schema(dbSchema).rpc('restore_stock', { p_variant_id: variant, p_qty: currentTotal })
         await admin.schema(dbSchema).from('C_CART_CartItemList')
-          .update({ CancelledAt: new Date().toISOString() }).in('ID', ids)
+          .delete().in('ID', ids)
       } else if (diff < 0) {
         // 減少庫存補回
         await admin.schema(dbSchema).rpc('restore_stock', { p_variant_id: variant, p_qty: Math.abs(diff) })
-        // 更新第一列為新總數，其餘軟刪除
+        // 更新第一列為新總數，其餘直接刪除
         const sorted = [...(rows ?? [])].sort((a: any, b: any) => a.ID - b.ID)
         await admin.schema(dbSchema).from('C_CART_CartItemList')
           .update({ Qty: qty }).eq('ID', sorted[0].ID)
         if (sorted.length > 1) {
           await admin.schema(dbSchema).from('C_CART_CartItemList')
-            .update({ CancelledAt: new Date().toISOString() })
+            .delete()
             .in('ID', sorted.slice(1).map((r: any) => r.ID))
         }
       }
@@ -156,7 +156,7 @@ Deno.serve(async (req) => {
         await admin.schema(dbSchema).rpc('restore_stock', { p_variant_id: row.VariantID, p_qty: row.Qty })
       }
       await admin.schema(dbSchema).from('C_CART_CartItemList')
-        .update({ CancelledAt: new Date().toISOString() }).in('ID', ids)
+        .delete().in('ID', ids)
 
       return json({ success: true })
     }
