@@ -105,12 +105,25 @@ Deno.serve(async (req) => {
       if (cCartItems?.length) {
         const pIds = [...new Set(cCartItems.map(i => i.ProductID).filter(Boolean))]
         const vIds = [...new Set(cCartItems.map(i => i.VariantID).filter(Boolean))]
+
+        // 查商品名稱 & variant（ColorID/SizeID）
         const [{ data: prods }, { data: vars }] = await Promise.all([
           admin.schema(dbSchema).from('C_PRD_ProductList').select('ID, ProductName').in('ID', pIds),
-          admin.schema(dbSchema).from('C_PRD_ProductVariantList').select('ID, ColorName, SizeName').in('ID', vIds),
+          admin.schema(dbSchema).from('C_PRD_ProductVariantList').select('ID, ColorID, SizeID').in('ID', vIds),
         ])
-        const prodMap = Object.fromEntries((prods ?? []).map(p => [p.ID, p.ProductName]))
-        const varMap  = Object.fromEntries((vars  ?? []).map(v => [v.ID, v]))
+
+        // 查顏色 & 尺寸名稱
+        const colorIds = [...new Set((vars ?? []).map((v: any) => v.ColorID).filter(Boolean))]
+        const sizeIds  = [...new Set((vars ?? []).map((v: any) => v.SizeID).filter(Boolean))]
+        const [{ data: colors }, { data: sizes }] = await Promise.all([
+          colorIds.length ? admin.schema(dbSchema).from('S_PRD_ColorList').select('ID, Name').in('ID', colorIds) : Promise.resolve({ data: [] }),
+          sizeIds.length  ? admin.schema(dbSchema).from('S_PRD_SizeList').select('ID, Name').in('ID', sizeIds)   : Promise.resolve({ data: [] }),
+        ])
+
+        const prodMap  = Object.fromEntries((prods  ?? []).map((p: any) => [p.ID, p.ProductName]))
+        const colorMap = Object.fromEntries((colors ?? []).map((c: any) => [c.ID, c.Name]))
+        const sizeMap  = Object.fromEntries((sizes  ?? []).map((s: any) => [s.ID, s.Name]))
+        const varMap   = Object.fromEntries((vars   ?? []).map((v: any) => [v.ID, v]))
 
         for (const ci of cCartItems) {
           const mid = cartToMember[ci.CartID]
@@ -119,8 +132,8 @@ Deno.serve(async (req) => {
           const spec = varMap[ci.VariantID] as any
           cartItemsByMember[mid].push({
             ProductName: prodMap[ci.ProductID] || '–',
-            ColorName:   spec?.ColorName || '',
-            SizeName:    spec?.SizeName  || '',
+            ColorName:   colorMap[spec?.ColorID] || '',
+            SizeName:    sizeMap[spec?.SizeID]   || '',
             qty:         ci.Qty,
           })
         }
