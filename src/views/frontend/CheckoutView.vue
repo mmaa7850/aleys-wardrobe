@@ -578,7 +578,10 @@ async function submitOrder() {
 
       <!-- Right: order summary -->
       <div class="co-summary">
-        <h2 class="co-section-title">訂單摘要</h2>
+        <h2 class="co-section-title">{{ checkoutType === 'preorder' ? '預購訂單摘要' : '訂單摘要' }}</h2>
+        <div v-if="checkoutType === 'preorder'" style="font-size:12px; color:#c8a882; margin-bottom:12px;">
+          預購商品將於三週內出貨，實際出貨時間以 LINE 通知為準。
+        </div>
 
         <div class="co-summary-items">
           <div v-for="item in cart.selectedItems" :key="item.id" class="co-summary-item">

@@ -132,7 +132,7 @@ onMounted(async () => {
                 <span v-if="item.colorName && item.sizeName"> / </span>
                 <span v-if="item.sizeName">{{ item.sizeName }}</span>
               </p>
-              <p class="cart-item__preorder">預購<span v-if="item.preOrderShipDate"> · 預計 {{ item.preOrderShipDate }} 出貨</span></p>
+              <p class="cart-item__preorder">預購 · 三週內出貨</p>
               <p class="cart-item__price-mobile">NT$ {{ item.unitPrice.toLocaleString() }}</p>
             </div>
             <div class="cart-item__price d-hide-sm">NT$ {{ item.unitPrice.toLocaleString() }}</div>

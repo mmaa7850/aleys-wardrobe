@@ -285,9 +285,7 @@ onMounted(async () => {
         <!-- Pre-order notice（庫存售完 + IsPreOrder = true 才顯示）-->
         <div v-if="isActivePreOrder" class="pd-preorder">
           <span class="pd-preorder__badge">預購中</span>
-          <span v-if="product.PreOrderShipDate" class="pd-preorder__date">
-            預計 {{ product.PreOrderShipDate }} 出貨
-          </span>
+          <span class="pd-preorder__date">三週內出貨</span>
           <p v-if="product.PreOrderNote" class="pd-preorder__note">{{ product.PreOrderNote }}</p>
         </div>
 
