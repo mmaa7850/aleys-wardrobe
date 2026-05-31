@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { db } from '@/lib/db'
 import { supabase } from '@/lib/supabase'
 import { useCartStore } from '@/stores/cart'
@@ -9,13 +9,18 @@ import { useWalletStore } from '@/stores/wallet'
 import { trackBeginCheckout } from '@/lib/gtag'
 
 const router = useRouter()
+const route  = useRoute()
 const cart   = useCartStore()
+
+// 結帳類型：從 URL query 決定，並同步到 store
+const checkoutType = computed(() => route.query.type === 'preorder' ? 'preorder' : 'stock')
 const auth   = useAuthStore()
 const wallet = useWalletStore()
 
-// ── 錢包付款 ────────────────────────────────────────────────
-const useWallet   = ref(false)  // 是否使用錢包餘額
+// ── 錢包付款（預購不支援錢包折抵）────────────────────────────
+const useWallet   = ref(false)
 const walletDeductAmt = computed(() => {
+  if (checkoutType.value === 'preorder') return 0
   if (!useWallet.value || wallet.balance <= 0) return 0
   return Math.min(wallet.balance, finalTotal.value)
 })
@@ -166,7 +171,13 @@ onMounted(async () => {
     shippingMethods.value = methodsResult.data
     selectedMethodId.value = methodsResult.data[0].ID
   }
-  if (cart.isEmpty) router.push('/cart')
+  // 依 URL 設定結帳類型
+  cart.checkoutType = checkoutType.value
+
+  const hasItems = checkoutType.value === 'preorder'
+    ? cart.preorderItems.length > 0
+    : cart.stockItems.length > 0
+  if (!hasItems) router.push('/cart')
 
   trackBeginCheckout(cart.selectedItems, cart.selectedTotal)
 

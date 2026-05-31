@@ -9,22 +9,37 @@ export const useCartStore = defineStore('cart', {
     memberDbId: null,
     items: [],
     isLoading: false,
-    selectedItemIds: [],
+    selectedItemIds: [],   // 保留相容舊邏輯
+    checkoutType: null,    // 'stock' | 'preorder' | null
   }),
 
   getters: {
     itemCount: (state) => state.items.reduce((sum, item) => sum + item.qty, 0),
     total: (state) => state.items.reduce((sum, item) => sum + item.unitPrice * item.qty, 0),
     isEmpty: (state) => state.items.length === 0,
-    selectedItems: (state) => state.items.filter(i => state.selectedItemIds.includes(i.id)),
-    selectedTotal: (state) => state.items
-      .filter(i => state.selectedItemIds.includes(i.id))
-      .reduce((sum, i) => sum + i.unitPrice * i.qty, 0),
-    // 購物金導致金額為負時不允許結帳
+
+    // 分組 getter
+    stockItems:   (state) => state.items.filter(i => !i.isPreOrder && !i.isReward),
+    preorderItems:(state) => state.items.filter(i => i.isPreOrder),
+    rewardItems:  (state) => state.items.filter(i => i.isReward),
+    stockTotal:   (state) => state.items.filter(i => !i.isPreOrder && !i.isReward).reduce((s, i) => s + i.unitPrice * i.qty, 0),
+    preorderTotal:(state) => state.items.filter(i => i.isPreOrder).reduce((s, i) => s + i.unitPrice * i.qty, 0),
+
+    // Checkout 依 type 決定品項（CheckoutView 使用）
+    selectedItems: (state) => {
+      if (state.checkoutType === 'stock')    return state.items.filter(i => !i.isPreOrder)  // 含購物金
+      if (state.checkoutType === 'preorder') return state.items.filter(i => i.isPreOrder)
+      return state.items.filter(i => state.selectedItemIds.includes(i.id))
+    },
+    selectedTotal: (state) => {
+      if (state.checkoutType === 'stock')    return state.items.filter(i => !i.isPreOrder).reduce((s, i) => s + i.unitPrice * i.qty, 0)
+      if (state.checkoutType === 'preorder') return state.items.filter(i => i.isPreOrder).reduce((s, i) => s + i.unitPrice * i.qty, 0)
+      return state.items.filter(i => state.selectedItemIds.includes(i.id)).reduce((s, i) => s + i.unitPrice * i.qty, 0)
+    },
     canCheckout: (state) => {
-      const total = state.items
-        .filter(i => state.selectedItemIds.includes(i.id))
-        .reduce((sum, i) => sum + i.unitPrice * i.qty, 0)
+      if (state.checkoutType === 'stock')    return state.items.filter(i => !i.isPreOrder).reduce((s, i) => s + i.unitPrice * i.qty, 0) > 0
+      if (state.checkoutType === 'preorder') return state.items.filter(i => i.isPreOrder).length > 0
+      const total = state.items.filter(i => state.selectedItemIds.includes(i.id)).reduce((s, i) => s + i.unitPrice * i.qty, 0)
       return total > 0
     },
   },
@@ -392,6 +407,7 @@ export const useCartStore = defineStore('cart', {
       this.items = []
       this.isLoading = false
       this.selectedItemIds = []
+      this.checkoutType = null
     },
   },
 })

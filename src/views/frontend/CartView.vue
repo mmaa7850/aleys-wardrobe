@@ -44,157 +44,114 @@ onMounted(async () => {
     </div>
 
     <!-- Cart content -->
-    <div v-else class="cart-layout">
+    <div v-else class="cart-sections">
 
-      <!-- Items list -->
-      <div class="cart-items">
-        <div class="cart-items__header">
-          <span></span>
-          <span></span>
-          <span>商品</span>
-          <span class="d-hide-sm">單價</span>
-          <span>數量</span>
-          <span class="d-hide-sm">小計</span>
-          <span></span>
+      <!-- ── 現貨商品 ─────────────────────────────────────── -->
+      <div v-if="cart.stockItems.length" class="cart-layout">
+        <div class="cart-items">
+          <div class="cart-section-label">現貨商品</div>
+          <div class="cart-items__header">
+            <span></span>
+            <span>商品</span>
+            <span class="d-hide-sm">單價</span>
+            <span>數量</span>
+            <span class="d-hide-sm">小計</span>
+          </div>
+          <div v-for="item in cart.stockItems" :key="item.id" class="cart-item">
+            <div class="cart-item__img-wrap">
+              <RouterLink :to="`/products/${item.productId}`">
+                <video v-if="item.imgType === 'video' && item.imgUrl" :src="item.imgUrl" class="cart-item__img" muted preload="metadata" />
+                <img v-else-if="item.imgUrl" :src="item.imgUrl" :alt="item.productName" class="cart-item__img" />
+                <div v-else class="cart-item__no-img">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                </div>
+              </RouterLink>
+            </div>
+            <div class="cart-item__info">
+              <RouterLink :to="`/products/${item.productId}`" class="cart-item__name">{{ item.productName }}</RouterLink>
+              <p class="cart-item__variant">
+                <span v-if="item.colorName">{{ item.colorName }}</span>
+                <span v-if="item.colorName && item.sizeName"> / </span>
+                <span v-if="item.sizeName">{{ item.sizeName }}</span>
+              </p>
+              <p class="cart-item__price-mobile">NT$ {{ item.unitPrice.toLocaleString() }}</p>
+            </div>
+            <div class="cart-item__price d-hide-sm">NT$ {{ item.unitPrice.toLocaleString() }}</div>
+            <div class="cart-item__qty">
+              <button class="qty-btn" disabled>−</button>
+              <span class="qty-num">{{ item.qty }}</span>
+              <button class="qty-btn" disabled>+</button>
+            </div>
+            <div class="cart-item__subtotal d-hide-sm">NT$ {{ (item.unitPrice * item.qty).toLocaleString() }}</div>
+          </div>
         </div>
 
-        <div
-          v-for="item in cart.items"
-          :key="item.id"
-          class="cart-item"
-          :class="{ 'cart-item--unchecked': item.isPreOrder && !cart.selectedItemIds.includes(item.id) }"
-        >
-          <!-- 現貨：鎖頭（不可取消）；預購：勾選框（可選擇本次是否結帳） -->
-          <div class="cart-item__check">
-            <svg
-              v-if="!item.isPreOrder"
-              class="cart-item__lock"
-              width="13" height="13" viewBox="0 0 24 24" fill="none"
-              stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-              title="現貨商品已鎖定，無法取消"
-            >
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-            <input
-              v-else
-              type="checkbox"
-              class="cart-item__checkbox"
-              :checked="cart.selectedItemIds.includes(item.id)"
-              @change="cart.toggleSelection(item.id)"
-            />
-          </div>
-
-          <!-- Image -->
-          <div class="cart-item__img-wrap">
-            <RouterLink :to="`/products/${item.productId}`">
-              <video
-                v-if="item.imgType === 'video' && item.imgUrl"
-                :src="item.imgUrl"
-                class="cart-item__img"
-                muted
-                preload="metadata"
-              />
-              <img
-                v-else-if="item.imgUrl"
-                :src="item.imgUrl"
-                :alt="item.productName"
-                class="cart-item__img"
-              />
-              <div v-else class="cart-item__no-img">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
-                  <rect x="3" y="3" width="18" height="18" rx="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <path d="m21 15-5-5L5 21"/>
-                </svg>
-              </div>
-            </RouterLink>
-          </div>
-
-          <!-- Product info -->
-          <div class="cart-item__info">
-            <RouterLink :to="`/products/${item.productId}`" class="cart-item__name">
-              {{ item.productName }}
-            </RouterLink>
-            <p class="cart-item__variant">
-              <span v-if="item.colorName">{{ item.colorName }}</span>
-              <span v-if="item.colorName && item.sizeName"> / </span>
-              <span v-if="item.sizeName">{{ item.sizeName }}</span>
-            </p>
-            <p v-if="item.isPreOrder" class="cart-item__preorder">
-              預購
-              <span v-if="item.preOrderShipDate">· 預計 {{ item.preOrderShipDate }} 出貨</span>
-            </p>
-            <!-- Mobile price -->
-            <p class="cart-item__price-mobile">NT$ {{ item.unitPrice.toLocaleString() }}</p>
-          </div>
-
-          <!-- Unit price (desktop) -->
-          <div class="cart-item__price d-hide-sm">
-            NT$ {{ item.unitPrice.toLocaleString() }}
-          </div>
-
-          <!-- Qty controls（只有預購商品可以改數量） -->
-          <div class="cart-item__qty">
-            <button
-              class="qty-btn"
-              :disabled="!item.isPreOrder || item.qty <= 1"
-              @click="cart.updateQty(item.id, item.qty - 1)"
-            >−</button>
-            <span class="qty-num">{{ item.qty }}</span>
-            <button
-              class="qty-btn"
-              :disabled="!item.isPreOrder || item.qty >= 99"
-              @click="cart.updateQty(item.id, item.qty + 1)"
-            >+</button>
-          </div>
-
-          <!-- Subtotal (desktop) -->
-          <div class="cart-item__subtotal d-hide-sm">
-            NT$ {{ (item.unitPrice * item.qty).toLocaleString() }}
-          </div>
-
-          <!-- Remove（只有預購商品才能刪除） -->
-          <button v-if="item.isPreOrder" class="cart-item__remove" @click="cart.removeItem(item.id)" aria-label="移除">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+        <div class="cart-summary">
+          <h2 class="cart-summary__title">現貨訂單摘要</h2>
+          <div class="cart-summary__row"><span>商品小計</span><span>NT$ {{ cart.stockTotal.toLocaleString() }}</span></div>
+          <div class="cart-summary__row"><span>運費</span><span class="cart-summary__shipping-tbd">結帳時選擇</span></div>
+          <div class="cart-summary__divider"></div>
+          <div class="cart-summary__row cart-summary__row--total"><span>小計</span><span>NT$ {{ cart.stockTotal.toLocaleString() }}</span></div>
+          <button class="cart-summary__checkout-btn" @click="router.push('/checkout?type=stock')">前往結帳</button>
+          <RouterLink to="/products" class="cart-summary__continue">← 繼續購物</RouterLink>
         </div>
       </div>
 
-      <!-- Order summary -->
-      <div class="cart-summary">
-        <h2 class="cart-summary__title">訂單摘要</h2>
-
-        <div class="cart-summary__row">
-          <span>已選商品</span>
-          <span>NT$ {{ cart.selectedTotal.toLocaleString() }}</span>
+      <!-- ── 預購商品 ─────────────────────────────────────── -->
+      <div v-if="cart.preorderItems.length" class="cart-layout" :style="cart.stockItems.length ? 'margin-top:48px' : ''">
+        <div class="cart-items">
+          <div class="cart-section-label cart-section-label--preorder">預購商品</div>
+          <div class="cart-items__header">
+            <span></span>
+            <span>商品</span>
+            <span class="d-hide-sm">單價</span>
+            <span>數量</span>
+            <span class="d-hide-sm">小計</span>
+            <span></span>
+          </div>
+          <div v-for="item in cart.preorderItems" :key="item.id" class="cart-item">
+            <div class="cart-item__img-wrap">
+              <RouterLink :to="`/products/${item.productId}`">
+                <video v-if="item.imgType === 'video' && item.imgUrl" :src="item.imgUrl" class="cart-item__img" muted preload="metadata" />
+                <img v-else-if="item.imgUrl" :src="item.imgUrl" :alt="item.productName" class="cart-item__img" />
+                <div v-else class="cart-item__no-img">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                </div>
+              </RouterLink>
+            </div>
+            <div class="cart-item__info">
+              <RouterLink :to="`/products/${item.productId}`" class="cart-item__name">{{ item.productName }}</RouterLink>
+              <p class="cart-item__variant">
+                <span v-if="item.colorName">{{ item.colorName }}</span>
+                <span v-if="item.colorName && item.sizeName"> / </span>
+                <span v-if="item.sizeName">{{ item.sizeName }}</span>
+              </p>
+              <p class="cart-item__preorder">預購<span v-if="item.preOrderShipDate"> · 預計 {{ item.preOrderShipDate }} 出貨</span></p>
+              <p class="cart-item__price-mobile">NT$ {{ item.unitPrice.toLocaleString() }}</p>
+            </div>
+            <div class="cart-item__price d-hide-sm">NT$ {{ item.unitPrice.toLocaleString() }}</div>
+            <div class="cart-item__qty">
+              <button class="qty-btn" :disabled="item.qty <= 1" @click="cart.updateQty(item.id, item.qty - 1)">−</button>
+              <span class="qty-num">{{ item.qty }}</span>
+              <button class="qty-btn" :disabled="item.qty >= 99" @click="cart.updateQty(item.id, item.qty + 1)">+</button>
+            </div>
+            <div class="cart-item__subtotal d-hide-sm">NT$ {{ (item.unitPrice * item.qty).toLocaleString() }}</div>
+            <button class="cart-item__remove" @click="cart.removeItem(item.id)" aria-label="移除">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
         </div>
-        <div class="cart-summary__row">
-          <span>運費</span>
-          <span class="cart-summary__shipping-tbd">結帳時選擇</span>
+
+        <div class="cart-summary">
+          <h2 class="cart-summary__title">預購訂單摘要</h2>
+          <p class="cart-summary__preorder-note">預購商品將於到貨後另行寄出，運費免收</p>
+          <div class="cart-summary__row"><span>商品小計</span><span>NT$ {{ cart.preorderTotal.toLocaleString() }}</span></div>
+          <div class="cart-summary__row"><span>運費</span><span style="color:#c8a882;">免費</span></div>
+          <div class="cart-summary__divider"></div>
+          <div class="cart-summary__row cart-summary__row--total"><span>小計</span><span>NT$ {{ cart.preorderTotal.toLocaleString() }}</span></div>
+          <button class="cart-summary__checkout-btn" @click="router.push('/checkout?type=preorder')">前往結帳（預購）</button>
+          <RouterLink to="/products" class="cart-summary__continue">← 繼續購物</RouterLink>
         </div>
-
-        <div class="cart-summary__divider"></div>
-
-        <div class="cart-summary__row cart-summary__row--total">
-          <span>小計</span>
-          <span>NT$ {{ cart.selectedTotal.toLocaleString() }}</span>
-        </div>
-
-        <button
-          class="cart-summary__checkout-btn"
-          :disabled="cart.selectedItemIds.length === 0"
-          @click="router.push('/checkout')"
-        >
-          前往結帳
-        </button>
-
-        <RouterLink to="/products" class="cart-summary__continue">
-          ← 繼續購物
-        </RouterLink>
       </div>
 
     </div>
@@ -284,6 +241,26 @@ onMounted(async () => {
 .cart-empty__link:hover { border-color: var(--fe-text); }
 
 /* Layout */
+.cart-sections { display: flex; flex-direction: column; }
+
+.cart-section-label {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b5c4e;
+  border-bottom: 1px solid #e8e0d8;
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+}
+.cart-section-label--preorder { color: #c8a882; }
+
+.cart-summary__preorder-note {
+  font-size: 12px;
+  color: #c8a882;
+  margin-bottom: 12px;
+}
+
 .cart-layout {
   display: grid;
   grid-template-columns: 1fr 320px;
