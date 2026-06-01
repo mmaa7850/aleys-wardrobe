@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-30
+> 更新時間：2026-06-01
 
 ---
 
@@ -32,6 +32,17 @@
 - **前台訂單詳情 UX 改善**：運費正確從 ShippingFee 讀取；有錢包折抵時訂單總計顯示 NewebpayAmt；新增「訂單狀態」欄位（從 S_ORD_StatusList 查中文名稱）；退款訂單不顯示重新付款/ATM轉帳資訊；payStatusLabel 補 refunded→已退款；訂單列表/會員中心金額同步修正
 - **wallet-topup 加入 LINE Pay**：`LINEPAY=1` 加入儲值付款選項
 - **LINE Pay 儲值/結帳全程測試通過**（沙盒環境）
+- **LINE 帳號綁定**：LINE OA Follow 觸發 `line-webhook`→建立 `LineBindToken`→私訊綁定連結；會員點連結進 `/bind-line`→呼叫 `line-bind`→寫入 `LineUserID`；Unfollow 時自動清除
+- **FB OAuth 登入後擷取 FbName**：前台 FB 登入後將 `user_metadata.full_name` 存入 `C_MBR_MemberList.FbName`，供直播留言比對
+- **購物車拆分現貨/預購**：購物車頁面分兩個區塊，各自「前往結帳」按鈕帶 `?type=stock` / `?type=preorder`；加入購物車時即扣庫存（`decrement_stock`），移除時回補；前台查詢加 `CancelledAt IS NULL` 過濾
+- **預購出貨說明改固定文字**：商品頁/購物車/結帳頁一律顯示「三週內出貨」；移除 `PreOrderShipDate` UI 引用；後台商品編輯移除精確出貨日欄位
+- **訂單 OrderType 欄位**：`create-payment` 存入 `OrderType`（`stock`/`preorder`）；前台訂單列表/會員中心對預購訂單顯示「預購」badge
+- **管理者 Email → UserId 查詢工具**：管理者帳號頁面新增工具欄，輸入 Email 自動查出對應 UUID，方便新增後台帳號
+- **週銷單機制（pg_cron）**：每週日 16:00 UTC（台灣週一 00:00）自動執行：取消 `pending`/`failed` 訂單、`restore_stock` 回補庫存、軟刪除購物車現貨品（`CancelledAt`，預購品保留）、同步回補購物車庫存；也可從後台「待結清單」手動觸發 `cancel-orders`
+- **銷單自動封鎖會員**：`cancel-orders` 執行後依 `CustomerEmail` 找到對應會員設 `IsBlocked=true`；`live-import` 建單前檢查，封鎖者拒絕建單（回傳 `status='blocked'`）
+- **後台會員購物車管理**：會員列表新增「購物車」按鈕，開 Modal 顯示品項（含商品名稱/顏色/尺寸/數量）；逐筆移除並回補庫存（`manage-member-cart` Edge Function，service_role 繞過 RLS）；支援合併同款品項、數量調整
+- **PendingList Tab2 被封鎖名單**：`/admin/orders/pending` 新增 Tab2「本週被封鎖名單」，呼叫 `get-blocked-members` Edge Function，顯示本週銷單後被封鎖的會員及其被取消的購物車品項明細
+- **直播即時搶標（live-bid-poll 起標）**：`start_bid` action — 起標時在 FB 直播貼出格式化起標公告（含商品名稱、直播價、留言格式範例）並在 `C_LIV_ActiveBidList` 建立 open 記錄；後台場次詳情「起標」按鈕（已開標中顯示「● 開標中」badge，未直播時 disable）
 
 ---
 
@@ -45,7 +56,7 @@
 - `/admin/live` 場次列表（建立/管理）
 - 場次詳情三個 Tab：**商品對照表**（代碼↔商品↔直播價）/ **留言解析建單**（貼 FB 留言文字 → 解析 → 批次建單 → LINE 通知）/ **FB 直播監控**（連 FB → 即時輪詢留言 → 自動搶標/截標）
 - `live-import` Edge Function：比對 `FbName` 找會員、扣庫存、建訂單（`OrderSource='live'`）、發 LINE 推播付款連結
-- `live-bid-poll` Edge Function：FB Graph API 輪詢、起標/截標管理
+- `live-bid-poll` Edge Function：FB Graph API 輪詢、`start_bid`（起標貼公告 + 建 ActiveBid 記錄）✅ 已完成
 - DB tables：`C_LIV_SessionList` / `C_LIV_ProductList` / `C_LIV_ActiveBidList` / `C_LIV_ProcessedCommentList`（已執行）
 
 **待測試清單：**
@@ -77,7 +88,7 @@
 - ✅ **自然人憑證**：開立成功，InvoiceCarrierNum 正確存入
 - ✅ **捐贈碼**：開立成功，InvoiceLoveCode 正確存入
 - ✅ **後台作廢發票**：作廢成功，InvoiceStatus 變 voided
-- ⚠️ **後台開立折讓**：Buffer 錯誤已修（補 import），待重新測試
+- ⚠️ **後台開立折讓**：Buffer import 已修（`import { Buffer } from 'node:buffer'`）、Result JSON parse 防護已加，待重新測試
 - ⚠️ **後台手動補開發票**：待測試（找 InvoiceStatus=none 的已付款訂單）
 
 **尚需設定（正式上線前）：**
