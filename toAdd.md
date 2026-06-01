@@ -88,8 +88,8 @@
 - ✅ **自然人憑證**：開立成功，InvoiceCarrierNum 正確存入
 - ✅ **捐贈碼**：開立成功，InvoiceLoveCode 正確存入
 - ✅ **後台作廢發票**：作廢成功，InvoiceStatus 變 voided
-- ⚠️ **後台開立折讓**：Buffer import 已修（`import { Buffer } from 'node:buffer'`）、Result JSON parse 防護已加，待重新測試
-- ⚠️ **後台手動補開發票**：待測試（找 InvoiceStatus=none 的已付款訂單）
+- ✅ **後台開立折讓**：開立成功，InvoiceStatus 變 allowance，InvoiceAllowanceNo 正確寫入
+- ✅ **後台手動補開發票**：開立成功
 
 **尚需設定（正式上線前）：**
 - Supabase Edge Functions Secrets 切換 `EZPAY_ENV=prod`
