@@ -19,6 +19,7 @@
 | `add_cart_features.sql` | `C_CART_CartItemList` 新增 `Source` / `LiveSessionID` / `IsReward` / `RewardAmt`；`ProductID` / `VariantID` 改允許 NULL | ✅ 已執行 |
 | `setup_weekly_cron.sql` | pg_cron：每週日 16:00 UTC（台灣週一 00:00）自動銷單 + 回補庫存 + 軟刪除購物車現貨品 | ✅ 已執行 |
 | `cart_stock_functions.sql` | 新增 `decrement_stock(bigint, int)` / `restore_stock(bigint, int)` 原子性庫存函式 | ✅ 已執行 |
+| `add_purchase_system.sql` | 新增 `S_INV_SupplierList` / `S_INV_CostTypeList` / `C_INV_PurchaseOrderList` / `C_INV_PurchaseOrderItemList` / `C_INV_PurchaseOrderCostList` / `C_ORD_OrderExtraCostList`；`C_PRD_ProductVariantList` 新增 `CostPrice`；`C_ORD_OrderItemList` 新增 `UnitCost`；`C_ORD_OrderList` 新增 `ActualShippingCost` | ⬜ 待執行 |
 
 > ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
 > - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）
@@ -292,6 +293,7 @@ WITH CHECK (
 | UnitPrice | bigint | NO | — |
 | Qty | bigint | NO | — |
 | SubTotal | bigint | NO | — |
+| UnitCost | numeric(10,4) | NO | 0 | 建單時快照的加權平均成本（CostPrice snapshot） |
 
 ### C_ORD_OrderList
 | 欄位 | 型別 | Nullable | Default |
@@ -351,6 +353,7 @@ WITH CHECK (
 | InvoiceLoveCode | varchar(10) | YES | — | 捐贈碼 |
 | InvoiceBuyerUBN | varchar(8) | YES | — | 公司戶統一編號 |
 | InvoiceBuyerName | varchar(100) | YES | — | 公司戶名稱 |
+| ActualShippingCost | integer | YES | — | 實際出貨運費成本（出貨時依箱數×系統設定自動計算）|
 
 ### C_ORD_OrderStatusLog
 | 欄位 | 型別 | Nullable | Default |
@@ -361,6 +364,83 @@ WITH CHECK (
 | ToStatusID | bigint | NO | — |
 | Note | text | YES | — |
 | CreatedDate | timestamptz | NO | now() |
+
+### C_ORD_OrderExtraCostList
+訂單額外成本（退換貨運費等）；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| OrderID | bigint | NO | — | 對應 C_ORD_OrderList.ID |
+| EventType | varchar(20) | NO | 'other' | `return`=退貨 / `exchange`=換貨 / `other` |
+| CostType | varchar(30) | NO | 'other' | `shipping_back`=寄回運費 / `shipping_out`=補寄運費 / `other` |
+| Amount | integer | NO | — | 金額（CHECK >= 0）|
+| Note | text | YES | — | |
+| CreatedDate | timestamptz | NO | now() | |
+
+### C_INV_PurchaseOrderList
+進貨單主表；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| PurchaseNo | varchar(30) | NO | — | UNIQUE，格式 `PO_YYYYMMDD_XXXXX` |
+| SupplierID | bigint | YES | — | FK → S_INV_SupplierList |
+| PurchaseDate | date | NO | — | |
+| Status | varchar(20) | NO | 'draft' | `draft`=草稿 / `confirmed`=已確認 |
+| TotalCost | numeric(12,4) | YES | — | 商品成本 + 附加成本（confirm 時計算）|
+| Note | text | YES | — | |
+| CreatedDate | timestamptz | NO | now() | |
+| UpdatedDate | timestamptz | NO | now() | |
+
+### C_INV_PurchaseOrderItemList
+進貨明細；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| PurchaseOrderID | bigint | NO | — | FK → C_INV_PurchaseOrderList（CASCADE DELETE）|
+| ProductID | bigint | NO | — | |
+| VariantID | bigint | NO | — | |
+| ProductName | varchar(200) | YES | — | 快取，避免 JOIN |
+| ColorName | varchar(50) | YES | — | |
+| SizeName | varchar(20) | YES | — | |
+| Qty | integer | NO | — | CHECK > 0 |
+| UnitCost | numeric(10,4) | NO | — | CHECK >= 0，每件進貨成本（不含附加成本）|
+| SubTotal | numeric(12,4) | GENERATED | — | Qty × UnitCost，STORED |
+
+### C_INV_PurchaseOrderCostList
+進貨附加成本（關稅、運費等）；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| PurchaseOrderID | bigint | NO | — | FK → C_INV_PurchaseOrderList（CASCADE DELETE）|
+| CostTypeID | bigint | YES | — | FK → S_INV_CostTypeList |
+| Amount | numeric(10,2) | NO | — | CHECK >= 0 |
+| Note | text | YES | — | |
+| CreatedDate | timestamptz | NO | now() | |
+
+### S_INV_SupplierList
+供應商主檔；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default |
+|------|------|----------|---------|
+| ID | bigint | NO | — |
+| Name | varchar(100) | NO | — |
+| ContactName | varchar(50) | YES | — |
+| Phone | varchar(20) | YES | — |
+| Email | varchar(100) | YES | — |
+| Note | text | YES | — |
+| IsActive | boolean | NO | true |
+| CreatedDate | timestamptz | NO | now() |
+| UpdatedDate | timestamptz | NO | now() |
+
+### S_INV_CostTypeList
+進貨附加成本類型設定（可自訂）；RLS `is_staff()` ALL；預設四筆：大陸段物流費/過境運費/關稅/報關費
+| 欄位 | 型別 | Nullable | Default |
+|------|------|----------|---------|
+| ID | bigint | NO | — |
+| Name | varchar(50) | NO | — |
+| Description | varchar(200) | YES | — |
+| SortOrder | integer | NO | 0 |
+| IsActive | boolean | NO | true |
+| UpdatedDate | timestamptz | NO | now() |
 
 ### C_PRD_ProductList
 | 欄位 | 型別 | Nullable | Default |
@@ -432,6 +512,7 @@ WITH CHECK (
 | StockQty | bigint | NO | 0 |
 | SKU | varchar | YES | — |
 | IsActive | boolean | NO | false |
+| CostPrice | numeric(10,4) | NO | 0 | 加權平均進貨成本（每次確認進貨單時自動更新）|
 | CreatedDate | timestamptz | YES | now() |
 | UpdatedDate | timestamptz | YES | — |
 
@@ -627,6 +708,24 @@ WITH CHECK (
 ---
 
 ## RLS Policies
+
+### S_INV_SupplierList / S_INV_CostTypeList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| supplier_staff_all | authenticated | ALL | is_staff() |
+| costtype_staff_all | authenticated | ALL | is_staff() |
+
+### C_INV_PurchaseOrderList / C_INV_PurchaseOrderItemList / C_INV_PurchaseOrderCostList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| purchase_order_staff_all | authenticated | ALL | is_staff() |
+| purchase_item_staff_all  | authenticated | ALL | is_staff() |
+| purchase_cost_staff_all  | authenticated | ALL | is_staff() |
+
+### C_ORD_OrderExtraCostList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| order_extra_cost_staff_all | authenticated | ALL | is_staff() |
 
 ### LineBindToken
 > 無公開 policy；僅由 `line-webhook` 和 `line-bind` Edge Functions 以 service_role（繞過 RLS）讀寫。已啟用 RLS（`ENABLE ROW LEVEL SECURITY`）。

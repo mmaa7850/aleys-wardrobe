@@ -150,8 +150,14 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ### 2. 批次進貨 / 成本追蹤 / 毛利報表
 
-> **狀態：✅ 使用者已確認，待開發。**
+> **狀態：✅ 已開發完成，待執行 DB migration + 系統設定。**
 > 規格圖：`D:\Users\MondyHuang\Downloads\purchase-system-overview.pptx`
+
+**⚠️ 上線前必做：**
+1. 在 Supabase 執行 `supabase/migrations/add_purchase_system.sql`（兩個 schema 均已包含）
+2. 在後台「系統設定」(`S_SYS_Config`) 新增兩個 Key：
+   - `shipping_cost_cvscom`：超商每箱運費成本（例：`70`）
+   - `shipping_cost_home`：宅配每箱運費成本（例：`120`）
 
 #### DB 異動
 
@@ -222,13 +228,13 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 #### 開發順序
 
-1. DB migration（6張新表 + 3個欄位 + 2個 Config key）
-2. 供應商設定 + 成本項目設定頁面（簡單 CRUD）
-3. 進貨單建立 / confirm 邏輯（庫存更新 + 加權平均成本）
-4. `create-payment` 補快照 `UnitCost`
-5. 出貨 Modal 補箱數 + `ActualShippingCost`
-6. 訂單詳情補「額外成本」區塊
-7. 毛利報表
+1. ✅ DB migration（6張新表 + 3個欄位 + 2個 Config key）— `supabase/migrations/add_purchase_system.sql`
+2. ✅ 供應商設定 + 成本項目設定頁面（`Suppliers.vue` / `SetCostTypes.vue`）
+3. ✅ 進貨單建立 / confirm 邏輯（`Purchases.vue` / `PurchaseDetail.vue`）— 加權平均成本計算 + 庫存更新
+4. ✅ `create-payment` 補快照 `UnitCost`
+5. ✅ 出貨 Modal 補箱數 + 自動計算 `ActualShippingCost`
+6. ✅ 訂單詳情補「額外成本」區塊（`C_ORD_OrderExtraCostList`）
+7. ✅ 毛利報表（`ProfitReport.vue`）— 日期篩選、訂單明細、成本拆解彙總
 
 ---
 
