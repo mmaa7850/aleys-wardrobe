@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-05-30
+> 更新時間：2026-06-01
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -12,6 +12,18 @@
 | `add_shipping_method_fields.sql` | 新增 ShippingMethod / HomeDelivery* 欄位 | ✅ 已執行 |
 | `add_trade_no.sql` | 新增 TradeNo 欄位（藍新退款用） | ✅ 已執行 |
 | `add_invoice_fields.sql` | Invoice* 欄位（ezPay）+ ATM 轉帳欄位（錢包儲值）+ 發票載具欄位（InvoiceCarrierType 等） | ✅ 已執行 |
+| `add_wallet_tables.sql` | 新增錢包三張表（`C_MBR_WalletList` / `WalletTxList` / `WalletTopupList`）+ C_ORD_OrderList 的 `WalletDeductAmt` / `NewebpayAmt` | ✅ 已執行 |
+| `add_line_binding.sql` | `C_MBR_MemberList` 新增 `LineUserID` / `FbName`；新增 `LineBindToken` 表 | ✅ 已執行 |
+| `add_live_tables.sql` | 新增 `C_LIV_SessionList` / `C_LIV_ProductList`；`C_ORD_OrderList` 新增 `OrderSource` / `LiveSessionID` | ✅ 已執行 |
+| `add_live_realtime_tables.sql` | `C_LIV_SessionList` 新增 `FbPageId` / `FbLiveVideoId`；新增 `C_LIV_ActiveBidList` / `C_LIV_ProcessedCommentList`；`C_ORD_OrderList` 新增 `LiveCode` | ✅ 已執行 |
+| `add_cart_features.sql` | `C_CART_CartItemList` 新增 `Source` / `LiveSessionID` / `IsReward` / `RewardAmt`；`ProductID` / `VariantID` 改允許 NULL | ✅ 已執行 |
+| `setup_weekly_cron.sql` | pg_cron：每週日 16:00 UTC（台灣週一 00:00）自動銷單 + 回補庫存 + 軟刪除購物車現貨品 | ✅ 已執行 |
+| `cart_stock_functions.sql` | 新增 `decrement_stock(bigint, int)` / `restore_stock(bigint, int)` 原子性庫存函式 | ✅ 已執行 |
+
+> ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
+> - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）
+> - `C_MBR_MemberList.IsBlocked`（銷單後自動封鎖）
+> - `C_ORD_OrderList.OrderType`（`stock` / `preorder`）
 
 ---
 
@@ -79,14 +91,19 @@ WITH CHECK (
 ## Tables
 
 ### C_CART_CartItemList
-| 欄位 | 型別 | Nullable | Default |
-|------|------|----------|---------|
-| ID | bigint | NO | — |
-| CartID | bigint | NO | — |
-| ProductID | bigint | NO | — |
-| VariantID | bigint | NO | — |
-| Qty | integer | YES | 1 |
-| AddedAt | timestamptz | YES | now() |
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| CartID | bigint | NO | — | |
+| ProductID | bigint | **YES** | — | 購物金獎勵品項可為 NULL |
+| VariantID | bigint | **YES** | — | 同上 |
+| Qty | integer | YES | 1 | |
+| AddedAt | timestamptz | YES | now() | |
+| Source | varchar(20) | YES | 'web' | `web` / `live`（直播代建） |
+| LiveSessionID | bigint | YES | — | 直播代建時填入場次 ID |
+| IsReward | boolean | NO | false | 購物金獎勵品項標記 |
+| RewardAmt | integer | YES | — | 購物金面額 |
+| CancelledAt | timestamptz | YES | — | 週銷單軟刪除時間（前台查詢需加 `IS NULL` 過濾） |
 
 ### C_CART_CartList
 | 欄位 | 型別 | Nullable | Default |
@@ -95,6 +112,62 @@ WITH CHECK (
 | MemberID | bigint | NO | — |
 | CreatedDate | timestamptz | YES | now() |
 | UpdatedDate | timestamptz | YES | now() |
+
+### C_LIV_SessionList
+> 直播場次主表
+
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| Title | varchar(100) | NO | — | 場次名稱 |
+| LiveDate | date | YES | — | 直播日期 |
+| Status | varchar(20) | NO | 'planned' | `planned` / `active` / `closed` |
+| Notes | text | YES | — | 備注 |
+| FbPageId | varchar | YES | — | FB 粉專 Page ID（即時監控用）|
+| FbLiveVideoId | varchar | YES | — | FB 直播影片 ID |
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | now() | |
+
+### C_LIV_ProductList
+> 直播場次商品對照表（代碼 ↔ 商品 Variant ↔ 直播價）
+
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| SessionID | bigint | NO | — | FK → C_LIV_SessionList.ID（CASCADE）|
+| Code | varchar(20) | NO | — | 留言關鍵字代碼，如 `Y77` |
+| ColorName | varchar(50) | NO | — | 顏色名稱 |
+| SizeName | varchar(20) | NO | — | 尺寸 |
+| VariantID | bigint | NO | — | FK → C_PRD_ProductVariantList.ID |
+| ProductName | varchar(200) | YES | — | 快取商品名稱（避免 join）|
+| LivePrice | bigint | NO | — | 直播特價（元）|
+| CreatedDate | timestamptz | YES | now() | |
+
+### C_LIV_ActiveBidList
+> 追蹤目前開標中的商品。同一場次同一 Code 只能有一個 `open` 狀態（UNIQUE index）
+
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| SessionID | bigint | NO | — | |
+| Code | varchar | NO | — | 商品代碼 |
+| ProductName | varchar | YES | — | 快取名稱 |
+| Status | varchar | NO | 'open' | `open` / `closed` |
+| OpenedAt | timestamptz | NO | now() | 起標時間 |
+| ClosedAt | timestamptz | YES | — | 截標時間 |
+| CreatedDate | timestamptz | NO | now() | |
+
+### C_LIV_ProcessedCommentList
+> 已處理 FB 留言 ID（去重）。`FbCommentId` + `FbUserId + DedupKey` 雙重防止重複建單。
+
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| SessionID | bigint | NO | — | |
+| FbCommentId | varchar | NO | — | UNIQUE(SessionID, FbCommentId) |
+| FbUserId | varchar | YES | — | FB 用戶 ID |
+| DedupKey | varchar | YES | — | `{CODE}\|{VariantID}`，null=非入單留言 |
+| CreatedDate | timestamptz | NO | now() | |
 
 ### C_MBR_MemberAddressList
 | 欄位 | 型別 | Nullable | Default |
@@ -123,9 +196,12 @@ WITH CHECK (
 | RegisterSource | text | YES | 'email' |
 | DefaultPayMethodID | bigint | YES | — |
 | MemberLevelID | bigint | YES | — (FK → S_MBR_MemberLevelList.ID) |
-| IsActive | boolean | YES | true |
-| CreatedDate | timestamptz | YES | now() |
-| UpdatedDate | timestamptz | YES | now() |
+| IsActive | boolean | YES | true | |
+| LineUserID | text | YES | — | LINE 帳號綁定後填入（UNIQUE）；`line-webhook` Unfollow 時清除 |
+| FbName | text | YES | — | FB 登入後擷取 `user_metadata.full_name`；直播留言比對用 |
+| IsBlocked | boolean | YES | false | 週銷單後自動設為 true；直播建單前檢查，封鎖者拒絕建單 |
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | now() | |
 
 ### C_MBR_MemberSocialList
 | 欄位 | 型別 | Nullable | Default |
@@ -136,6 +212,19 @@ WITH CHECK (
 | SocialUserID | text | YES | — |
 | SocialEmail | text | YES | — |
 | CreatedDate | timestamptz | YES | now() |
+
+### LineBindToken
+> LINE 帳號綁定的一次性 Token 表。由 `line-webhook` 建立、`line-bind` 消費。
+
+| 欄位 | 型別 | Nullable | Default | 備注 |
+|------|------|----------|---------|------|
+| Token | text | NO | — | PRIMARY KEY（UUID v4） |
+| LineUserID | text | NO | — | LINE 用戶 ID |
+| CreatedAt | timestamptz | YES | now() | |
+| UsedAt | timestamptz | YES | — | 綁定完成後填入 |
+| ExpiresAt | timestamptz | YES | now() + 7 days | 7 天有效期 |
+
+> RLS：已啟用；僅由 `line-webhook` / `line-bind` Edge Functions 以 service_role 讀寫，無公開 policy。
 
 ### C_MBR_WalletList
 | 欄位 | 型別 | Nullable | Default |
@@ -209,7 +298,11 @@ WITH CHECK (
 |------|------|----------|---------|
 | ID | bigint | NO | — |
 | OrderNo | varchar | NO | — |
-
+| OrderType | varchar(20) | YES | 'stock' | `stock`=現貨 / `preorder`=預購；前台訂單列表顯示「預購」badge |
+| OrderSource | varchar(20) | YES | 'web' | `web` / `live`（直播代建）/ `admin`（後台手動）|
+| LiveSessionID | bigint | YES | — | 直播代建時填入 |
+| LiveCode | varchar | YES | — | 直播代碼（方便結標公告查詢）|
+| TradeNo | varchar(50) | YES | — | 藍新退款交易流水號（`payment-notify` 寫入）|
 | CustomerName | varchar | NO | — |
 | CustomerEmail | varchar | NO | — |
 | CustomerPhone | varchar | YES | — |
@@ -535,6 +628,18 @@ WITH CHECK (
 
 ## RLS Policies
 
+### LineBindToken
+> 無公開 policy；僅由 `line-webhook` 和 `line-bind` Edge Functions 以 service_role（繞過 RLS）讀寫。已啟用 RLS（`ENABLE ROW LEVEL SECURITY`）。
+
+### C_LIV_SessionList / C_LIV_ProductList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| live_session_staff_all | authenticated | ALL | is_staff()（任何啟用管理員）|
+| live_product_staff_all | authenticated | ALL | is_staff() |
+
+### C_LIV_ActiveBidList / C_LIV_ProcessedCommentList
+> 無 RLS policy；由 `live-bid-poll` / `live-import` Edge Functions 以 service_role 存取。
+
 ### C_CART_CartItemList
 | Policy | Role | CMD | 條件 |
 |--------|------|-----|------|
@@ -689,3 +794,7 @@ WITH CHECK (
 | `staging.is_admin()` | 檢查目前使用者是否在 S_SYS_AdminUserList 且 IsAdmin=true, IsActive=true（超管）|
 | `staging.is_staff()` | 檢查目前使用者是否在 S_SYS_AdminUserList 且 IsActive=true（任何啟用的管理員）|
 | `staging.user_owns_order(OrderID)` | 檢查訂單是否屬於目前使用者 |
+| `decrement_stock(p_variant_id bigint, p_qty int)` | 原子性扣庫存（`FOR UPDATE` 鎖）；庫存不足回傳 `false`；加入購物車時呼叫 |
+| `restore_stock(p_variant_id bigint, p_qty int)` | 原子性還庫存；移除購物車 / 取消訂單時呼叫 |
+
+> 上述 `decrement_stock` / `restore_stock` 在 `public` 和 `staging` 兩個 schema 各有一份，`SECURITY DEFINER` 確保任何 role 都可呼叫。

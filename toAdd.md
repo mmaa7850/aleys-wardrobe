@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-05-30
+> 更新時間：2026-06-01
 
 ---
 
@@ -32,6 +32,17 @@
 - **前台訂單詳情 UX 改善**：運費正確從 ShippingFee 讀取；有錢包折抵時訂單總計顯示 NewebpayAmt；新增「訂單狀態」欄位（從 S_ORD_StatusList 查中文名稱）；退款訂單不顯示重新付款/ATM轉帳資訊；payStatusLabel 補 refunded→已退款；訂單列表/會員中心金額同步修正
 - **wallet-topup 加入 LINE Pay**：`LINEPAY=1` 加入儲值付款選項
 - **LINE Pay 儲值/結帳全程測試通過**（沙盒環境）
+- **LINE 帳號綁定**：LINE OA Follow 觸發 `line-webhook`→建立 `LineBindToken`→私訊綁定連結；會員點連結進 `/bind-line`→呼叫 `line-bind`→寫入 `LineUserID`；Unfollow 時自動清除
+- **FB OAuth 登入後擷取 FbName**：前台 FB 登入後將 `user_metadata.full_name` 存入 `C_MBR_MemberList.FbName`，供直播留言比對
+- **購物車拆分現貨/預購**：購物車頁面分兩個區塊，各自「前往結帳」按鈕帶 `?type=stock` / `?type=preorder`；加入購物車時即扣庫存（`decrement_stock`），移除時回補；前台查詢加 `CancelledAt IS NULL` 過濾
+- **預購出貨說明改固定文字**：商品頁/購物車/結帳頁一律顯示「三週內出貨」；移除 `PreOrderShipDate` UI 引用；後台商品編輯移除精確出貨日欄位
+- **訂單 OrderType 欄位**：`create-payment` 存入 `OrderType`（`stock`/`preorder`）；前台訂單列表/會員中心對預購訂單顯示「預購」badge
+- **管理者 Email → UserId 查詢工具**：管理者帳號頁面新增工具欄，輸入 Email 自動查出對應 UUID，方便新增後台帳號
+- **週銷單機制（pg_cron）**：每週日 16:00 UTC（台灣週一 00:00）自動執行：取消 `pending`/`failed` 訂單、`restore_stock` 回補庫存、軟刪除購物車現貨品（`CancelledAt`，預購品保留）、同步回補購物車庫存；也可從後台「待結清單」手動觸發 `cancel-orders`
+- **銷單自動封鎖會員**：`cancel-orders` 執行後依 `CustomerEmail` 找到對應會員設 `IsBlocked=true`；`live-import` 建單前檢查，封鎖者拒絕建單（回傳 `status='blocked'`）
+- **後台會員購物車管理**：會員列表新增「購物車」按鈕，開 Modal 顯示品項（含商品名稱/顏色/尺寸/數量）；逐筆移除並回補庫存（`manage-member-cart` Edge Function，service_role 繞過 RLS）；支援合併同款品項、數量調整
+- **PendingList Tab2 被封鎖名單**：`/admin/orders/pending` 新增 Tab2「本週被封鎖名單」，呼叫 `get-blocked-members` Edge Function，顯示本週銷單後被封鎖的會員及其被取消的購物車品項明細
+- **直播即時搶標（live-bid-poll 起標）**：`start_bid` action — 起標時在 FB 直播貼出格式化起標公告（含商品名稱、直播價、留言格式範例）並在 `C_LIV_ActiveBidList` 建立 open 記錄；後台場次詳情「起標」按鈕（已開標中顯示「● 開標中」badge，未直播時 disable）
 
 ---
 
@@ -45,7 +56,7 @@
 - `/admin/live` 場次列表（建立/管理）
 - 場次詳情三個 Tab：**商品對照表**（代碼↔商品↔直播價）/ **留言解析建單**（貼 FB 留言文字 → 解析 → 批次建單 → LINE 通知）/ **FB 直播監控**（連 FB → 即時輪詢留言 → 自動搶標/截標）
 - `live-import` Edge Function：比對 `FbName` 找會員、扣庫存、建訂單（`OrderSource='live'`）、發 LINE 推播付款連結
-- `live-bid-poll` Edge Function：FB Graph API 輪詢、起標/截標管理
+- `live-bid-poll` Edge Function：FB Graph API 輪詢、`start_bid`（起標貼公告 + 建 ActiveBid 記錄）✅ 已完成
 - DB tables：`C_LIV_SessionList` / `C_LIV_ProductList` / `C_LIV_ActiveBidList` / `C_LIV_ProcessedCommentList`（已執行）
 
 **待測試清單：**
@@ -77,8 +88,8 @@
 - ✅ **自然人憑證**：開立成功，InvoiceCarrierNum 正確存入
 - ✅ **捐贈碼**：開立成功，InvoiceLoveCode 正確存入
 - ✅ **後台作廢發票**：作廢成功，InvoiceStatus 變 voided
-- ⚠️ **後台開立折讓**：Buffer 錯誤已修（補 import），待重新測試
-- ⚠️ **後台手動補開發票**：待測試（找 InvoiceStatus=none 的已付款訂單）
+- ✅ **後台開立折讓**：開立成功，InvoiceStatus 變 allowance，InvoiceAllowanceNo 正確寫入
+- ✅ **後台手動補開發票**：開立成功
 
 **尚需設定（正式上線前）：**
 - Supabase Edge Functions Secrets 切換 `EZPAY_ENV=prod`
@@ -137,7 +148,91 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ---
 
-### 2. Google Analytics 整合
+### 2. 批次進貨 / 成本追蹤 / 毛利報表
+
+> **狀態：規格已確認，等使用者最終確認後執行。**
+> 規格圖：`D:\Users\MondyHuang\Downloads\purchase-system-overview.pptx`
+
+#### DB 異動
+
+**新增 6 張表：**
+
+| 表格 | 用途 |
+|------|------|
+| `S_INV_SupplierList` | 供應商主檔（名稱/聯絡人/電話/Email/IsActive）|
+| `S_INV_CostTypeList` | 附加成本項目設定（大陸段運費/過境運費/關稅等，可自行新增）|
+| `C_INV_PurchaseOrderList` | 進貨單主表（PurchaseNo/SupplierID/日期/狀態 draft→confirmed/總成本）|
+| `C_INV_PurchaseOrderItemList` | 進貨明細（ProductID/VariantID/Qty/UnitCost/SubTotal）|
+| `C_INV_PurchaseOrderCostList` | 進貨附加成本（對應 CostTypeID，可多筆）|
+| `C_ORD_OrderExtraCostList` | 訂單額外成本（退換貨運費等；EventType: return/exchange；CostType: shipping_back/shipping_out/other）|
+
+**修改 3 張現有表：**
+
+| 表格 | 新增欄位 | 說明 |
+|------|------|------|
+| `C_PRD_ProductVariantList` | `CostPrice numeric(10,4)` | 加權平均成本，進貨 confirm 時自動更新 |
+| `C_ORD_OrderItemList` | `UnitCost numeric(10,4)` | 建單當下快照成本，不隨後續進貨變動 |
+| `C_ORD_OrderList` | `ActualShippingCost integer` | 實際出貨運費，出貨時自動帶入設定值×箱數 |
+
+**系統設定（`S_SYS_Config`）新增 2 個 Key：**
+- `shipping_cost_cvscom`：超商每箱成本（例：70）
+- `shipping_cost_home`：宅配每箱成本（例：120）
+
+#### 後台新增頁面
+
+| 頁面 | 路由 |
+|------|------|
+| 供應商設定 | `/admin/inventory/suppliers` |
+| 附加成本項目設定 | `/admin/inventory/setcosttypes` |
+| 進貨單列表 | `/admin/inventory/purchases` |
+| 進貨單詳情 / 建立 | `/admin/inventory/purchases/:id` |
+| 毛利報表 | `/admin/reports/profit` |
+
+#### 現有頁面修改
+
+- **出貨 Modal**：新增「箱數」欄位（預設 1）；系統依 `ShippingMethod` 自動帶對應設定值；計算 `ActualShippingCost = 設定值 × 箱數`，可手動覆蓋
+- **訂單詳情**：新增「額外成本」區塊，可新增多筆退換貨費用
+- **`create-payment`**：建單時把 variant 當下的 `CostPrice` 快照寫入 `OrderItemList.UnitCost`
+
+#### 進貨 Confirm 自動執行
+
+1. `StockQty` + 進貨數量
+2. 附加成本依數量比例分攤 → 重算加權平均 `CostPrice`
+3. 寫入 `C_INV_StockLog` 庫存異動紀錄
+
+#### 毛利計算公式
+
+```
+訂單毛利 = FinalAmount
+         - Σ(UnitCost × Qty)       商品成本（建單快照）
+         - PaymentFee              金流手續費
+         - ActualShippingCost      實際出貨運費
+         - Σ(OrderExtraCostList)   退換貨等額外成本
+
+毛利率 = 訂單毛利 ÷ FinalAmount × 100%
+```
+
+#### 毛利報表內容
+
+- **Stat Cards**：總營收 / 總毛利 / 整體毛利率 / 平均訂單毛利
+- **每日毛利折線圖**：今日/本週/本月/自訂區間
+- **商品毛利率排行**：依毛利率或金額排序
+- **成本結構拆解**：商品成本/手續費/出貨運費/退換貨費用各佔比
+- **缺少成本資料提醒**：`UnitCost=0` 的訂單另外標示
+
+#### 開發順序
+
+1. DB migration（6張新表 + 3個欄位 + 2個 Config key）
+2. 供應商設定 + 成本項目設定頁面（簡單 CRUD）
+3. 進貨單建立 / confirm 邏輯（庫存更新 + 加權平均成本）
+4. `create-payment` 補快照 `UnitCost`
+5. 出貨 Modal 補箱數 + `ActualShippingCost`
+6. 訂單詳情補「額外成本」區塊
+7. 毛利報表
+
+---
+
+### 3. Google Analytics 整合
 
 - 申請 GA4 屬性，取得 Measurement ID
 - 在 `.env` 加入 `VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX`（已預留欄位）
@@ -154,7 +249,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ---
 
-### 3. 註冊確認信件優化
+### 4. 註冊確認信件優化
 
 現況：Supabase 預設寄件人為 `noreply@mail.supabase.io`，體驗不佳。
 
@@ -172,7 +267,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ---
 
-### 4. 大戶會員標記（暫緩決策）
+### 5. 大戶會員標記（暫緩決策）
 
 **決策方向（已討論）：**
 - 優先選擇**方案 A（自動計算）**：不動 DB schema；在會員列表和訂單詳情頁根據累積消費金額顯示「大戶」badge；門檻值存 `S_SYS_Config`（key: `vip_threshold`）
@@ -185,7 +280,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ## 🟢 低優先（複雜度高 / 有外部依賴 / 暫緩）
 
-### 5. FB 直播留言自動化
+### 6. FB 直播留言自動化
 
 讓客人直播留言「+1 商品 顏色 尺寸」後，系統自動建訂單、分配庫存、發結帳連結。
 
@@ -207,7 +302,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ---
 
-### 6. 分批出貨
+### 7. 分批出貨
 
 單筆訂單中部分商品先到貨、部分延後，需拆分出貨記錄與通知。
 
@@ -218,7 +313,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ---
 
-### 7. 訂單取消流程
+### 8. 訂單取消流程
 
 目前系統沒有「取消訂單」功能，只有「退款」。
 
@@ -233,7 +328,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ---
 
-### 8. 訂單通知信
+### 9. 訂單通知信
 
 目前下單、付款成功、出貨，客人都**不會收到任何通知**。
 
@@ -245,7 +340,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ---
 
-### 9. 客戶錢包 / 儲值（暫緩，待會計確認）
+### 10. 客戶錢包 / 儲值（暫緩，待會計確認）
 
 **⚠️ 實作前需請會計師確認「儲值不開發票、消費開發票」符合記帳需求。**
 
