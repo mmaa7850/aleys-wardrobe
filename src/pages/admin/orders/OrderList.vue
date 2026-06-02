@@ -34,7 +34,50 @@ const activeTab = ref("info");
 const detailLoading = ref(false);
 const detailOrder = ref(null);
 const detailItems = ref([]);
-const detailLogs = ref([]);
+const detailLogs  = ref([]);
+const detailExtraCosts = ref([]);
+
+// ── 訂單額外成本（退換貨等）────────────────────────────
+const extraCostForm    = ref({ EventType: 'other', CostType: 'other', Amount: 0, Note: '' });
+const extraCostSaving  = ref(false);
+const extraCostErr     = ref('');
+const extraCostSuccess = ref('');
+const showExtraCostForm = ref(false);
+
+const EVENT_TYPE_LABELS: Record<string, string> = { return: '退貨', exchange: '換貨', other: '其他' };
+const COST_TYPE_LABELS:  Record<string, string>  = { shipping_back: '寄回運費', shipping_out: '補寄運費', other: '其他' };
+
+async function addExtraCost() {
+  extraCostErr.value = '';
+  if (Number(extraCostForm.value.Amount) < 0) { extraCostErr.value = '金額不可為負'; return; }
+  extraCostSaving.value = true;
+  try {
+    const { error } = await db.from('C_ORD_OrderExtraCostList').insert({
+      OrderID:   detailOrder.value.ID,
+      EventType: extraCostForm.value.EventType,
+      CostType:  extraCostForm.value.CostType,
+      Amount:    Number(extraCostForm.value.Amount),
+      Note:      extraCostForm.value.Note?.trim() || null,
+    });
+    if (error) throw error;
+    extraCostForm.value = { EventType: 'other', CostType: 'other', Amount: 0, Note: '' };
+    showExtraCostForm.value = false;
+    extraCostSuccess.value = '已新增';
+    // 重新載入
+    const { data } = await db.from('C_ORD_OrderExtraCostList').select('*').eq('OrderID', detailOrder.value.ID).order('ID');
+    detailExtraCosts.value = data ?? [];
+  } catch (e) {
+    extraCostErr.value = e?.message ?? String(e);
+  } finally {
+    extraCostSaving.value = false;
+  }
+}
+
+async function deleteExtraCost(id: number) {
+  if (!confirm('確認刪除此費用記錄？')) return;
+  await db.from('C_ORD_OrderExtraCostList').delete().eq('ID', id);
+  detailExtraCosts.value = detailExtraCosts.value.filter(c => c.ID !== id);
+}
 
 const editStatusId = ref(null);
 const editAdminNote = ref("");
@@ -71,7 +114,7 @@ const isWalletOnly = computed(() =>
 );
 
 // ── 標記已出貨（宅配）─────────────────────────────────
-const shipForm = ref({ company: 'tcat', no: '' });
+const shipForm = ref({ company: 'tcat', no: '', boxCount: 1 });
 const shipLoading = ref(false);
 const shipError = ref('');
 const shipSuccess = ref(false);
@@ -95,10 +138,18 @@ const canMarkShipped = computed(() =>
 
 const markShipped = async () => {
   if (!shipForm.value.no.trim()) { shipError.value = '請填寫物流單號'; return; }
+  const boxes = Math.max(1, Number(shipForm.value.boxCount) || 1);
   shipLoading.value = true;
   shipError.value = '';
   shipSuccess.value = false;
   try {
+    // 從系統設定讀取每箱運費成本
+    const shippingMethod = detailOrder.value?.ShippingMethod ?? '';
+    const configKey = shippingMethod === 'cvscom' ? 'shipping_cost_cvscom' : 'shipping_cost_home';
+    const { data: cfgData } = await db.from('S_SYS_Config').select('Value').eq('Name', configKey).maybeSingle();
+    const costPerBox = Number(cfgData?.Value) || 0;
+    const actualShippingCost = costPerBox * boxes;
+
     const shippedStatus = statusOptions.value.find(s => s.Name === 'shipped')
     const { error } = await db
       .from('C_ORD_OrderList')
@@ -107,6 +158,7 @@ const markShipped = async () => {
         HomeDeliveryNo: shipForm.value.no.trim(),
         ShippingStatus: 'shipped',
         ShippingStatusText: '已出貨',
+        ActualShippingCost: actualShippingCost,
         UpdatedDate: new Date().toISOString(),
         ...(shippedStatus ? { StatusID: shippedStatus.ID } : {}),
       })
@@ -119,6 +171,7 @@ const markShipped = async () => {
       HomeDeliveryNo: shipForm.value.no.trim(),
       ShippingStatus: 'shipped',
       ShippingStatusText: '已出貨',
+      ActualShippingCost: actualShippingCost,
       ...(shippedStatus ? { StatusID: shippedStatus.ID } : {}),
     };
     if (shippedStatus) editStatusId.value = shippedStatus.ID;
@@ -207,17 +260,19 @@ const openDetail = async (id) => {
   _modal.show();
 
   try {
-    const [orderRes, itemsRes, logsRes] = await Promise.all([
+    const [orderRes, itemsRes, logsRes, extraCostsRes] = await Promise.all([
       db.from("C_ORD_OrderList").select("*").eq("ID", id).single(),
       db.from("C_ORD_OrderItemList").select("*").eq("OrderID", id).order("ID"),
       db.from("C_ORD_OrderStatusLog").select("*").eq("OrderID", id).order("CreatedDate"),
+      db.from("C_ORD_OrderExtraCostList").select("*").eq("OrderID", id).order("ID"),
     ]);
 
     if (orderRes.error) throw orderRes.error;
 
     detailOrder.value = orderRes.data;
     detailItems.value = itemsRes.data ?? [];
-    detailLogs.value = logsRes.data ?? [];
+    detailLogs.value  = logsRes.data ?? [];
+    detailExtraCosts.value = extraCostsRes.data ?? [];
 
     editStatusId.value = orderRes.data.StatusID;
     editAdminNote.value = orderRes.data.AdminNote ?? "";
@@ -770,24 +825,29 @@ onMounted(async () => {
                       <div v-if="shipError" class="alert alert-danger py-2 small mb-2">{{ shipError }}</div>
                       <div v-if="shipSuccess" class="alert alert-success py-2 small mb-2">已標記出貨</div>
                       <div class="row g-2 align-items-end">
-                        <div class="col-12 col-sm-4">
+                        <div class="col-12 col-sm-3">
                           <label class="form-label small mb-1">物流公司</label>
                           <select v-model="shipForm.company" class="form-select form-select-sm">
                             <option v-for="c in SHIP_COMPANIES" :key="c.value" :value="c.value">{{ c.label }}</option>
                           </select>
                         </div>
-                        <div class="col-12 col-sm-5">
+                        <div class="col-12 col-sm-4">
                           <label class="form-label small mb-1">物流單號</label>
                           <input v-model="shipForm.no" type="text" class="form-control form-control-sm"
                             placeholder="輸入物流單號" :disabled="shipLoading" />
                         </div>
-                        <div class="col-12 col-sm-3">
+                        <div class="col-6 col-sm-2">
+                          <label class="form-label small mb-1">箱數</label>
+                          <input v-model.number="shipForm.boxCount" type="number" min="1" class="form-control form-control-sm" :disabled="shipLoading" />
+                        </div>
+                        <div class="col-6 col-sm-3">
                           <button class="btn btn-success btn-sm w-100" @click="markShipped" :disabled="shipLoading">
                             <span v-if="shipLoading" class="spinner-border spinner-border-sm me-1"></span>
                             標記已出貨
                           </button>
                         </div>
                       </div>
+                      <div class="text-muted small mt-1">運費成本將依箱數自動計算（系統設定）</div>
                     </template>
                     <!-- 未付款或其他狀況 -->
                     <p v-else class="text-muted small mb-0">訂單付款後才可標記出貨</p>
@@ -848,6 +908,82 @@ onMounted(async () => {
 
                     <div v-if="invoiceSuccess" class="alert alert-success py-2 small mt-2 mb-0">{{ invoiceSuccess }}</div>
                     <div v-if="invoiceError" class="alert alert-danger py-2 small mt-2 mb-0">{{ invoiceError }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 額外成本（退換貨等） -->
+              <div class="col-12">
+                <div class="card">
+                  <div class="card-header small fw-semibold d-flex align-items-center justify-content-between">
+                    <span>額外成本記錄（退換貨）</span>
+                    <button class="btn btn-xs btn-outline-primary" @click="showExtraCostForm = !showExtraCostForm">
+                      {{ showExtraCostForm ? '取消' : '+ 新增' }}
+                    </button>
+                  </div>
+                  <div class="card-body">
+                    <!-- 新增表單 -->
+                    <div v-if="showExtraCostForm" class="border rounded p-3 mb-3 bg-light">
+                      <div v-if="extraCostErr" class="alert alert-danger py-2 small mb-2">{{ extraCostErr }}</div>
+                      <div class="row g-2 align-items-end">
+                        <div class="col-6 col-sm-2">
+                          <label class="form-label small mb-1">事件類型</label>
+                          <select v-model="extraCostForm.EventType" class="form-select form-select-sm">
+                            <option value="return">退貨</option>
+                            <option value="exchange">換貨</option>
+                            <option value="other">其他</option>
+                          </select>
+                        </div>
+                        <div class="col-6 col-sm-3">
+                          <label class="form-label small mb-1">費用類型</label>
+                          <select v-model="extraCostForm.CostType" class="form-select form-select-sm">
+                            <option value="shipping_back">寄回運費</option>
+                            <option value="shipping_out">補寄運費</option>
+                            <option value="other">其他</option>
+                          </select>
+                        </div>
+                        <div class="col-6 col-sm-2">
+                          <label class="form-label small mb-1">金額</label>
+                          <input v-model.number="extraCostForm.Amount" type="number" min="0" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-6 col-sm-3">
+                          <label class="form-label small mb-1">備註</label>
+                          <input v-model="extraCostForm.Note" type="text" class="form-control form-control-sm" placeholder="選填" />
+                        </div>
+                        <div class="col-12 col-sm-2">
+                          <button class="btn btn-success btn-sm w-100" @click="addExtraCost" :disabled="extraCostSaving">
+                            <span v-if="extraCostSaving" class="spinner-border spinner-border-sm me-1"></span>
+                            儲存
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-if="extraCostSuccess" class="alert alert-success py-2 small mb-2">{{ extraCostSuccess }}</div>
+
+                    <div v-if="!detailExtraCosts.length" class="text-muted small">尚無額外成本記錄</div>
+                    <table v-else class="table table-sm align-middle mb-0">
+                      <thead class="table-light">
+                        <tr>
+                          <th>事件</th>
+                          <th>費用類型</th>
+                          <th class="text-end">金額</th>
+                          <th>備註</th>
+                          <th style="width:40px"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="c in detailExtraCosts" :key="c.ID">
+                          <td>{{ EVENT_TYPE_LABELS[c.EventType] ?? c.EventType }}</td>
+                          <td>{{ COST_TYPE_LABELS[c.CostType]   ?? c.CostType }}</td>
+                          <td class="text-end">NT$ {{ Number(c.Amount).toLocaleString() }}</td>
+                          <td class="text-muted small">{{ c.Note || '—' }}</td>
+                          <td>
+                            <button class="btn btn-xs btn-outline-danger" @click="deleteExtraCost(c.ID)">✕</button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>

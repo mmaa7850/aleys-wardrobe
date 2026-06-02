@@ -243,6 +243,16 @@ Deno.serve(async (req) => {
       })
     }
 
+    // 快照各規格的加權平均成本（CostPrice），寫入 UnitCost
+    const variantIds = (items as Array<{ variantId: number }>).map(i => i.variantId)
+    const { data: variantCosts } = await supabaseAdmin
+      .schema(dbSchema)
+      .from('C_PRD_ProductVariantList')
+      .select('ID, "CostPrice"')
+      .in('ID', variantIds)
+    const costMap: Record<number, number> = {}
+    for (const v of variantCosts ?? []) costMap[v.ID] = Number(v.CostPrice) || 0
+
     const orderItems = (items as Array<{
       productId: number; productName: string; variantId: number
       colorName: string; sizeName: string; unitPrice: number; qty: number
@@ -256,6 +266,7 @@ Deno.serve(async (req) => {
       UnitPrice: item.unitPrice,
       Qty: item.qty,
       SubTotal: item.unitPrice * item.qty,
+      UnitCost: costMap[item.variantId] ?? 0,
     }))
 
     const { error: itemsErr } = await supabaseAdmin

@@ -211,8 +211,13 @@ const router = createRouter({
         // { path: "orders", name: "admin-orders", component: () => import("@/pages/admin/orders/Orders.vue") },
         // { path: "orders/status", name: "admin-orders-status", component: () => import("@/pages/admin/orders/OrderStatus.vue") },
 
-        { path: "inventory/overview", name: "admin-inventory-overview", component: () => import("@/pages/admin/inventory/StockOverview.vue") },
-        { path: "inventory/logs", name: "admin-inventory-logs", component: () => import("@/pages/admin/inventory/StockLogs.vue") },
+        { path: "inventory/overview",    name: "admin-inventory-overview",    component: () => import("@/pages/admin/inventory/StockOverview.vue") },
+        { path: "inventory/logs",         name: "admin-inventory-logs",         component: () => import("@/pages/admin/inventory/StockLogs.vue") },
+        { path: "inventory/suppliers",    name: "admin-inventory-suppliers",    component: () => import("@/pages/admin/inventory/Suppliers.vue"),    meta: { permission: "CanManageProducts" } },
+        { path: "inventory/setcosttypes", name: "admin-inventory-setcosttypes", component: () => import("@/pages/admin/inventory/SetCostTypes.vue"), meta: { permission: "CanManageProducts" } },
+        { path: "inventory/purchases",    name: "admin-inventory-purchases",    component: () => import("@/pages/admin/inventory/Purchases.vue"),    meta: { permission: "CanManageProducts" } },
+        { path: "inventory/purchases/:id", name: "admin-inventory-purchase-detail", component: () => import("@/pages/admin/inventory/PurchaseDetail.vue"), meta: { permission: "CanManageProducts" }, props: true },
+        { path: "reports/profit",         name: "admin-reports-profit",         component: () => import("@/pages/admin/reports/ProfitReport.vue") },
 
         // { path: "marketing/coupons", name: "admin-marketing-coupons", component: () => import("@/pages/admin/marketing/Coupons.vue") },
         // { path: "marketing/banners", name: "admin-marketing-banners", component: () => import("@/pages/admin/marketing/Banners.vue") },

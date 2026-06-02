@@ -66,7 +66,10 @@ const allSections = [
     icon: `<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>`,
     children: [
       { labelKey: "admin.sidebar.stockOverview", to: "/admin/inventory/overview" },
-      { labelKey: "admin.sidebar.stockLogs", to: "/admin/inventory/logs" },
+      { labelKey: "admin.sidebar.stockLogs",     to: "/admin/inventory/logs" },
+      { labelKey: "admin.sidebar.purchases",     to: "/admin/inventory/purchases" },
+      { labelKey: "admin.sidebar.suppliers",     to: "/admin/inventory/suppliers" },
+      { labelKey: "admin.sidebar.costTypes",     to: "/admin/inventory/setcosttypes" },
     ],
   },
   {
@@ -80,6 +83,7 @@ const allSections = [
       { labelKey: "admin.sidebar.reportOrders",    to: "/admin/reports/orders" },
       { labelKey: "admin.sidebar.reportMembers",   to: "/admin/reports/members" },
       { labelKey: "admin.sidebar.reportAnalytics", to: "/admin/reports/analytics" },
+      { labelKey: "admin.sidebar.reportProfit",    to: "/admin/reports/profit" },
     ],
   },
   {
