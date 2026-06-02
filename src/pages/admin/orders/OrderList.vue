@@ -44,8 +44,8 @@ const extraCostErr     = ref('');
 const extraCostSuccess = ref('');
 const showExtraCostForm = ref(false);
 
-const EVENT_TYPE_LABELS: Record<string, string> = { return: '退貨', exchange: '換貨', other: '其他' };
-const COST_TYPE_LABELS:  Record<string, string>  = { shipping_back: '寄回運費', shipping_out: '補寄運費', other: '其他' };
+const EVENT_TYPE_LABELS = { return: '退貨', exchange: '換貨', other: '其他' };
+const COST_TYPE_LABELS  = { shipping_back: '寄回運費', shipping_out: '補寄運費', other: '其他' };
 
 async function addExtraCost() {
   extraCostErr.value = '';
@@ -73,7 +73,7 @@ async function addExtraCost() {
   }
 }
 
-async function deleteExtraCost(id: number) {
+async function deleteExtraCost(id) {
   if (!confirm('確認刪除此費用記錄？')) return;
   await db.from('C_ORD_OrderExtraCostList').delete().eq('ID', id);
   detailExtraCosts.value = detailExtraCosts.value.filter(c => c.ID !== id);
