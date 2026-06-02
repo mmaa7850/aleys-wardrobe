@@ -150,7 +150,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ### 2. 批次進貨 / 成本追蹤 / 毛利報表
 
-> **狀態：規格已確認，等使用者最終確認後執行。**
+> **狀態：✅ 使用者已確認，待開發。**
 > 規格圖：`D:\Users\MondyHuang\Downloads\purchase-system-overview.pptx`
 
 #### DB 異動
