@@ -123,6 +123,90 @@
 
 ---
 
+### 1. 批次進貨 / 成本追蹤 / 毛利報表
+
+> **狀態：規格已確認，等使用者最終確認後執行。**
+> 規格圖：`D:\Users\MondyHuang\Downloads\purchase-system-overview.pptx`
+
+#### DB 異動
+
+**新增 6 張表：**
+
+| 表格 | 用途 |
+|------|------|
+| `S_INV_SupplierList` | 供應商主檔（名稱/聯絡人/電話/Email/IsActive）|
+| `S_INV_CostTypeList` | 附加成本項目設定（大陸段運費/過境運費/關稅等，可自行新增）|
+| `C_INV_PurchaseOrderList` | 進貨單主表（PurchaseNo/SupplierID/日期/狀態 draft→confirmed/總成本）|
+| `C_INV_PurchaseOrderItemList` | 進貨明細（ProductID/VariantID/Qty/UnitCost/SubTotal）|
+| `C_INV_PurchaseOrderCostList` | 進貨附加成本（對應 CostTypeID，可多筆）|
+| `C_ORD_OrderExtraCostList` | 訂單額外成本（退換貨運費等；EventType: return/exchange；CostType: shipping_back/shipping_out/other）|
+
+**修改 3 張現有表：**
+
+| 表格 | 新增欄位 | 說明 |
+|------|------|------|
+| `C_PRD_ProductVariantList` | `CostPrice numeric(10,4)` | 加權平均成本，進貨 confirm 時自動更新 |
+| `C_ORD_OrderItemList` | `UnitCost numeric(10,4)` | 建單當下快照成本，不隨後續進貨變動 |
+| `C_ORD_OrderList` | `ActualShippingCost integer` | 實際出貨運費，出貨時自動帶入設定值×箱數 |
+
+**系統設定（`S_SYS_Config`）新增 2 個 Key：**
+- `shipping_cost_cvscom`：超商每箱成本（例：70）
+- `shipping_cost_home`：宅配每箱成本（例：120）
+
+#### 後台新增頁面
+
+| 頁面 | 路由 |
+|------|------|
+| 供應商設定 | `/admin/inventory/suppliers` |
+| 附加成本項目設定 | `/admin/inventory/setcosttypes` |
+| 進貨單列表 | `/admin/inventory/purchases` |
+| 進貨單詳情 / 建立 | `/admin/inventory/purchases/:id` |
+| 毛利報表 | `/admin/reports/profit` |
+
+#### 現有頁面修改
+
+- **出貨 Modal**：新增「箱數」欄位（預設 1）；系統依 `ShippingMethod` 自動帶對應設定值；計算 `ActualShippingCost = 設定值 × 箱數`，可手動覆蓋
+- **訂單詳情**：新增「額外成本」區塊，可新增多筆退換貨費用
+- **`create-payment`**：建單時把 variant 當下的 `CostPrice` 快照寫入 `OrderItemList.UnitCost`
+
+#### 進貨 Confirm 自動執行
+
+1. `StockQty` + 進貨數量
+2. 附加成本依數量比例分攤 → 重算加權平均 `CostPrice`
+3. 寫入 `C_INV_StockLog` 庫存異動紀錄
+
+#### 毛利計算公式
+
+```
+訂單毛利 = FinalAmount
+         - Σ(UnitCost × Qty)       商品成本（建單快照）
+         - PaymentFee              金流手續費
+         - ActualShippingCost      實際出貨運費
+         - Σ(OrderExtraCostList)   退換貨等額外成本
+
+毛利率 = 訂單毛利 ÷ FinalAmount × 100%
+```
+
+#### 毛利報表內容
+
+- **Stat Cards**：總營收 / 總毛利 / 整體毛利率 / 平均訂單毛利
+- **每日毛利折線圖**：今日/本週/本月/自訂區間
+- **商品毛利率排行**：依毛利率或金額排序
+- **成本結構拆解**：商品成本/手續費/出貨運費/退換貨費用各佔比
+- **缺少成本資料提醒**：`UnitCost=0` 的訂單另外標示
+
+#### 開發順序
+
+1. DB migration（6張新表 + 3個欄位 + 2個 Config key）
+2. 供應商設定 + 成本項目設定頁面（簡單 CRUD）
+3. 進貨單建立 / confirm 邏輯（庫存更新 + 加權平均成本）
+4. `create-payment` 補快照 `UnitCost`
+5. 出貨 Modal 補箱數 + `ActualShippingCost`
+6. 訂單詳情補「額外成本」區塊
+7. 毛利報表
+
+---
+
 ### 2. Google Analytics 整合
 
 - 申請 GA4 屬性，取得 Measurement ID
