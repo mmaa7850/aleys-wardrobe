@@ -26,22 +26,37 @@ async function load() {
   loading.value = true
   errMsg.value  = ''
   try {
-    // 取出指定日期範圍內已付款/已出貨/已完成的訂單
+    // ① 訂單主表 + 訂單明細（C_ORD_OrderItemList 為原生關聯，無問題）
     const { data, error } = await db
       .from('C_ORD_OrderList')
       .select(`
-        ID, "OrderNo", "CreatedDate", "FinalAmount", "ShippingMethodID",
-        "ActualShippingCost", "PaymentMethod",
-        C_ORD_OrderItemList ( "ProductName", "ColorName", "SizeName", "Qty", "UnitPrice", "UnitCost" ),
-        C_ORD_OrderExtraCostList ( "EventType", "CostType", "Amount" )
+        ID, "OrderNo", "CreatedDate", "FinalAmount", "ActualShippingCost", "PaymentMethod", "PaymentFee",
+        C_ORD_OrderItemList ( "Qty", "UnitCost" )
       `)
-      .in('Status', ['paid', 'shipped', 'delivered', 'completed'])
+      .in('PaymentStatus', ['paid'])
       .gte('CreatedDate', dateFrom.value + 'T00:00:00')
       .lte('CreatedDate', dateTo.value   + 'T23:59:59')
       .order('CreatedDate', { ascending: false })
 
     if (error) throw error
-    orders.value = (data ?? []).map(computeProfit)
+    const orderList = data ?? []
+
+    // ② 額外成本（migration 執行後才有，安全查詢）
+    let extraCostMap = {}
+    try {
+      const orderIds = orderList.map(o => o.ID)
+      if (orderIds.length) {
+        const { data: costs } = await db
+          .from('C_ORD_OrderExtraCostList')
+          .select('"OrderID", "Amount"')
+          .in('OrderID', orderIds)
+        for (const c of (costs ?? [])) {
+          extraCostMap[c.OrderID] = (extraCostMap[c.OrderID] ?? 0) + Number(c.Amount)
+        }
+      }
+    } catch { /* migration 尚未執行時忽略 */ }
+
+    orders.value = orderList.map(o => computeProfit(o, extraCostMap[o.ID] ?? 0))
   } catch (e) {
     errMsg.value = e?.message ?? String(e)
   } finally {
@@ -55,16 +70,15 @@ async function load() {
 // 金流手續費率（信用卡 1.5%、ATM 0，預設 1.5%）
 const FEE_RATE = 0.015
 
-function computeProfit(o) {
+function computeProfit(o, extraCostsTotal = 0) {
   const revenue   = Number(o.FinalAmount) || 0
   const itemsCost = (o.C_ORD_OrderItemList ?? []).reduce(
     (s, i) => s + (Number(i.UnitCost) || 0) * (Number(i.Qty) || 0), 0
   )
-  const payFee      = Math.round(revenue * FEE_RATE)
-  const shipCost    = Number(o.ActualShippingCost) || 0
-  const extraCosts  = (o.C_ORD_OrderExtraCostList ?? []).reduce(
-    (s, c) => s + (Number(c.Amount) || 0), 0
-  )
+  // 優先用 DB 儲存的實際手續費，否則用預設費率估算
+  const payFee   = o.PaymentFee != null ? Number(o.PaymentFee) : Math.round(revenue * FEE_RATE)
+  const shipCost   = Number(o.ActualShippingCost) || 0
+  const extraCosts = extraCostsTotal
   const totalCost = itemsCost + payFee + shipCost + extraCosts
   const profit    = revenue - totalCost
   const margin    = revenue > 0 ? (profit / revenue * 100) : 0
