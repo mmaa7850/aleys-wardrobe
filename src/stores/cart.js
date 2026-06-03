@@ -284,6 +284,16 @@ export const useCartStore = defineStore('cart', {
         return
       }
 
+      // ── 檢查 DB 中是否有已軟刪除的舊 row（CancelledAt IS NOT NULL）──
+      // 週期銷單 cron 會 soft-delete，但 unique constraint 仍存在，不可重複 insert
+      const { data: cancelledRow } = await db
+        .from('C_CART_CartItemList')
+        .select('ID, Qty')
+        .eq('CartID', this.cartId)
+        .eq('VariantID', variantId)
+        .not('CancelledAt', 'is', null)
+        .maybeSingle()
+
       // 判斷是否為預購商品（StockQty <= 0 = 預購，不需扣庫存）
       const { data: variantData } = await db
         .from('C_PRD_ProductVariantList')
@@ -300,19 +310,30 @@ export const useCartStore = defineStore('cart', {
         if (!ok) throw new Error('庫存不足，無法加入購物車')
       }
 
-      const row = { CartID: this.cartId, ProductID: productId, VariantID: variantId, Qty: qty, Source: source }
-      if (liveSessionId) row.LiveSessionID = liveSessionId
+      if (cancelledRow) {
+        // 復活已軟刪除的 row：清除 CancelledAt 並更新數量
+        const { error } = await db
+          .from('C_CART_CartItemList')
+          .update({ CancelledAt: null, Qty: qty })
+          .eq('ID', cancelledRow.ID)
+        if (error) {
+          if (!isPreOrder) await db.rpc('restore_stock', { p_variant_id: variantId, p_qty: qty })
+          throw error
+        }
+      } else {
+        const row = { CartID: this.cartId, ProductID: productId, VariantID: variantId, Qty: qty, Source: source }
+        if (liveSessionId) row.LiveSessionID = liveSessionId
 
-      const { error } = await db
-        .from('C_CART_CartItemList')
-        .insert(row)
-        .select('ID')
-        .single()
+        const { error } = await db
+          .from('C_CART_CartItemList')
+          .insert(row)
+          .select('ID')
+          .single()
 
-      if (error) {
-        // DB 寫入失敗，回補庫存
-        if (!isPreOrder) await db.rpc('restore_stock', { p_variant_id: variantId, p_qty: qty })
-        throw error
+        if (error) {
+          if (!isPreOrder) await db.rpc('restore_stock', { p_variant_id: variantId, p_qty: qty })
+          throw error
+        }
       }
 
       await this._loadItems()
