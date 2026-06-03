@@ -101,6 +101,18 @@
 
 ---
 
+## 其他上線前準備（非 FB 相關）
+
+| 項目 | 說明 | 狀態 |
+|------|------|------|
+| **GA4 Measurement ID — Vercel 正式專案** | 在 Vercel `aleys-wardrobe`（正式版）→ Settings → Environment Variables 新增 `VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX`，勾 Production + Preview（不需 Development）| ⚠️ 待設定 |
+| **GA4 Measurement ID — Vercel 測試專案** | 同上，在 `aleys-wardrobe-test` 也要設定，驗證追蹤碼是否正常收資料 | ⚠️ 待設定 |
+| **批次進貨 migration** | 執行 `supabase/migrations/add_purchase_system.sql`（見 toAdd.md） | ⚠️ 待執行 |
+| **批次進貨 系統設定** | 後台「系統設定」新增 `shipping_cost_cvscom` / `shipping_cost_home` 兩個 Key | ⚠️ 待設定 |
+| **ezPay 切換正式環境** | Supabase Secrets 將 `EZPAY_ENV` 改為 `prod` | ⚠️ 上線時設定 |
+
+---
+
 ## 注意事項
 
 | 項目 | 說明 |
