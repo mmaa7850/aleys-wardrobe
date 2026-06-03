@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { supabase } from "@/lib/supabase";
 import { db } from "@/lib/db";
+import { setUserId } from "@/lib/gtag";
 
 const defaultPermissions = () => ({
   CanManageProducts: false,
@@ -16,6 +17,8 @@ export const useAuthStore = defineStore("auth", {
     isAdmin: false,
     isActive: false,
     permissions: defaultPermissions(),
+    lineUserId: null,   // 前台消費者 LINE 綁定狀態
+    memberId: null,     // C_MBR_MemberList.ID
   }),
 
   getters: {
@@ -37,11 +40,32 @@ export const useAuthStore = defineStore("auth", {
         this.isAdmin = false;
         this.isActive = false;
         this.permissions = defaultPermissions();
+        this.lineUserId = null;
+        this.memberId = null;
         return;
       }
 
       this.user = data.user;
-      await this.loadAdminProfile();
+      await Promise.all([this.loadAdminProfile(), this.loadMemberProfile()]);
+    },
+
+    // 載入前台會員資料（LineUserID、會員 ID）
+    async loadMemberProfile() {
+      if (!this.user?.id) { this.lineUserId = null; this.memberId = null; return; }
+      try {
+        const { data } = await db
+          .from('C_MBR_MemberList')
+          .select('ID, "LineUserID"')
+          .eq('UserID', this.user.id)
+          .maybeSingle()
+        this.lineUserId = data?.LineUserID ?? null
+        this.memberId   = data?.ID ?? null
+        // GA4 User-ID：以會員 ID 識別訪客（比 cookie 更準確）
+        if (this.memberId) setUserId(String(this.memberId))
+      } catch {
+        this.lineUserId = null
+        this.memberId   = null
+      }
     },
 
     async loadAdminProfile() {
@@ -86,9 +110,7 @@ export const useAuthStore = defineStore("auth", {
       if (error) throw error;
 
       this.user = data.user;
-
-      // 登入後馬上查管理員狀態
-      await this.loadAdminProfile();
+      await Promise.all([this.loadAdminProfile(), this.loadMemberProfile()]);
     },
 
     async signUp(email, password) {
@@ -114,6 +136,8 @@ export const useAuthStore = defineStore("auth", {
       this.isAdmin = false;
       this.isActive = false;
       this.permissions = defaultPermissions();
+      this.lineUserId = null;
+      this.memberId   = null;
     },
   },
 });

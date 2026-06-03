@@ -1,11 +1,15 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, RouterLink } from 'vue-router'
+import { ref, computed, onMounted, nextTick } from 'vue'
+import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { db } from '@/lib/db'
 
 const auth   = useAuthStore()
 const router = useRouter()
+const route  = useRoute()
+
+// 從購物車跳轉過來時提示綁定 LINE
+const requireLineNotice = ref(route.query.requireLine === '1')
 
 const profile     = ref(null)
 const isLoading   = ref(true)
@@ -122,10 +126,15 @@ async function onSignOut() {
   router.push('/')
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!auth.isLoggedIn) { router.push('/login'); return }
   fetchProfile()
   fetchOrders()
+  // 從加入購物車跳轉過來時，自動捲動到 LINE 綁定區
+  if (route.query.requireLine === '1') {
+    await nextTick()
+    document.getElementById('line-bind-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 })
 </script>
 
@@ -261,7 +270,12 @@ onMounted(() => {
       </RouterLink>
 
       <!-- LINE 綁定狀態 -->
-      <section class="ac-section">
+      <section class="ac-section" id="line-bind-section">
+        <!-- 從加入購物車跳轉時的提示 -->
+        <div v-if="requireLineNotice && !lineUserID" class="ac-line-notice">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span>加入購物車前需先完成 LINE 綁定，請加入好友後點擊下方按鈕完成綁定</span>
+        </div>
         <h2 class="ac-section__title">帳號綁定</h2>
         <div class="ac-bind-row">
           <div class="ac-bind-icon ac-bind-icon--line">
@@ -675,6 +689,21 @@ onMounted(() => {
   flex-shrink: 0;
 }
 .ac-bind-icon--line { background: #06C755; color: #fff; }
+
+.ac-line-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #fff8e1;
+  border: 1px solid #f9c846;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 0.85rem;
+  color: #7a5c00;
+  line-height: 1.5;
+}
+.ac-line-notice svg { flex-shrink: 0; margin-top: 2px; stroke: #f9c846; }
 
 .ac-bind-info { flex: 1; }
 

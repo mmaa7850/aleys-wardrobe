@@ -82,4 +82,9 @@ export function trackPurchase(orderNo, items, total) {
   })
 }
 
+export function setUserId(userId) {
+  if (!GA_ID || typeof window.gtag !== 'function') return
+  window.gtag('config', GA_ID, { user_id: userId })
+}
+
 export const gaEnabled = Boolean(GA_ID)

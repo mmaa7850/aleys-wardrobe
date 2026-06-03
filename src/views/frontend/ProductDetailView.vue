@@ -164,7 +164,11 @@ function selectColor(id) {
 
 async function onAddToCart() {
   if (!selectedVariant.value) return
-  if (!auth.isLoggedIn) { router.push('/login'); return }
+  if (!auth.isLoggedIn) { router.push('/login?redirect=' + encodeURIComponent(route.fullPath)); return }
+  if (!auth.lineUserId) {
+    router.push('/account?requireLine=1')
+    return
+  }
   addingToCart.value = true
   try {
     await cart.addItem(product.value.ID, selectedVariant.value.ID, qty.value)
