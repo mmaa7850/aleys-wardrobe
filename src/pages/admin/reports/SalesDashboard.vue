@@ -96,7 +96,7 @@ async function load() {
 
   const [{ data: orders }, { data: lowStock }] = await Promise.all([
     db.from('C_ORD_OrderList')
-      .select('FinalAmount, PaymentStatus, CreatedDate, NewebpayAmt, PaymentMethod')
+      .select('FinalAmount, PaymentStatus, CreatedDate, NewebpayAmt, PaymentMethod, "PaymentFee"')
       .gte('CreatedDate', start + 'T00:00:00')
       .lte('CreatedDate', end + 'T23:59:59'),
     db.from('C_PRD_ProductVariantList')
@@ -109,7 +109,11 @@ async function load() {
   const refunded = (orders ?? []).filter(o => o.PaymentStatus === 'refunded')
   const revenue  = paid.reduce((s, o) => s + (o.FinalAmount ?? 0), 0)
 
-  const estFee = paid.reduce((s, o) => s + estimateFee(o), 0)
+  // 優先使用 payment-notify 寫入的實際手續費；若為 null（舊訂單或錢包全額付款）則用估算值補充
+  const estFee = paid.reduce((s, o) => {
+    const actual = o.PaymentFee ?? null
+    return s + (actual !== null ? Number(actual) : estimateFee(o))
+  }, 0)
 
   stats.value = {
     revenue,
