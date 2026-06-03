@@ -80,7 +80,7 @@ export const useAuthStore = defineStore("auth", {
         .from("S_SYS_AdminUserList")
         .select("IsAdmin, IsActive, CanManageProducts, CanManageOrders, CanManageMarketing, CanManageSettings, CanManageMembers")
         .eq("UserId", this.user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error("[loadAdminProfile] query failed:", error.message);
@@ -89,6 +89,9 @@ export const useAuthStore = defineStore("auth", {
         this.permissions = defaultPermissions();
         return;
       }
+
+      // 一般消費者不在 AdminUserList，data 為 null，保持預設值即可
+      if (!data) return;
 
       this.isAdmin = data.IsAdmin === true;
       this.isActive = data.IsActive === true;

@@ -275,6 +275,9 @@ export const useCartStore = defineStore('cart', {
     async addItem(productId, variantId, qty = 1, { source = 'web', liveSessionId = null } = {}) {
       if (!this.cartId) await this.fetchCart()
 
+      // items 可能尚未載入（頁面重整後），先確保是最新狀態再檢查重複
+      if (this.items.length === 0) await this._loadItems()
+
       const existing = this.items.find(i => i.variantId === variantId && !i.isReward)
       if (existing) {
         await this.updateQty(existing.id, existing.qty + qty)
