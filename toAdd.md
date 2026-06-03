@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-06-01
+> 更新時間：2026-06-03
 
 ---
 
@@ -43,6 +43,11 @@
 - **後台會員購物車管理**：會員列表新增「購物車」按鈕，開 Modal 顯示品項（含商品名稱/顏色/尺寸/數量）；逐筆移除並回補庫存（`manage-member-cart` Edge Function，service_role 繞過 RLS）；支援合併同款品項、數量調整
 - **PendingList Tab2 被封鎖名單**：`/admin/orders/pending` 新增 Tab2「本週被封鎖名單」，呼叫 `get-blocked-members` Edge Function，顯示本週銷單後被封鎖的會員及其被取消的購物車品項明細
 - **直播即時搶標（live-bid-poll 起標）**：`start_bid` action — 起標時在 FB 直播貼出格式化起標公告（含商品名稱、直播價、留言格式範例）並在 `C_LIV_ActiveBidList` 建立 open 記錄；後台場次詳情「起標」按鈕（已開標中顯示「● 開標中」badge，未直播時 disable）
+- **批次進貨 / 成本追蹤 / 毛利報表**：6 張新資料表 + 3 個欄位異動；供應商 CRUD、成本項目 CRUD、進貨單列表 / 詳情（加權平均成本計算 + 庫存更新）；出貨 Modal 補箱數自動計算 `ActualShippingCost`；訂單詳情補「額外成本」區塊；毛利報表（日期篩選 + 成本拆解）；`create-payment` 快照 `UnitCost`
+- **Redeploy 後舊 chunk 消失導致按鈕失效修正**：`main.js` 監聽 `vite:preloadError` + `router.onError` 捕捉 `ChunkLoadError`，自動重新整理到最新版本
+- **GA4 追蹤碼整合**：`gtag.js` 已完成（`initGA` / `trackPageView` / `trackViewItem` / `trackAddToCart` / `trackBeginCheckout` / `trackPurchase` / `setUserId`）；GA4 資料串流已建立；Vercel 測試專案已加入 `VITE_GA_MEASUREMENT_ID`；登入後自動傳會員 ID 給 GA4（User-ID 精準識別）
+- **加入購物車前強制登入並綁定 LINE**：未登入 → 導向 `/login?redirect=`；已登入但未綁定 LINE → 導向 `/account?requireLine=1`（頁面顯示黃色提示條並自動捲動到 LINE 綁定區塊）
+- **購物車 Bug 修正**：① `loadAdminProfile` 改 `.maybeSingle()`，消費者不在後台帳號表時不再報 406；② `addItem` 先載入 items 再檢查重複；③ 修正週銷單 soft-delete 後再次加入相同商品衝突的問題（偵測到 `CancelledAt IS NOT NULL` 的舊 row 則 UPDATE 復活而非 INSERT）
 
 ---
 
@@ -240,18 +245,17 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ### 3. Google Analytics 整合
 
-- 申請 GA4 屬性，取得 Measurement ID
-- 在 `.env` 加入 `VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX`（已預留欄位）
-- 追蹤事件：`view_item` / `add_to_cart` / `begin_checkout` / `purchase`
+> **狀態：程式完成 ✅，Vercel 正式專案環境變數待設定 ⚠️**
 
-**需使用者確認的問題：**
+**已完成：**
+- GA4 資料串流建立，指向 `aleys-wardrobe-test.vercel.app` ✅
+- `gtag.js` 全部追蹤函式完成（`initGA` / `trackPageView` / `trackViewItem` / `trackAddToCart` / `trackBeginCheckout` / `trackPurchase` / `setUserId`）✅
+- Vercel 測試專案（`aleys-wardrobe-test`）已加入 `VITE_GA_MEASUREMENT_ID` ✅
+- 登入後自動呼叫 `setUserId(memberId)` 提升訪客識別準確度 ✅
+- GA4 即時報表確認有收到資料 ✅
 
-> ❓ **Q1：GA4 屬性申請了嗎？**
-> 有 Measurement ID（G-XXXXXXXXXX）就可以馬上串接，程式端已預留好了。
-
-> ❓ **Q2：後台 sidebar 問題**
-> 之前提到後台 sidebar 有問題待查明，這個問題解決了嗎？
-> （GA4 報表頁 `/admin/reports/analytics` 已建立，但 sidebar 連結需確認正常）
+**上線前待做：**
+- Vercel 正式專案（`aleys-wardrobe`）補加 `VITE_GA_MEASUREMENT_ID`（已記錄在 `fb_app_review.md`）⚠️
 
 ---
 
