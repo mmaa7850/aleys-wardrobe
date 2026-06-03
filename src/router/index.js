@@ -268,4 +268,15 @@ router.beforeEach(async (to) => {
   return true;
 });
 
+// Redeploy 後舊 chunk 消失導致動態 import 失敗 → 自動重新整理
+router.onError((error, to) => {
+  const isChunkError =
+    error?.message?.includes('Failed to fetch dynamically imported module') ||
+    error?.message?.includes('Importing a module script failed') ||
+    error?.name === 'ChunkLoadError'
+  if (isChunkError) {
+    window.location.assign(to.fullPath)
+  }
+})
+
 export default router;
