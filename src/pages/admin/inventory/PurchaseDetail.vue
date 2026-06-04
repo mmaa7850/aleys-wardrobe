@@ -3,6 +3,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal } from 'bootstrap'
 import { db } from '@/lib/db'
+import { supabase } from '@/lib/supabase'
 
 const props = defineProps({ id: { type: String, required: true } })
 const router = useRouter()
@@ -21,6 +22,8 @@ const products   = ref([])   // { ID, ProductName, C_PRD_ProductVariantList: [..
 const variantMap = ref({})   // variantId -> { label, productId, productName, colorName, sizeName }
 const colorMap   = ref({})   // colorId -> name
 const sizeMap    = ref({})   // sizeId  -> name
+const imgMap     = ref({})   // productId -> publicUrl
+const productSearch = ref('')
 
 // ── 明細 & 附加成本 ────────────────────────────────────
 const items = ref([])   // C_INV_PurchaseOrderItemList
@@ -59,6 +62,7 @@ async function load() {
       { data: vars },
       { data: colors },
       { data: sizes },
+      { data: pics },
       { data: its,  error: e2 },
       { data: csts, error: e3 },
     ] = await Promise.all([
@@ -72,6 +76,7 @@ async function load() {
       db.from('C_PRD_ProductVariantList').select('ID, "ProductID", "ColorID", "SizeID", "IsActive"').eq('IsActive', true),
       db.from('S_PRD_ColorList').select('ID, "Name"'),
       db.from('S_PRD_SizeList').select('ID, "Name"'),
+      db.from('C_PRD_ProductPictureList').select('"ProductID", "StoragePath", "IsMain", "SortOrder"').order('IsMain', { ascending: false }).order('SortOrder'),
       db.from('C_INV_PurchaseOrderItemList')
         .select('*')
         .eq('PurchaseOrderID', props.id)
@@ -95,6 +100,16 @@ async function load() {
     // 建立 color / size map
     colorMap.value = Object.fromEntries((colors ?? []).map(c => [c.ID, c.Name]))
     sizeMap.value  = Object.fromEntries((sizes  ?? []).map(s => [s.ID, s.Name]))
+
+    // 建立商品圖片 map（每個商品取第一張）
+    const imap = {}
+    for (const pic of (pics ?? [])) {
+      if (!imap[pic.ProductID] && pic.StoragePath) {
+        const { data: urlData } = supabase.storage.from('product-pictures').getPublicUrl(pic.StoragePath)
+        imap[pic.ProductID] = urlData?.publicUrl ?? ''
+      }
+    }
+    imgMap.value = imap
 
     // 建立 variant map
     const prodMap = Object.fromEntries((prods ?? []).map(p => [p.ID, p.ProductName]))
@@ -138,6 +153,12 @@ async function saveHeader() {
 // ─────────────────────────────────────────────────────
 // 明細 CRUD
 // ─────────────────────────────────────────────────────
+const filteredProducts = computed(() => {
+  const q = productSearch.value.trim().toLowerCase()
+  if (!q) return products.value
+  return products.value.filter(p => p.ProductName.toLowerCase().includes(q))
+})
+
 const variantsForProduct = computed(() => {
   if (!itemForm.value.ProductID) return []
   return Object.entries(variantMap.value)
@@ -151,9 +172,10 @@ const ensureItemModal = async () => {
 }
 
 const openAddItem = async () => {
-  editItemId.value = null
-  itemForm.value   = { ProductID: '', VariantID: '', Qty: 1, UnitCost: 0 }
+  editItemId.value  = null
+  itemForm.value    = { ProductID: '', VariantID: '', Qty: 1, UnitCost: 0 }
   itemSaveErr.value = ''
+  productSearch.value = ''
   await ensureItemModal()
   itemModal.show()
 }
@@ -533,7 +555,7 @@ onMounted(load)
 
   <!-- ── 新增明細 Modal ───────────────────────────────── -->
   <div ref="itemModalEl" class="modal fade" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-xl">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title">{{ editItemId ? '編輯明細' : '新增明細' }}</h5>
@@ -542,30 +564,48 @@ onMounted(load)
         <div class="modal-body">
           <div v-if="itemSaveErr" class="alert alert-danger py-2 mb-3">{{ itemSaveErr }}</div>
 
+          <!-- 商品搜尋 + card 選擇 -->
           <div class="mb-3">
-            <label class="form-label fw-medium">商品 <span class="text-danger">*</span></label>
-            <select v-model="itemForm.ProductID" class="form-select" @change="itemForm.VariantID = ''">
-              <option value="">— 選擇商品 —</option>
-              <option v-for="p in products" :key="p.ID" :value="p.ID">{{ p.ProductName }}</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-medium">規格 <span class="text-danger">*</span></label>
-            <select v-model="itemForm.VariantID" class="form-select" :disabled="!itemForm.ProductID">
-              <option value="">— 選擇規格 —</option>
-              <option v-for="v in variantsForProduct" :key="v.id" :value="v.id">{{ v.label }}</option>
-            </select>
-          </div>
-          <div class="row g-3">
-            <div class="col-6">
-              <label class="form-label fw-medium">進貨數量</label>
-              <input v-model.number="itemForm.Qty" type="number" min="1" class="form-control" />
-            </div>
-            <div class="col-6">
-              <label class="form-label fw-medium">單位成本（元）</label>
-              <input v-model.number="itemForm.UnitCost" type="number" min="0" step="0.0001" class="form-control" />
+            <label class="form-label fw-medium">選擇商品 <span class="text-danger">*</span></label>
+            <input v-model="productSearch" type="text" class="form-control mb-2" placeholder="🔍 搜尋商品名稱…" />
+            <div class="product-picker-grid">
+              <div
+                v-for="p in filteredProducts" :key="p.ID"
+                class="product-card"
+                :class="{ selected: itemForm.ProductID === p.ID }"
+                @click="itemForm.ProductID = p.ID; itemForm.VariantID = ''"
+              >
+                <div class="product-card-img">
+                  <img v-if="imgMap[p.ID]" :src="imgMap[p.ID]" :alt="p.ProductName" />
+                  <div v-else class="product-card-no-img">—</div>
+                </div>
+                <div class="product-card-name">{{ p.ProductName }}</div>
+              </div>
+              <div v-if="filteredProducts.length === 0" class="text-muted small py-2">找不到符合的商品</div>
             </div>
           </div>
+
+          <!-- 規格 / 數量 / 成本（選完商品才顯示） -->
+          <template v-if="itemForm.ProductID">
+            <hr class="my-3" />
+            <div class="row g-3">
+              <div class="col-12 col-md-4">
+                <label class="form-label fw-medium">規格 <span class="text-danger">*</span></label>
+                <select v-model="itemForm.VariantID" class="form-select">
+                  <option value="">— 選擇規格 —</option>
+                  <option v-for="v in variantsForProduct" :key="v.id" :value="v.id">{{ v.label }}</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label fw-medium">進貨數量</label>
+                <input v-model.number="itemForm.Qty" type="number" min="1" class="form-control" />
+              </div>
+              <div class="col-6 col-md-4">
+                <label class="form-label fw-medium">單位成本（元）</label>
+                <input v-model.number="itemForm.UnitCost" type="number" min="0" step="0.0001" class="form-control" />
+              </div>
+            </div>
+          </template>
         </div>
         <div class="modal-footer">
           <button class="btn btn-secondary" @click="itemModal?.hide()" :disabled="itemSaving">取消</button>
@@ -621,5 +661,62 @@ onMounted(load)
 .btn-xs {
   padding: 2px 6px;
   font-size: 12px;
+}
+
+/* 商品選擇 grid */
+.product-picker-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+
+.product-card {
+  width: 110px;
+  border: 2px solid #e5e5e5;
+  border-radius: 8px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #fff;
+}
+.product-card:hover {
+  border-color: #aaa;
+}
+.product-card.selected {
+  border-color: #c9a96e;
+  box-shadow: 0 0 0 2px #c9a96e44;
+}
+
+.product-card-img {
+  width: 100%;
+  height: 80px;
+  overflow: hidden;
+  background: #f5f5f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.product-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.product-card-no-img {
+  color: #bbb;
+  font-size: 18px;
+}
+
+.product-card-name {
+  padding: 5px 6px;
+  font-size: 11px;
+  line-height: 1.3;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: #333;
 }
 </style>
