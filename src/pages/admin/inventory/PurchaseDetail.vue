@@ -19,6 +19,8 @@ const suppliers  = ref([])
 const costTypes  = ref([])
 const products   = ref([])   // { ID, ProductName, C_PRD_ProductVariantList: [...] }
 const variantMap = ref({})   // variantId -> { label, productId, productName, colorName, sizeName }
+const colorMap   = ref({})   // colorId -> name
+const sizeMap    = ref({})   // sizeId  -> name
 
 // ── 明細 & 附加成本 ────────────────────────────────────
 const items = ref([])   // C_INV_PurchaseOrderItemList
@@ -54,6 +56,9 @@ async function load() {
       { data: sups },
       { data: cts },
       { data: prods },
+      { data: vars },
+      { data: colors },
+      { data: sizes },
       { data: its,  error: e2 },
       { data: csts, error: e3 },
     ] = await Promise.all([
@@ -63,9 +68,10 @@ async function load() {
         .single(),
       db.from('S_INV_SupplierList').select('ID, "Name"').eq('IsActive', true).order('Name'),
       db.from('S_INV_CostTypeList').select('ID, "Name"').eq('IsActive', true).order('SortOrder'),
-      db.from('C_PRD_ProductList')
-        .select(`ID, "ProductName", C_PRD_ProductVariantList(ID, "ColorID", "SizeID", "IsActive", S_PRD_ColorList("Name"), S_PRD_SizeList("Name"))`)
-        .eq('IsActive', true),
+      db.from('C_PRD_ProductList').select('ID, "ProductName"').eq('IsActive', true),
+      db.from('C_PRD_ProductVariantList').select('ID, "ProductID", "ColorID", "SizeID", "IsActive"').eq('IsActive', true),
+      db.from('S_PRD_ColorList').select('ID, "Name"'),
+      db.from('S_PRD_SizeList').select('ID, "Name"'),
       db.from('C_INV_PurchaseOrderItemList')
         .select('*')
         .eq('PurchaseOrderID', props.id)
@@ -86,20 +92,22 @@ async function load() {
     items.value     = its  ?? []
     costs.value     = csts ?? []
 
+    // 建立 color / size map
+    colorMap.value = Object.fromEntries((colors ?? []).map(c => [c.ID, c.Name]))
+    sizeMap.value  = Object.fromEntries((sizes  ?? []).map(s => [s.ID, s.Name]))
+
     // 建立 variant map
+    const prodMap = Object.fromEntries((prods ?? []).map(p => [p.ID, p.ProductName]))
     const vmap = {}
-    for (const p of (prods ?? [])) {
-      for (const v of (p.C_PRD_ProductVariantList ?? [])) {
-        if (!v.IsActive) continue
-        const colorName = v.S_PRD_ColorList?.Name ?? ''
-        const sizeName  = v.S_PRD_SizeList?.Name  ?? ''
-        vmap[v.ID] = {
-          label:       `${p.ProductName}｜${colorName} / ${sizeName}`,
-          productId:   p.ID,
-          productName: p.ProductName,
-          colorName,
-          sizeName,
-        }
+    for (const v of (vars ?? [])) {
+      const colorName = colorMap.value[v.ColorID] ?? ''
+      const sizeName  = sizeMap.value[v.SizeID]   ?? ''
+      vmap[v.ID] = {
+        label:       `${prodMap[v.ProductID] ?? ''}｜${colorName} / ${sizeName}`,
+        productId:   v.ProductID,
+        productName: prodMap[v.ProductID] ?? '',
+        colorName,
+        sizeName,
       }
     }
     variantMap.value = vmap
