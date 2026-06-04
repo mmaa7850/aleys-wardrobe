@@ -22,8 +22,10 @@ const products   = ref([])   // { ID, ProductName, C_PRD_ProductVariantList: [..
 const variantMap = ref({})   // variantId -> { label, productId, productName, colorName, sizeName }
 const colorMap   = ref({})   // colorId -> name
 const sizeMap    = ref({})   // sizeId  -> name
-const imgMap     = ref({})   // productId -> publicUrl
+const imgMap        = ref({})   // productId -> publicUrl
+const categoryList  = ref([])   // [{ Name, Description }]
 const productSearch = ref('')
+const categoryFilter = ref('')
 
 // ── 明細 & 附加成本 ────────────────────────────────────
 const items = ref([])   // C_INV_PurchaseOrderItemList
@@ -59,6 +61,7 @@ async function load() {
       { data: sups },
       { data: cts },
       { data: prods },
+      { data: cats },
       { data: vars },
       { data: colors },
       { data: sizes },
@@ -72,7 +75,8 @@ async function load() {
         .single(),
       db.from('S_INV_SupplierList').select('ID, "Name"').eq('IsActive', true).order('Name'),
       db.from('S_INV_CostTypeList').select('ID, "Name"').eq('IsActive', true).order('SortOrder'),
-      db.from('C_PRD_ProductList').select('ID, "ProductName"').eq('IsActive', true),
+      db.from('C_PRD_ProductList').select('ID, "ProductName", "Category"').eq('IsActive', true),
+      db.from('S_PRD_CategoryList').select('"Name", "Description"').order('Name'),
       db.from('C_PRD_ProductVariantList').select('ID, "ProductID", "ColorID", "SizeID", "IsActive"').eq('IsActive', true),
       db.from('S_PRD_ColorList').select('ID, "Name"'),
       db.from('S_PRD_SizeList').select('ID, "Name"'),
@@ -96,6 +100,8 @@ async function load() {
     costTypes.value = cts  ?? []
     items.value     = its  ?? []
     costs.value     = csts ?? []
+
+    categoryList.value = cats ?? []
 
     // 建立 color / size map
     colorMap.value = Object.fromEntries((colors ?? []).map(c => [c.ID, c.Name]))
@@ -154,9 +160,11 @@ async function saveHeader() {
 // 明細 CRUD
 // ─────────────────────────────────────────────────────
 const filteredProducts = computed(() => {
+  let list = products.value
+  if (categoryFilter.value) list = list.filter(p => p.Category === categoryFilter.value)
   const q = productSearch.value.trim().toLowerCase()
-  if (!q) return products.value
-  return products.value.filter(p => p.ProductName.toLowerCase().includes(q))
+  if (q) list = list.filter(p => p.ProductName.toLowerCase().includes(q))
+  return list
 })
 
 const variantsForProduct = computed(() => {
@@ -175,7 +183,8 @@ const openAddItem = async () => {
   editItemId.value  = null
   itemForm.value    = { ProductID: '', VariantID: '', Qty: 1, UnitCost: 0 }
   itemSaveErr.value = ''
-  productSearch.value = ''
+  productSearch.value  = ''
+  categoryFilter.value = ''
   await ensureItemModal()
   itemModal.show()
 }
@@ -567,7 +576,17 @@ onMounted(load)
           <!-- 商品搜尋 + card 選擇 -->
           <div class="mb-3">
             <label class="form-label fw-medium">選擇商品 <span class="text-danger">*</span></label>
-            <input v-model="productSearch" type="text" class="form-control mb-2" placeholder="🔍 搜尋商品名稱…" />
+            <div class="row g-2 mb-2">
+              <div class="col-6">
+                <input v-model="productSearch" type="text" class="form-control" placeholder="🔍 搜尋商品名稱…" />
+              </div>
+              <div class="col-6">
+                <select v-model="categoryFilter" class="form-select">
+                  <option value="">全部分類</option>
+                  <option v-for="c in categoryList" :key="c.Name" :value="c.Name">{{ c.Description }}</option>
+                </select>
+              </div>
+            </div>
             <div class="product-picker-grid">
               <div
                 v-for="p in filteredProducts" :key="p.ID"
