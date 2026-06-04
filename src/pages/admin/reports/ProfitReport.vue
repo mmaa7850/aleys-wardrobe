@@ -56,7 +56,10 @@ async function load() {
       }
     } catch { /* migration 尚未執行時忽略 */ }
 
-    orders.value = orderList.map(o => computeProfit(o, extraCostMap[o.ID] ?? 0))
+    // 排除所有品項 UnitCost 都為 0 的訂單（無成本資料，毛利率會虛高）
+    orders.value = orderList
+      .filter(o => (o.C_ORD_OrderItemList ?? []).some(i => Number(i.UnitCost) > 0))
+      .map(o => computeProfit(o, extraCostMap[o.ID] ?? 0))
   } catch (e) {
     errMsg.value = e?.message ?? String(e)
   } finally {
