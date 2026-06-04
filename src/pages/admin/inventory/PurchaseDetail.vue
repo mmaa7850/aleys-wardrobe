@@ -22,10 +22,15 @@ const products   = ref([])   // { ID, ProductName, C_PRD_ProductVariantList: [..
 const variantMap = ref({})   // variantId -> { label, productId, productName, colorName, sizeName }
 const colorMap   = ref({})   // colorId -> name
 const sizeMap    = ref({})   // sizeId  -> name
-const imgMap        = ref({})   // productId -> publicUrl
-const categoryList  = ref([])   // [{ Name, Description }]
-const productSearch = ref('')
+const imgMap         = ref({})   // productId -> publicUrl
+const categoryList   = ref([])   // [{ Name, Description }]
+const productSearch  = ref('')
 const categoryFilter = ref('')
+
+// ── 進貨明細搜尋 & 折疊 ────────────────────────────────
+const itemSearch         = ref('')
+const itemCategoryFilter = ref('')
+const collapsedGroups    = ref(new Set())
 
 // ── 明細 & 附加成本 ────────────────────────────────────
 const items = ref([])   // C_INV_PurchaseOrderItemList
@@ -417,15 +422,37 @@ async function confirmPurchase() {
 // ─────────────────────────────────────────────────────
 // 格式化
 // ─────────────────────────────────────────────────────
-// 依商品名稱分組
+// productName -> category 查找表
+const productCategoryMap = computed(() => {
+  const m = {}
+  for (const p of products.value) m[p.ProductName] = p.Category ?? ''
+  return m
+})
+
+// 分類顯示名稱
+const categoryDescMap = computed(() =>
+  Object.fromEntries(categoryList.value.map(c => [c.Name, c.Description]))
+)
+
+// 依商品名稱分組（含搜尋過濾）
 const groupedItems = computed(() => {
+  const q   = itemSearch.value.trim().toLowerCase()
+  const cat = itemCategoryFilter.value
   const map = {}
   for (const item of items.value) {
+    if (q   && !item.ProductName.toLowerCase().includes(q)) continue
+    if (cat && productCategoryMap.value[item.ProductName] !== cat) continue
     if (!map[item.ProductName]) map[item.ProductName] = []
     map[item.ProductName].push(item)
   }
   return Object.entries(map).map(([name, rows]) => ({ name, rows }))
 })
+
+function toggleGroup(name) {
+  const s = new Set(collapsedGroups.value)
+  s.has(name) ? s.delete(name) : s.add(name)
+  collapsedGroups.value = s
+}
 
 const fmt = (n) => Number(n ?? 0).toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
 
@@ -494,7 +521,17 @@ onMounted(load)
           </button>
         </div>
         <div class="card-body p-0">
+          <!-- 搜尋列 -->
+          <div class="px-3 py-2 border-bottom d-flex gap-2">
+            <input v-model="itemSearch" type="text" class="form-control form-control-sm" style="max-width:220px" placeholder="🔍 搜尋商品名稱…" />
+            <select v-model="itemCategoryFilter" class="form-select form-select-sm" style="max-width:180px">
+              <option value="">全部分類</option>
+              <option v-for="c in categoryList" :key="c.Name" :value="c.Name">{{ c.Description }}</option>
+            </select>
+          </div>
+
           <div v-if="!items.length" class="text-center py-4 text-muted">尚無進貨明細</div>
+          <div v-else-if="!groupedItems.length" class="text-center py-4 text-muted">找不到符合的商品</div>
           <div v-else class="table-responsive">
             <table class="table align-middle mb-0">
               <thead class="table-light">
@@ -504,34 +541,42 @@ onMounted(load)
                   <th class="text-end">數量</th>
                   <th class="text-end">單位成本</th>
                   <th class="text-end">小計</th>
-                  <th v-if="isDraft" style="width:60px"></th>
+                  <th style="width:80px"></th>
                 </tr>
               </thead>
               <tbody v-for="group in groupedItems" :key="group.name">
                 <!-- 商品名稱分組 header -->
-                <tr class="table-group-header">
-                  <td :colspan="isDraft ? 6 : 5" class="fw-semibold text-dark py-2 ps-3">
+                <tr class="table-group-header" style="cursor:pointer" @click="toggleGroup(group.name)">
+                  <td :colspan="isDraft ? 5 : 5" class="fw-semibold text-dark py-2 ps-3">
                     {{ group.name }}
+                    <span class="text-muted small ms-2">{{ group.rows.length }} 個規格</span>
+                  </td>
+                  <td class="text-end pe-3">
+                    <span class="group-toggle-arrow" :class="{ collapsed: collapsedGroups.has(group.name) }">▾</span>
                   </td>
                 </tr>
                 <!-- 該商品的規格列 -->
-                <tr v-for="item in group.rows" :key="item.ID">
-                  <td class="ps-4 text-muted">{{ item.ColorName }}</td>
-                  <td class="text-muted">{{ item.SizeName }}</td>
-                  <td class="text-end">{{ item.Qty }}</td>
-                  <td class="text-end">{{ fmt(item.UnitCost) }}</td>
-                  <td class="text-end fw-medium">{{ fmt(item.SubTotal) }}</td>
-                  <td v-if="isDraft" class="text-end">
-                    <button class="btn btn-xs btn-outline-secondary me-1" @click="openEditItem(item)">✎</button>
-                    <button class="btn btn-xs btn-outline-danger" @click="deleteItem(item.ID)">✕</button>
-                  </td>
-                </tr>
+                <template v-if="!collapsedGroups.has(group.name)">
+                  <tr v-for="item in group.rows" :key="item.ID">
+                    <td class="ps-4 text-muted">{{ item.ColorName }}</td>
+                    <td class="text-muted">{{ item.SizeName }}</td>
+                    <td class="text-end">{{ item.Qty }}</td>
+                    <td class="text-end">{{ fmt(item.UnitCost) }}</td>
+                    <td class="text-end fw-medium">{{ fmt(item.SubTotal) }}</td>
+                    <td class="text-end">
+                      <template v-if="isDraft">
+                        <button class="btn btn-xs btn-outline-secondary me-1" @click="openEditItem(item)">✎</button>
+                        <button class="btn btn-xs btn-outline-danger" @click="deleteItem(item.ID)">✕</button>
+                      </template>
+                    </td>
+                  </tr>
+                </template>
               </tbody>
               <tfoot class="table-light">
                 <tr>
                   <td colspan="4" class="text-end fw-semibold">商品小計</td>
                   <td class="text-end fw-semibold">NT$ {{ fmt(itemsTotal) }}</td>
-                  <td v-if="isDraft"></td>
+                  <td></td>
                 </tr>
               </tfoot>
             </table>
@@ -812,6 +857,18 @@ onMounted(load)
   border-top: 2px solid #e8ddd0;
   font-size: 14px;
   letter-spacing: 0.02em;
+}
+.table-group-header:hover td {
+  background-color: #ede8e0;
+}
+.group-toggle-arrow {
+  display: inline-block;
+  transition: transform 0.2s;
+  font-size: 16px;
+  color: #888;
+}
+.group-toggle-arrow.collapsed {
+  transform: rotate(-90deg);
 }
 
 .product-card-name {
