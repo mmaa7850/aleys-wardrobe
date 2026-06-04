@@ -76,7 +76,7 @@ async function load() {
       db.from('C_PRD_ProductVariantList').select('ID, "ProductID", "ColorID", "SizeID", "IsActive"').eq('IsActive', true),
       db.from('S_PRD_ColorList').select('ID, "Name"'),
       db.from('S_PRD_SizeList').select('ID, "Name"'),
-      db.from('C_PRD_ProductPictureList').select('"ProductID", "StoragePath", "IsMain", "SortOrder"').order('IsMain', { ascending: false }).order('SortOrder'),
+      db.from('C_PRD_ProductPictureList').select('"ProductID", "StoragePath", "IsMain", "SortOrder", "Type"').order('IsMain', { ascending: false }).order('SortOrder'),
       db.from('C_INV_PurchaseOrderItemList')
         .select('*')
         .eq('PurchaseOrderID', props.id)
@@ -105,8 +105,13 @@ async function load() {
     const imap = {}
     for (const pic of (pics ?? [])) {
       if (!imap[pic.ProductID] && pic.StoragePath) {
-        const { data: urlData } = supabase.storage.from('product-pictures').getPublicUrl(pic.StoragePath)
-        imap[pic.ProductID] = urlData?.publicUrl ?? ''
+        if (pic.Type === 'image') {
+          const { data: urlData } = supabase.storage.from('product-pictures').getPublicUrl(pic.StoragePath)
+          imap[pic.ProductID] = { type: 'image', url: urlData?.publicUrl ?? '' }
+        } else {
+          // 影片：只標記類型，不載入縮圖
+          imap[pic.ProductID] = { type: 'video', url: '' }
+        }
       }
     }
     imgMap.value = imap
@@ -576,7 +581,8 @@ onMounted(load)
                 @click="itemForm.ProductID = p.ID; itemForm.VariantID = ''"
               >
                 <div class="product-card-img">
-                  <img v-if="imgMap[p.ID]" :src="imgMap[p.ID]" :alt="p.ProductName" />
+                  <img v-if="imgMap[p.ID]?.type === 'image'" :src="imgMap[p.ID].url" :alt="p.ProductName" />
+                  <div v-else-if="imgMap[p.ID]?.type === 'video'" class="product-card-no-img">🎬</div>
                   <div v-else class="product-card-no-img">—</div>
                 </div>
                 <div class="product-card-name">{{ p.ProductName }}</div>
