@@ -417,6 +417,16 @@ async function confirmPurchase() {
 // ─────────────────────────────────────────────────────
 // 格式化
 // ─────────────────────────────────────────────────────
+// 依商品名稱分組
+const groupedItems = computed(() => {
+  const map = {}
+  for (const item of items.value) {
+    if (!map[item.ProductName]) map[item.ProductName] = []
+    map[item.ProductName].push(item)
+  }
+  return Object.entries(map).map(([name, rows]) => ({ name, rows }))
+})
+
 const fmt = (n) => Number(n ?? 0).toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 4 })
 
 onMounted(load)
@@ -486,10 +496,9 @@ onMounted(load)
         <div class="card-body p-0">
           <div v-if="!items.length" class="text-center py-4 text-muted">尚無進貨明細</div>
           <div v-else class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table class="table align-middle mb-0">
               <thead class="table-light">
                 <tr>
-                  <th>商品</th>
                   <th>顏色</th>
                   <th>尺寸</th>
                   <th class="text-end">數量</th>
@@ -498,11 +507,17 @@ onMounted(load)
                   <th v-if="isDraft" style="width:60px"></th>
                 </tr>
               </thead>
-              <tbody>
-                <tr v-for="item in items" :key="item.ID">
-                  <td>{{ item.ProductName }}</td>
-                  <td>{{ item.ColorName }}</td>
-                  <td>{{ item.SizeName }}</td>
+              <tbody v-for="group in groupedItems" :key="group.name">
+                <!-- 商品名稱分組 header -->
+                <tr class="table-group-header">
+                  <td :colspan="isDraft ? 6 : 5" class="fw-semibold text-dark py-2 ps-3">
+                    {{ group.name }}
+                  </td>
+                </tr>
+                <!-- 該商品的規格列 -->
+                <tr v-for="item in group.rows" :key="item.ID">
+                  <td class="ps-4 text-muted">{{ item.ColorName }}</td>
+                  <td class="text-muted">{{ item.SizeName }}</td>
                   <td class="text-end">{{ item.Qty }}</td>
                   <td class="text-end">{{ fmt(item.UnitCost) }}</td>
                   <td class="text-end fw-medium">{{ fmt(item.SubTotal) }}</td>
@@ -514,7 +529,7 @@ onMounted(load)
               </tbody>
               <tfoot class="table-light">
                 <tr>
-                  <td colspan="5" class="text-end fw-semibold">商品小計</td>
+                  <td colspan="4" class="text-end fw-semibold">商品小計</td>
                   <td class="text-end fw-semibold">NT$ {{ fmt(itemsTotal) }}</td>
                   <td v-if="isDraft"></td>
                 </tr>
@@ -789,6 +804,14 @@ onMounted(load)
 .product-card-no-img {
   color: #bbb;
   font-size: 18px;
+}
+
+/* 進貨明細分組 header */
+.table-group-header td {
+  background-color: #f5f0ea;
+  border-top: 2px solid #e8ddd0;
+  font-size: 14px;
+  letter-spacing: 0.02em;
 }
 
 .product-card-name {
