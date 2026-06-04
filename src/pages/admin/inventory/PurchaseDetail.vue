@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal } from 'bootstrap'
 import { db } from '@/lib/db'
@@ -159,6 +159,16 @@ async function saveHeader() {
 // ─────────────────────────────────────────────────────
 // 明細 CRUD
 // ─────────────────────────────────────────────────────
+// 新增模式：選完商品後展開的規格行列表
+const variantRows = ref([])  // [{ id, colorName, sizeName, qty, unitCost }]
+
+watch(() => itemForm.value.ProductID, (pid) => {
+  if (!pid || editItemId.value) { variantRows.value = []; return }
+  variantRows.value = Object.entries(variantMap.value)
+    .filter(([, v]) => v.productId === Number(pid))
+    .map(([id, v]) => ({ id: Number(id), colorName: v.colorName, sizeName: v.sizeName, qty: null, unitCost: null }))
+})
+
 const filteredProducts = computed(() => {
   let list = products.value
   if (categoryFilter.value) list = list.filter(p => p.Category === categoryFilter.value)
@@ -206,31 +216,48 @@ const openEditItem = async (row) => {
 
 async function saveItem() {
   itemSaveErr.value = ''
-  if (!itemForm.value.VariantID) { itemSaveErr.value = '請選擇商品規格'; return }
-  if (!(Number(itemForm.value.Qty) > 0)) { itemSaveErr.value = '數量須大於 0'; return }
-  if (Number(itemForm.value.UnitCost) < 0) { itemSaveErr.value = '單位成本不可為負'; return }
 
-  const vm = variantMap.value[Number(itemForm.value.VariantID)]
-  const payload = {
-    PurchaseOrderID: Number(props.id),
-    ProductID:    vm?.productId   ?? 0,
-    VariantID:    Number(itemForm.value.VariantID),
-    ProductName:  vm?.productName ?? '',
-    ColorName:    vm?.colorName   ?? '',
-    SizeName:     vm?.sizeName    ?? '',
-    Qty:          Number(itemForm.value.Qty),
-    UnitCost:     Number(itemForm.value.UnitCost),
-  }
-
-  itemSaving.value = true
-  let error
   if (editItemId.value) {
-    ;({ error } = await db.from('C_INV_PurchaseOrderItemList').update(payload).eq('ID', editItemId.value))
+    // ── 編輯模式：單筆更新 ──
+    if (!itemForm.value.VariantID) { itemSaveErr.value = '請選擇商品規格'; return }
+    if (!(Number(itemForm.value.Qty) > 0)) { itemSaveErr.value = '數量須大於 0'; return }
+    if (Number(itemForm.value.UnitCost) < 0) { itemSaveErr.value = '單位成本不可為負'; return }
+    const vm = variantMap.value[Number(itemForm.value.VariantID)]
+    const payload = {
+      PurchaseOrderID: Number(props.id),
+      ProductID:   vm?.productId   ?? 0,
+      VariantID:   Number(itemForm.value.VariantID),
+      ProductName: vm?.productName ?? '',
+      ColorName:   vm?.colorName   ?? '',
+      SizeName:    vm?.sizeName    ?? '',
+      Qty:         Number(itemForm.value.Qty),
+      UnitCost:    Number(itemForm.value.UnitCost),
+    }
+    itemSaving.value = true
+    const { error } = await db.from('C_INV_PurchaseOrderItemList').update(payload).eq('ID', editItemId.value)
+    itemSaving.value = false
+    if (error) { itemSaveErr.value = error.message; return }
   } else {
-    ;({ error } = await db.from('C_INV_PurchaseOrderItemList').insert(payload))
+    // ── 新增模式：批次 insert（只存數量 > 0 的行）──
+    const toSave = variantRows.value.filter(r => Number(r.qty) > 0)
+    if (!toSave.length) { itemSaveErr.value = '請至少填入一個規格的進貨數量'; return }
+    if (toSave.some(r => Number(r.unitCost) < 0)) { itemSaveErr.value = '單位成本不可為負'; return }
+    const payloads = toSave.map(r => ({
+      PurchaseOrderID: Number(props.id),
+      ProductID:   variantMap.value[r.id]?.productId   ?? 0,
+      VariantID:   r.id,
+      ProductName: variantMap.value[r.id]?.productName ?? '',
+      ColorName:   r.colorName,
+      SizeName:    r.sizeName,
+      Qty:         Number(r.qty),
+      UnitCost:    Number(r.unitCost) || 0,
+    }))
+    itemSaving.value = true
+    const { error } = await db.from('C_INV_PurchaseOrderItemList').insert(payloads)
+    itemSaving.value = false
+    if (error) { itemSaveErr.value = error.message; return }
   }
-  itemSaving.value = false
-  if (error) { itemSaveErr.value = error.message; return }
+
   itemModal.hide()
   await load()
 }
@@ -607,8 +634,40 @@ onMounted(load)
             </div>
           </div>
 
-          <!-- 規格 / 數量 / 成本（選完商品才顯示） -->
-          <template v-if="itemForm.ProductID">
+          <!-- 新增模式：規格表格 -->
+          <template v-if="!editItemId && itemForm.ProductID && variantRows.length">
+            <hr class="my-3" />
+            <p class="text-muted small mb-2">填入要進貨的規格數量，未填或 0 的規格會略過。</p>
+            <div class="table-responsive">
+              <table class="table table-sm align-middle mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>顏色</th>
+                    <th>尺寸</th>
+                    <th style="width:130px">進貨數量</th>
+                    <th style="width:150px">單位成本（元）</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in variantRows" :key="row.id">
+                    <td>{{ row.colorName }}</td>
+                    <td>{{ row.sizeName }}</td>
+                    <td>
+                      <input v-model.number="row.qty" type="number" min="0" class="form-control form-control-sm"
+                        :class="{ 'border-primary': Number(row.qty) > 0 }" placeholder="0" />
+                    </td>
+                    <td>
+                      <input v-model.number="row.unitCost" type="number" min="0" step="0.0001" class="form-control form-control-sm"
+                        :disabled="!(Number(row.qty) > 0)" placeholder="0" />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+
+          <!-- 編輯模式：單筆下拉 -->
+          <template v-if="editItemId">
             <hr class="my-3" />
             <div class="row g-3">
               <div class="col-12 col-md-4">
