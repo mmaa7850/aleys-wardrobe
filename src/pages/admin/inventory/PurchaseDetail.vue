@@ -105,6 +105,8 @@ async function load() {
     costTypes.value = cts  ?? []
     items.value     = its  ?? []
     costs.value     = csts ?? []
+    // 預設全部折疊
+    collapsedGroups.value = new Set((its ?? []).map(i => i.ProductName))
 
     categoryList.value = cats ?? []
 
@@ -868,7 +870,7 @@ onMounted(load)
   color: #888;
 }
 .group-toggle-arrow.collapsed {
-  transform: rotate(-90deg);
+  transform: rotate(180deg);
 }
 
 .product-card-name {
