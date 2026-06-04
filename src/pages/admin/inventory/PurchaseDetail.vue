@@ -105,13 +105,8 @@ async function load() {
     const imap = {}
     for (const pic of (pics ?? [])) {
       if (!imap[pic.ProductID] && pic.StoragePath) {
-        if (pic.Type === 'image') {
-          const { data: urlData } = supabase.storage.from('product-pictures').getPublicUrl(pic.StoragePath)
-          imap[pic.ProductID] = { type: 'image', url: urlData?.publicUrl ?? '' }
-        } else {
-          // 影片：只標記類型，不載入縮圖
-          imap[pic.ProductID] = { type: 'video', url: '' }
-        }
+        const { data: urlData } = supabase.storage.from('product-pictures').getPublicUrl(pic.StoragePath)
+        imap[pic.ProductID] = { type: pic.Type, url: urlData?.publicUrl ?? '' }
       }
     }
     imgMap.value = imap
@@ -582,7 +577,9 @@ onMounted(load)
               >
                 <div class="product-card-img">
                   <img v-if="imgMap[p.ID]?.type === 'image'" :src="imgMap[p.ID].url" :alt="p.ProductName" />
-                  <div v-else-if="imgMap[p.ID]?.type === 'video'" class="product-card-no-img">🎬</div>
+                  <video v-else-if="imgMap[p.ID]?.type === 'video'" autoplay muted loop playsinline>
+                    <source :src="imgMap[p.ID].url" />
+                  </video>
                   <div v-else class="product-card-no-img">—</div>
                 </div>
                 <div class="product-card-name">{{ p.ProductName }}</div>
@@ -705,7 +702,8 @@ onMounted(load)
   align-items: center;
   justify-content: center;
 }
-.product-card-img img {
+.product-card-img img,
+.product-card-img video {
   width: 100%;
   height: 100%;
   object-fit: cover;
