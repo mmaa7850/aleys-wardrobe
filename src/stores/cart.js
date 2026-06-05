@@ -311,17 +311,24 @@ export const useCartStore = defineStore('cart', {
       }
 
       if (cancelledRow) {
-        // 復活已軟刪除的 row：清除 CancelledAt 並更新數量
+        // 復活已軟刪除的 row：清除 CancelledAt 並更新數量、預購狀態
         const { error } = await db
           .from('C_CART_CartItemList')
-          .update({ CancelledAt: null, Qty: qty })
+          .update({ CancelledAt: null, Qty: qty, IsPreOrderItem: isPreOrder })
           .eq('ID', cancelledRow.ID)
         if (error) {
           if (!isPreOrder) await db.rpc('restore_stock', { p_variant_id: variantId, p_qty: qty })
           throw error
         }
       } else {
-        const row = { CartID: this.cartId, ProductID: productId, VariantID: variantId, Qty: qty, Source: source }
+        const row = {
+          CartID: this.cartId,
+          ProductID: productId,
+          VariantID: variantId,
+          Qty: qty,
+          Source: source,
+          IsPreOrderItem: isPreOrder,   // 記錄加入時的預購狀態，cron 以此判斷是否清除
+        }
         if (liveSessionId) row.LiveSessionID = liveSessionId
 
         const { error } = await db
