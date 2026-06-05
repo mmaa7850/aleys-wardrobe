@@ -760,12 +760,16 @@ onMounted(async () => {
                       <dd>{{ detailOrder.PaymentFee != null ? `NT$ ${detailOrder.PaymentFee.toLocaleString()}` : "-" }}</dd>
 
                       <template v-if="detailOrder.PaymentFee != null && (detailOrder.NewebpayAmt ?? detailOrder.FinalAmount) > 0">
+                        <template v-if="detailOrder.ActualShippingCost">
+                          <dt>出貨運費成本</dt>
+                          <dd class="text-danger">- NT$ {{ Number(detailOrder.ActualShippingCost).toLocaleString() }}</dd>
+                        </template>
                         <template v-if="detailExtraCosts.length">
                           <dt>額外成本</dt>
                           <dd class="text-danger">- NT$ {{ detailExtraCosts.reduce((s,c) => s + Number(c.Amount), 0).toLocaleString() }}</dd>
                         </template>
                         <dt class="fw-semibold text-dark">淨收金額</dt>
-                        <dd class="fw-bold text-success">NT$ {{ ((detailOrder.NewebpayAmt ?? detailOrder.FinalAmount) - detailOrder.PaymentFee - detailExtraCosts.reduce((s,c) => s + Number(c.Amount), 0)).toLocaleString() }}</dd>
+                        <dd class="fw-bold text-success">NT$ {{ ((detailOrder.NewebpayAmt ?? detailOrder.FinalAmount) - detailOrder.PaymentFee - (detailOrder.ActualShippingCost ?? 0) - detailExtraCosts.reduce((s,c) => s + Number(c.Amount), 0)).toLocaleString() }}</dd>
                       </template>
                     </dl>
                   </div>
