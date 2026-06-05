@@ -17,7 +17,7 @@ const mode = ref("create");
 const saving = ref(false);
 const saveError = ref("");
 
-const emptyForm = () => ({ ID: null, Name: "", Description: "", SortOrder: 0, IsActive: true });
+const emptyForm = () => ({ ID: null, Name: "", Description: "", SortOrder: 0, MinSpendingAmount: 0, IsActive: true });
 const form = ref(emptyForm());
 
 onMounted(load);
@@ -62,6 +62,7 @@ const openEdit = async (row) => {
     Name: row.Name ?? "",
     Description: row.Description ?? "",
     SortOrder: row.SortOrder ?? 0,
+    MinSpendingAmount: row.MinSpendingAmount ?? 0,
     IsActive: row.IsActive ?? true,
   };
   await ensureModal();
@@ -82,6 +83,7 @@ const submit = async () => {
         Name: form.value.Name.trim(),
         Description: form.value.Description.trim(),
         SortOrder: Number(form.value.SortOrder) || 0,
+        MinSpendingAmount: Number(form.value.MinSpendingAmount) || 0,
         IsActive: form.value.IsActive,
         CreatedDate: now,
         UpdatedDate: now,
@@ -93,6 +95,7 @@ const submit = async () => {
           Name: form.value.Name.trim(),
           Description: form.value.Description.trim(),
           SortOrder: Number(form.value.SortOrder) || 0,
+          MinSpendingAmount: Number(form.value.MinSpendingAmount) || 0,
           IsActive: form.value.IsActive,
           UpdatedDate: now,
         })
@@ -146,18 +149,19 @@ const formatDate = (val) => {
           <table class="table table-hover mb-0 align-middle">
             <thead class="table-light">
               <tr>
-                <th style="width:6%">排序</th>
-                <th style="width:20%">名稱</th>
-                <th style="width:34%">描述</th>
-                <th style="width:10%">狀態</th>
-                <th style="width:14%">建立時間</th>
-                <th style="width:14%">更新時間</th>
-                <th v-if="auth.isAdmin" style="width:2%" class="text-end">操作</th>
+                <th style="width:5%">排序</th>
+                <th style="width:18%">名稱</th>
+                <th style="width:28%">描述</th>
+                <th style="width:16%">兩年累積門檻</th>
+                <th style="width:8%">狀態</th>
+                <th style="width:11%">建立時間</th>
+                <th style="width:11%">更新時間</th>
+                <th v-if="auth.isAdmin" style="width:3%" class="text-end">操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="levels.length === 0">
-                <td :colspan="auth.isAdmin ? 7 : 6" class="text-center text-muted py-4">目前沒有資料</td>
+                <td :colspan="auth.isAdmin ? 8 : 7" class="text-center text-muted py-4">目前沒有資料</td>
               </tr>
               <tr v-for="r in levels" :key="r.ID">
                 <td class="text-muted">{{ r.SortOrder }}</td>
@@ -166,6 +170,10 @@ const formatDate = (val) => {
                   <span v-if="r.Name === 'VIP 會員'" class="badge ms-1" style="background:#c8a882;color:#fff">VIP</span>
                 </td>
                 <td class="text-muted small">{{ r.Description || "—" }}</td>
+                <td class="small">
+                  <span v-if="r.MinSpendingAmount > 0" class="fw-semibold">NT$ {{ r.MinSpendingAmount.toLocaleString() }}</span>
+                  <span v-else class="text-muted">無門檻</span>
+                </td>
                 <td>
                   <span :class="r.IsActive ? 'badge bg-success' : 'badge bg-secondary'">
                     {{ r.IsActive ? "啟用" : "停用" }}
@@ -207,6 +215,11 @@ const formatDate = (val) => {
             <div class="mb-3">
               <label class="form-label">排序</label>
               <input v-model.number="form.SortOrder" type="number" min="0" class="form-control" :disabled="saving" />
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">兩年累積消費門檻 <span class="text-muted small">（NT$，填 0 表示無門檻，不會被自動降級）</span></label>
+              <input v-model.number="form.MinSpendingAmount" type="number" min="0" step="100" class="form-control" :disabled="saving" placeholder="e.g. 10000" />
             </div>
 
             <div class="form-check">

@@ -39,14 +39,18 @@ async function saveEdit() {
   editError.value  = '';
   try {
     const newLevel = editLevel.value ? Number(editLevel.value) : null;
+    const now = new Date().toISOString();
+    // 若有更改等級，同步重設兩年起算點
+    const levelChanged = newLevel !== editTarget.value.MemberLevelID;
     const { error } = await db
       .from('C_MBR_MemberList')
       .update({
-        Name:          editName.value.trim()   || null,
-        Phone:         editPhone.value.trim()  || null,
-        FbName:        editFbName.value.trim() || null,
-        MemberLevelID: newLevel,
-        UpdatedDate:   new Date().toISOString(),
+        Name:            editName.value.trim()   || null,
+        Phone:           editPhone.value.trim()  || null,
+        FbName:          editFbName.value.trim() || null,
+        MemberLevelID:   newLevel,
+        ...(levelChanged ? { LevelUpdatedAt: now } : {}),
+        UpdatedDate:     now,
       })
       .eq('ID', editTarget.value.ID);
     if (error) throw error;
@@ -187,9 +191,10 @@ async function changeLevel(member, newLevelId) {
   if (!newLevelId) return;
   savingId.value = member.ID;
   try {
+    const now = new Date().toISOString()
     const { error } = await db
       .from("C_MBR_MemberList")
-      .update({ MemberLevelID: newLevelId, UpdatedDate: new Date().toISOString() })
+      .update({ MemberLevelID: newLevelId, LevelUpdatedAt: now, UpdatedDate: now })
       .eq("ID", member.ID);
     if (error) throw error;
     member.MemberLevelID = newLevelId;
