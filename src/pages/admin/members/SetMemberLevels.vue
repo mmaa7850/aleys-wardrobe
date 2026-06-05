@@ -28,7 +28,7 @@ async function load() {
   try {
     const { data, error } = await db
       .from("S_MBR_MemberLevelList")
-      .select("ID, Name, Description, SortOrder, IsActive, CreatedDate, UpdatedDate")
+      .select("ID, Name, Description, SortOrder, MinSpendingAmount, IsActive, CreatedDate, UpdatedDate")
       .order("SortOrder");
     if (error) throw error;
     levels.value = data ?? [];
