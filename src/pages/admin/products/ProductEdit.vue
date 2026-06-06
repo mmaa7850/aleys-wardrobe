@@ -76,6 +76,7 @@ const form = ref({
     IsActive: false,
     IsPreOrder: false,
     PreOrderNote: '',
+    LiveCode: '',
     CreatedDate: null,
     UpdatedDate: null,
 
@@ -230,7 +231,7 @@ const loadProduct = async (id) => {
         const { data, error } = await db
             .from(tableName)
             .select(
-                'ID,"ProductName","Category","Price","OriginPrice","IsActive","IsPreOrder","PreOrderNote","CreatedDate","UpdatedDate","SubTitle","Description","Material","WashingMethod","SEOTitle","SEODescription"'
+                'ID,"ProductName","Category","Price","OriginPrice","IsActive","IsPreOrder","PreOrderNote","LiveCode","CreatedDate","UpdatedDate","SubTitle","Description","Material","WashingMethod","SEOTitle","SEODescription"'
             )
             .eq("ID", id)
             .single();
@@ -309,6 +310,7 @@ const saveDraft = async () => {
             IsActive: !!form.value.IsActive,
             IsPreOrder: !!form.value.IsPreOrder,
             PreOrderNote: form.value.IsPreOrder ? (form.value.PreOrderNote?.trim() || null) : null,
+            LiveCode: form.value.LiveCode?.trim().toUpperCase() || null,
             UpdatedDate: now,
 
             Description: form.value.Description?.trim() ?? "",
@@ -1148,6 +1150,16 @@ onMounted(async () => {
                                         placeholder="e.g. 限量預購" :disabled="saving" />
                                 </div>
                             </template>
+
+                            <div class="col-12 col-md-6">
+                                <label class="form-label">直播留言代碼
+                                    <span class="text-muted small ms-1">（加入直播場次時自動帶入）</span>
+                                </label>
+                                <input v-model="form.LiveCode" type="text" class="form-control font-monospace"
+                                    placeholder="e.g. A1" :disabled="saving"
+                                    style="text-transform:uppercase"
+                                    @input="form.LiveCode = form.LiveCode.toUpperCase()" />
+                            </div>
 
                             <div class="col-12 col-md-6">
                                 <label class="form-label">{{ t("product.productEdit.price") }} *</label>

@@ -386,7 +386,7 @@ async function openEditProduct(p) {
       // 商品不在目前清單（例如未上架）→ 直接查
       const { data: directProd } = await db
         .from('C_PRD_ProductList')
-        .select('ID, ProductName, Category, IsActive')
+        .select('ID, ProductName, Category, IsActive, LiveCode')
         .eq('ID', variant.ProductID)
         .single()
       prod = directProd
@@ -415,7 +415,7 @@ async function browseProductList() {
 
   let query = db
     .from('C_PRD_ProductList')
-    .select('ID, ProductName, Category, IsActive')
+    .select('ID, ProductName, Category, IsActive, LiveCode')
     .eq('IsActive', true)
     .order('UpdatedDate', { ascending: false })
     .limit(30)
@@ -454,6 +454,10 @@ function getImageUrl(path) {
 async function loadVariantsForProduct(prod, keepVariant = false) {
   selectedBrowseProduct.value = prod
   prodForm.value.ProductName  = prod.ProductName
+  // 新增商品時自動帶入商品設定的直播代碼（編輯時保留既有代碼）
+  if (!editProdId.value && prod.LiveCode) {
+    prodForm.value.Code = prod.LiveCode.toUpperCase()
+  }
   if (!keepVariant) {
     prodForm.value.VariantID  = null
     prodForm.value.ColorName  = ''
