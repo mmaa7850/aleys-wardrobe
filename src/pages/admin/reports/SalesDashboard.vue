@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { db } from '@/lib/db'
 import { useRouter } from 'vue-router'
 import { Chart, registerables } from 'chart.js'
+import * as XLSX from 'xlsx'
 
 Chart.register(...registerables)
 
@@ -148,6 +149,39 @@ async function load() {
 watch(range, load, { deep: true })
 onMounted(load)
 onUnmounted(() => chartInstance?.destroy())
+
+// ── Excel 下載 ────────────────────────────────────────────────
+function downloadExcel() {
+  const { start, end } = range.value
+  const wb = XLSX.utils.book_new()
+
+  // Sheet 1：彙總
+  const summaryData = [
+    ['項目', '數值'],
+    ['期間', `${start} ~ ${end}`],
+    ['已付款營收 (NT$)', stats.value.revenue],
+    ['訂單數（全部）', stats.value.orders],
+    ['客單價（已付款）(NT$)', stats.value.aov],
+    ['退款金額 (NT$)', stats.value.refunds],
+    ['估算藍新手續費 (NT$)', stats.value.estFee],
+  ]
+  const ws1 = XLSX.utils.aoa_to_sheet(summaryData)
+  ws1['!cols'] = [{ wch: 22 }, { wch: 18 }]
+  XLSX.utils.book_append_sheet(wb, ws1, '彙總')
+
+  // Sheet 2：每日明細
+  const dailyData = [['日期', '已付款營收 (NT$)']]
+  chartLabels.value.forEach((label, i) => {
+    // label 是 MM-DD，補回年份
+    const fullDate = `${start.slice(0, 4)}-${label}`
+    dailyData.push([fullDate, chartData.value[i]])
+  })
+  const ws2 = XLSX.utils.aoa_to_sheet(dailyData)
+  ws2['!cols'] = [{ wch: 14 }, { wch: 20 }]
+  XLSX.utils.book_append_sheet(wb, ws2, '每日明細')
+
+  XLSX.writeFile(wb, `銷售總覽_${start}_${end}.xlsx`)
+}
 </script>
 
 <template>
@@ -157,7 +191,7 @@ onUnmounted(() => chartInstance?.destroy())
         <h4 class="mb-0">銷售總覽</h4>
         <div class="text-muted small">收入、訂單、客單價</div>
       </div>
-      <!-- Date preset -->
+      <!-- Date preset + 下載 -->
       <div class="d-flex flex-wrap gap-2 align-items-center">
         <div class="btn-group btn-group-sm">
           <button
@@ -173,6 +207,12 @@ onUnmounted(() => chartInstance?.destroy())
           <span class="text-muted">—</span>
           <input type="date" class="form-control form-control-sm" style="width:140px" v-model="customEnd" />
         </template>
+        <button
+          class="btn btn-sm btn-outline-success"
+          :disabled="loading"
+          @click="downloadExcel"
+          title="下載 Excel"
+        >⬇ Excel</button>
       </div>
     </div>
 
