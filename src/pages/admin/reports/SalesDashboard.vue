@@ -33,7 +33,10 @@ const range = computed(() => {
 
 // ── State ─────────────────────────────────────────────────────
 const loading = ref(false)
-const stats = ref({ revenue: 0, orders: 0, aov: 0, refunds: 0, lowStock: 0, estFee: 0 })
+const stats = ref({
+  revenue: 0, orders: 0, aov: 0, refunds: 0, lowStock: 0, estFee: 0,
+  clicks: 0, convRate: null, buyers: 0,
+})
 
 // ── 估算藍新手續費 ─────────────────────────────────────────────
 // 只有 NewebpayAmt > 0 的訂單才有手續費（全額錢包付款不經藍新）
@@ -95,15 +98,20 @@ async function load() {
   loading.value = true
   const { start, end } = range.value
 
-  const [{ data: orders }, { data: lowStock }] = await Promise.all([
+  const [{ data: orders }, { data: lowStock }, { data: clicks }] = await Promise.all([
     db.from('C_ORD_OrderList')
-      .select('FinalAmount, PaymentStatus, CreatedDate, NewebpayAmt, PaymentMethod, "PaymentFee"')
+      .select('ID, FinalAmount, PaymentStatus, CreatedDate, NewebpayAmt, PaymentMethod, "PaymentFee", MemberID')
       .gte('CreatedDate', start + 'T00:00:00')
       .lte('CreatedDate', end + 'T23:59:59'),
     db.from('C_PRD_ProductVariantList')
       .select('ID', { count: 'exact', head: true })
       .lte('StockQty', 3)
       .eq('IsActive', true),
+    db.from('C_ANL_ProductClickLog')
+      .select('ID', { count: 'exact', head: true })
+      .gte('CreatedDate', start + 'T00:00:00')
+      .lte('CreatedDate', end + 'T23:59:59')
+      .catch(() => ({ data: null, count: 0 })),
   ])
 
   const paid     = (orders ?? []).filter(o => o.PaymentStatus === 'paid')
@@ -116,13 +124,20 @@ async function load() {
     return s + (actual !== null ? Number(actual) : estimateFee(o))
   }, 0)
 
+  const clickCount = clicks?.count ?? 0
+  const paidCount  = paid.length
+  const buyerCount = new Set(paid.map(o => o.MemberID).filter(Boolean)).size
+
   stats.value = {
     revenue,
     orders: (orders ?? []).length,
-    aov: paid.length ? Math.round(revenue / paid.length) : 0,
+    aov: paidCount ? Math.round(revenue / paidCount) : 0,
     refunds: refunded.reduce((s, o) => s + (o.FinalAmount ?? 0), 0),
     lowStock: lowStock?.length ?? 0,
     estFee,
+    clicks:   clickCount,
+    convRate: clickCount > 0 ? paidCount / clickCount : null,
+    buyers:   buyerCount,
   }
 
   // Build daily series
@@ -252,6 +267,40 @@ function downloadExcel() {
               <span class="rpt-hint">信用卡 2.8%／ATM min(1%,20)</span>
             </div>
             <div class="rpt-value text-danger">NT$ {{ stats.estFee.toLocaleString() }}</div>
+          </div>
+        </div>
+        <!-- 流量指標 -->
+        <div class="col-6 col-lg-3">
+          <div class="rpt-card">
+            <div class="rpt-label">
+              商品點擊數
+              <span class="rpt-hint">消費者進入商品詳情頁次數</span>
+            </div>
+            <div class="rpt-value">
+              <span v-if="stats.clicks > 0">{{ stats.clicks.toLocaleString() }}</span>
+              <span v-else class="text-muted" style="font-size:16px">尚無資料</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="rpt-card">
+            <div class="rpt-label">
+              訂單轉換率
+              <span class="rpt-hint">已付款訂單數 ÷ 商品點擊數</span>
+            </div>
+            <div class="rpt-value">
+              <span v-if="stats.convRate !== null">{{ (stats.convRate * 100).toFixed(2) }}%</span>
+              <span v-else class="text-muted" style="font-size:16px">—</span>
+            </div>
+          </div>
+        </div>
+        <div class="col-6 col-lg-3">
+          <div class="rpt-card">
+            <div class="rpt-label">
+              買家數
+              <span class="rpt-hint">已付款訂單中的不重複會員</span>
+            </div>
+            <div class="rpt-value">{{ stats.buyers.toLocaleString() }}</div>
           </div>
         </div>
       </div>

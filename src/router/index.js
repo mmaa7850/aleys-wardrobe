@@ -224,6 +224,7 @@ const router = createRouter({
         { path: "finance/monthly-expenses",   name: "admin-finance-monthly-expenses",   component: () => import("@/pages/admin/finance/MonthlyExpenses.vue"),   meta: { permission: "CanManageSettings" } },
         { path: "reports/profit",         name: "admin-reports-profit",         component: () => import("@/pages/admin/reports/ProfitReport.vue") },
         { path: "reports/store-profit",   name: "admin-reports-store-profit",   component: () => import("@/pages/admin/reports/StoreProfitReport.vue") },
+        { path: "reports/traffic",        name: "admin-reports-traffic",        component: () => import("@/pages/admin/reports/TrafficSource.vue") },
 
         // { path: "marketing/coupons", name: "admin-marketing-coupons", component: () => import("@/pages/admin/marketing/Coupons.vue") },
         // { path: "marketing/banners", name: "admin-marketing-banners", component: () => import("@/pages/admin/marketing/Banners.vue") },

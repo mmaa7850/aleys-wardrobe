@@ -8,6 +8,23 @@ import { useWishlistStore } from '@/stores/wishlist'
 import { useAuthStore } from '@/stores/auth'
 import { trackViewItem, trackAddToCart } from '@/lib/gtag'
 
+// ── 點擊來源偵測 ───────────────────────────────────────
+function detectClickSource(qSrc) {
+  if (qSrc === 'line') return 'LINE'
+  const ref = document.referrer
+  if (!ref) return '直接'
+  try {
+    const refUrl = new URL(ref)
+    if (refUrl.hostname !== window.location.hostname) return '外部'
+    const path = refUrl.pathname
+    if (path === '/' || path === '') return '首頁'
+    if (path === '/products' || path.startsWith('/products?')) return '商品列表'
+    if (path === '/cart') return '購物車'
+    if (path === '/wishlist') return '願望清單'
+    return '其他'
+  } catch { return '直接' }
+}
+
 const route = useRoute()
 const router = useRouter()
 const cart = useCartStore()
@@ -144,6 +161,13 @@ async function fetchData() {
   trackViewItem(product.value)
   colors.value   = clrs || []
   sizes.value    = szs  || []
+
+  // ── 記錄商品點擊（fire & forget，不阻擋頁面載入）────────
+  db.from('C_ANL_ProductClickLog').insert({
+    ProductID:   prd.ID,
+    ProductName: prd.ProductName ?? '',
+    Source:      detectClickSource(route.query.src),
+  }).then() // 忽略結果
 
   // 預設選第一個顏色
   if (availableColors.value.length) {

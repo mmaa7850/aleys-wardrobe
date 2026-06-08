@@ -97,6 +97,7 @@ const allSections = [
       { labelKey: "admin.sidebar.reportAnalytics",  to: "/admin/reports/analytics" },
       { labelKey: "admin.sidebar.reportProfit",     to: "/admin/reports/profit" },
       { labelKey: "admin.sidebar.reportStoreProfit",to: "/admin/reports/store-profit" },
+      { labelKey: "admin.sidebar.reportTraffic",    to: "/admin/reports/traffic" },
     ],
   },
   {

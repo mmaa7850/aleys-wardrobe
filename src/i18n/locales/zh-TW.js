@@ -26,6 +26,8 @@ export default {
       suppliers: "供應商",
       costTypes: "成本項目",
       reportProfit: "毛利報表",
+      reportStoreProfit: "賣場淨利報表",
+      reportTraffic: "流量來源分析",
       marketing: "行銷",
       coupons: "優惠券",
       banners: "Banner",

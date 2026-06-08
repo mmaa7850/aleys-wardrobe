@@ -32,6 +32,7 @@ export default {
       monthlyExpenses: "Monthly Expenses",
       reportProfit: "Profit Report",
       reportStoreProfit: "Store Net Profit",
+      reportTraffic: "Traffic Sources",
       marketing: "Marketing",
       coupons: "Coupons",
       banners: "Banners",
