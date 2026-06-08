@@ -97,7 +97,9 @@ const allSections = [
       { labelKey: "admin.sidebar.reportAnalytics",  to: "/admin/reports/analytics" },
       { labelKey: "admin.sidebar.reportProfit",     to: "/admin/reports/profit" },
       { labelKey: "admin.sidebar.reportStoreProfit",to: "/admin/reports/store-profit" },
-      { labelKey: "admin.sidebar.reportTraffic",    to: "/admin/reports/traffic" },
+      { labelKey: "admin.sidebar.reportTraffic",       to: "/admin/reports/traffic" },
+      { labelKey: "admin.sidebar.reportCityStats",    to: "/admin/reports/city-stats" },
+      { labelKey: "admin.sidebar.reportRefundRanking",to: "/admin/reports/refund-ranking" },
     ],
   },
   {

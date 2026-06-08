@@ -225,6 +225,8 @@ const router = createRouter({
         { path: "reports/profit",         name: "admin-reports-profit",         component: () => import("@/pages/admin/reports/ProfitReport.vue") },
         { path: "reports/store-profit",   name: "admin-reports-store-profit",   component: () => import("@/pages/admin/reports/StoreProfitReport.vue") },
         { path: "reports/traffic",        name: "admin-reports-traffic",        component: () => import("@/pages/admin/reports/TrafficSource.vue") },
+        { path: "reports/city-stats",     name: "admin-reports-city-stats",     component: () => import("@/pages/admin/reports/CityStats.vue") },
+        { path: "reports/refund-ranking", name: "admin-reports-refund-ranking", component: () => import("@/pages/admin/reports/RefundRanking.vue") },
 
         // { path: "marketing/coupons", name: "admin-marketing-coupons", component: () => import("@/pages/admin/marketing/Coupons.vue") },
         // { path: "marketing/banners", name: "admin-marketing-banners", component: () => import("@/pages/admin/marketing/Banners.vue") },

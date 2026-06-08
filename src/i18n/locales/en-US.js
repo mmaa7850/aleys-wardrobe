@@ -33,6 +33,8 @@ export default {
       reportProfit: "Profit Report",
       reportStoreProfit: "Store Net Profit",
       reportTraffic: "Traffic Sources",
+      reportCityStats: "City Stats",
+      reportRefundRanking: "Refund Ranking",
       marketing: "Marketing",
       coupons: "Coupons",
       banners: "Banners",
