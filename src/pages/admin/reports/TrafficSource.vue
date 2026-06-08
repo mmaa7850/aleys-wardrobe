@@ -34,14 +34,10 @@ const dailyData  = ref([])   // [{ date, source, clicks }] for chart
 
 // Source 中文標籤與顏色
 const SOURCE_META = {
-  '首頁':     { color: '#C8A882' },
-  '商品列表':  { color: '#6366f1' },
-  '購物車':   { color: '#10b981' },
-  '願望清單':  { color: '#f59e0b' },
-  'LINE':     { color: '#06C755' },
-  '外部':     { color: '#64748b' },
-  '直接':     { color: '#94a3b8' },
-  '其他':     { color: '#e2e8f0' },
+  '廣告來源': { color: '#6366f1', hint: '從外部網站（FB/IG/Google/LINE等）進入' },
+  '購物車':   { color: '#10b981', hint: '從購物車頁跳轉到商品頁' },
+  '願望清單': { color: '#f59e0b', hint: '從願望清單跳轉到商品頁' },
+  '直接':     { color: '#94a3b8', hint: '直接輸入網址或書籤' },
 }
 const SOURCE_ORDER = Object.keys(SOURCE_META)
 
@@ -195,7 +191,7 @@ const totalClicks = computed(() => rows.value.reduce((s, r) => s + r.clicks, 0))
         </div>
         <div class="col-6 col-md-3">
           <div class="rpt-card">
-            <div class="rpt-label">最大來源</div>
+            <div class="rpt-label">最主要來源</div>
             <div class="rpt-value" style="font-size:20px">
               {{ rows[0]?.source }}
               <span class="text-muted" style="font-size:14px">{{ (rows[0]?.pct * 100).toFixed(1) }}%</span>
@@ -235,7 +231,10 @@ const totalClicks = computed(() => rows.value.reduce((s, r) => s + r.clicks, 0))
                     <td>
                       <span class="color-dot" :style="{ background: SOURCE_META[r.source]?.color ?? '#C8A882' }"></span>
                     </td>
-                    <td class="fw-semibold">{{ r.source }}</td>
+                    <td>
+                      <div class="fw-semibold">{{ r.source }}</div>
+                      <div v-if="SOURCE_META[r.source]?.hint" class="text-muted" style="font-size:11px">{{ SOURCE_META[r.source].hint }}</div>
+                    </td>
                     <td class="text-end">{{ r.clicks.toLocaleString() }}</td>
                     <td style="min-width:160px">
                       <div class="d-flex align-items-center gap-2">
@@ -257,10 +256,12 @@ const totalClicks = computed(() => rows.value.reduce((s, r) => s + r.clicks, 0))
 
       <!-- 說明 -->
       <div class="text-muted small mt-3">
-        來源偵測邏輯：<strong>LINE</strong> = 連結含 <code>?src=line</code>，<strong>首頁</strong> = 從 <code>/</code> 跳轉，
-        <strong>商品列表</strong> = 從 <code>/products</code> 跳轉，<strong>購物車</strong> = 從 <code>/cart</code> 跳轉，
-        <strong>外部</strong> = 不同網域，<strong>直接</strong> = 無 referrer。<br>
-        如需 LINE 通知的點擊追蹤，請在 LINE 訊息中的商品連結後加上 <code>?src=line</code>。
+        <strong>來源判斷規則：</strong>
+        <strong>廣告來源</strong> = 從外部網站進入（FB、IG、Google、LINE 等），LINE 訊息連結加 <code>?src=line</code> 也算廣告來源；
+        <strong>購物車</strong> = 從購物車頁跳轉；
+        <strong>願望清單</strong> = 從願望清單跳轉；
+        <strong>直接</strong> = 直接輸入網址或書籤。<br>
+        同一裝置同一天看過同一商品，點擊數只計一次（每日去重）。
       </div>
     </template>
   </div>

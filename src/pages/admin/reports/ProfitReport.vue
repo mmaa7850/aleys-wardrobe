@@ -70,7 +70,7 @@ async function load() {
       }
     } catch { /* migration 尚未執行時忽略 */ }
 
-    // 排除所有品項 UnitCost 都為 0 的訂單（無成本資料，毛利率會虛高）
+    // 排除所有品項 UnitCost 都為 0 的訂單（無成本資料，淨利率會虛高）
     orders.value = orderList
       .filter(o => (o.C_ORD_OrderItemList ?? []).some(i => Number(i.UnitCost) > 0))
       .map(o => computeProfit(o, extraCostMap[o.ID] ?? 0, consumableCostMap[o.ID] ?? 0))
@@ -206,7 +206,7 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
       <div class="col-6 col-md-3">
         <div class="card border-0 shadow-sm h-100">
           <div class="card-body">
-            <div class="text-muted small mb-1">毛利率</div>
+            <div class="text-muted small mb-1">淨利率</div>
             <div class="fs-5 fw-bold" :class="profitClass(summary.margin)">{{ fmtPct(summary.margin) }}</div>
           </div>
         </div>
@@ -266,7 +266,7 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
                 <th class="text-end">耗材成本</th>
                 <th class="text-end">退換費用</th>
                 <th class="text-end">毛利</th>
-                <th class="text-end">毛利率</th>
+                <th class="text-end">淨利率</th>
               </tr>
             </thead>
             <tbody>

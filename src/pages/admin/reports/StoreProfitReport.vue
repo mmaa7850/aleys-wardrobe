@@ -324,7 +324,7 @@ const clr = (n) => n >= 0 ? 'text-success' : 'text-danger'
                   <th class="text-end">耗材</th>
                   <th class="text-end">其他</th>
                   <th class="text-end">毛利</th>
-                  <th class="text-end">毛利率</th>
+                  <th class="text-end">淨利率</th>
                 </tr>
               </thead>
               <tbody>

@@ -8,21 +8,31 @@ import { useWishlistStore } from '@/stores/wishlist'
 import { useAuthStore } from '@/stores/auth'
 import { trackViewItem, trackAddToCart } from '@/lib/gtag'
 
-// ── 點擊來源偵測 ───────────────────────────────────────
+// ── 來源偵測 ───────────────────────────────────────────
+// 廣告來源 = 從外部網站（FB/IG/Google/LINE等）進來
+// 購物車 / 願望清單 = 從站內對應頁跳轉
+// 直接 = 無 referrer（直接輸入網址 / 書籤）
 function detectClickSource(qSrc) {
-  if (qSrc === 'line') return 'LINE'
+  if (qSrc === 'line') return '廣告來源'
   const ref = document.referrer
   if (!ref) return '直接'
   try {
     const refUrl = new URL(ref)
-    if (refUrl.hostname !== window.location.hostname) return '外部'
+    if (refUrl.hostname !== window.location.hostname) return '廣告來源'
     const path = refUrl.pathname
-    if (path === '/' || path === '') return '首頁'
-    if (path === '/products' || path.startsWith('/products?')) return '商品列表'
-    if (path === '/cart') return '購物車'
+    if (path === '/cart')     return '購物車'
     if (path === '/wishlist') return '願望清單'
-    return '其他'
+    return '直接'
   } catch { return '直接' }
+}
+
+// ── 點擊去重：每日同裝置同商品只計一次 ────────────────
+function shouldTrackClick(productId) {
+  const today = new Date().toISOString().slice(0, 10)  // YYYY-MM-DD
+  const key   = `ck_${today}_${productId}`
+  if (localStorage.getItem(key)) return false
+  localStorage.setItem(key, '1')
+  return true
 }
 
 const route = useRoute()
@@ -162,12 +172,14 @@ async function fetchData() {
   colors.value   = clrs || []
   sizes.value    = szs  || []
 
-  // ── 記錄商品點擊（fire & forget，不阻擋頁面載入）────────
-  db.from('C_ANL_ProductClickLog').insert({
-    ProductID:   prd.ID,
-    ProductName: prd.ProductName ?? '',
-    Source:      detectClickSource(route.query.src),
-  }).then() // 忽略結果
+  // ── 記錄商品點擊（每日去重，fire & forget）────────────
+  if (shouldTrackClick(prd.ID)) {
+    db.from('C_ANL_ProductClickLog').insert({
+      ProductID:   prd.ID,
+      ProductName: prd.ProductName ?? '',
+      Source:      detectClickSource(route.query.src),
+    }).then() // 忽略結果
+  }
 
   // 預設選第一個顏色
   if (availableColors.value.length) {
