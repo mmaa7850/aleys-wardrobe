@@ -37,6 +37,64 @@ const detailItems = ref([]);
 const detailLogs  = ref([]);
 const detailExtraCosts = ref([]);
 
+// ── 訂單耗材用量────────────────────────────────────────
+const detailConsumables   = ref([]);
+const consumableList      = ref([]);   // 所有啟用耗材（供下拉選）
+const consumableForm      = ref({ ConsumableID: '', Qty: 1 });
+const consumableSaving    = ref(false);
+const consumableErr       = ref('');
+const showConsumableForm  = ref(false);
+
+async function loadConsumableList() {
+  if (consumableList.value.length) return;
+  const { data } = await db
+    .from('C_INV_ConsumableList')
+    .select('ID, "Name", "Unit", "CostPrice"')
+    .eq('IsActive', true)
+    .order('Category').order('Name');
+  consumableList.value = data ?? [];
+}
+
+async function addConsumable() {
+  consumableErr.value = '';
+  if (!consumableForm.value.ConsumableID) { consumableErr.value = '請選擇耗材'; return; }
+  if (Number(consumableForm.value.Qty) < 1) { consumableErr.value = '數量至少 1'; return; }
+  consumableSaving.value = true;
+  try {
+    const c = consumableList.value.find(x => x.ID === Number(consumableForm.value.ConsumableID));
+    const qty      = Number(consumableForm.value.Qty);
+    const unitCost = Number(c?.CostPrice ?? 0);
+    const { error } = await db.from('C_ORD_OrderConsumableList').insert({
+      OrderID:        detailOrder.value.ID,
+      ConsumableID:   Number(consumableForm.value.ConsumableID),
+      ConsumableName: c?.Name ?? '',
+      Unit:           c?.Unit ?? '',
+      Qty:            qty,
+      UnitCost:       unitCost,
+      Amount:         parseFloat((qty * unitCost).toFixed(2)),
+    });
+    if (error) throw error;
+    consumableForm.value = { ConsumableID: '', Qty: 1 };
+    showConsumableForm.value = false;
+    const { data } = await db.from('C_ORD_OrderConsumableList').select('*').eq('OrderID', detailOrder.value.ID).order('ID');
+    detailConsumables.value = data ?? [];
+  } catch (e) {
+    consumableErr.value = e?.message ?? String(e);
+  } finally {
+    consumableSaving.value = false;
+  }
+}
+
+async function deleteConsumable(id) {
+  if (!confirm('確認刪除此耗材記錄？')) return;
+  await db.from('C_ORD_OrderConsumableList').delete().eq('ID', id);
+  detailConsumables.value = detailConsumables.value.filter(c => c.ID !== id);
+}
+
+const consumableTotalCost = computed(() =>
+  detailConsumables.value.reduce((s, c) => s + Number(c.Amount ?? 0), 0)
+);
+
 // ── 訂單額外成本（退換貨等）────────────────────────────
 const extraCostForm    = ref({ EventType: 'other', CostType: 'other', Amount: 0, Note: '' });
 const extraCostSaving  = ref(false);
@@ -239,6 +297,7 @@ const openDetail = async (id) => {
   detailOrder.value = null;
   detailItems.value = [];
   detailLogs.value = [];
+  detailConsumables.value = [];
   saveSuccess.value = false;
   saveError.value = "";
   refundSuccess.value = false;
@@ -251,6 +310,9 @@ const openDetail = async (id) => {
   invoiceSuccess.value = '';
   allowanceAmtInput.value = '';
   showAllowanceForm.value = false;
+  showConsumableForm.value = false;
+  consumableErr.value = '';
+  consumableForm.value = { ConsumableID: '', Qty: 1 };
   activeTab.value = "info";
   detailLoading.value = true;
 
@@ -260,11 +322,12 @@ const openDetail = async (id) => {
   _modal.show();
 
   try {
-    const [orderRes, itemsRes, logsRes, extraCostsRes] = await Promise.all([
+    const [orderRes, itemsRes, logsRes, extraCostsRes, consumablesRes] = await Promise.all([
       db.from("C_ORD_OrderList").select("*").eq("ID", id).single(),
       db.from("C_ORD_OrderItemList").select("*").eq("OrderID", id).order("ID"),
       db.from("C_ORD_OrderStatusLog").select("*").eq("OrderID", id).order("CreatedDate"),
       db.from("C_ORD_OrderExtraCostList").select("*").eq("OrderID", id).order("ID"),
+      db.from("C_ORD_OrderConsumableList").select("*").eq("OrderID", id).order("ID").then(r => r).catch(() => ({ data: [] })),
     ]);
 
     if (orderRes.error) throw orderRes.error;
@@ -272,7 +335,11 @@ const openDetail = async (id) => {
     detailOrder.value = orderRes.data;
     detailItems.value = itemsRes.data ?? [];
     detailLogs.value  = logsRes.data ?? [];
-    detailExtraCosts.value = extraCostsRes.data ?? [];
+    detailExtraCosts.value  = extraCostsRes.data ?? [];
+    detailConsumables.value = consumablesRes.data ?? [];
+
+    // 預載耗材下拉清單（非同步，不影響 modal 開啟速度）
+    loadConsumableList();
 
     editStatusId.value = orderRes.data.StatusID;
     editAdminNote.value = orderRes.data.AdminNote ?? "";
@@ -991,6 +1058,79 @@ onMounted(async () => {
                           </td>
                         </tr>
                       </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 耗材用量（包材 / 贈品） -->
+              <div class="col-12">
+                <div class="card">
+                  <div class="card-header small fw-semibold d-flex align-items-center justify-content-between">
+                    <span>
+                      耗材用量（包材 / 贈品）
+                      <span v-if="detailConsumables.length" class="badge bg-secondary ms-1">合計 NT$ {{ consumableTotalCost.toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }}</span>
+                    </span>
+                    <button class="btn btn-xs btn-outline-primary" @click="showConsumableForm = !showConsumableForm">
+                      {{ showConsumableForm ? '取消' : '+ 新增耗材' }}
+                    </button>
+                  </div>
+                  <div class="card-body">
+                    <!-- 新增耗材表單 -->
+                    <div v-if="showConsumableForm" class="border rounded p-3 mb-3 bg-light">
+                      <div v-if="consumableErr" class="alert alert-danger py-2 small mb-2">{{ consumableErr }}</div>
+                      <div class="row g-2 align-items-end">
+                        <div class="col-12 col-sm-6">
+                          <label class="form-label small mb-1">耗材品項</label>
+                          <select v-model.number="consumableForm.ConsumableID" class="form-select form-select-sm" :disabled="consumableSaving">
+                            <option value="">請選擇…</option>
+                            <option v-for="c in consumableList" :key="c.ID" :value="c.ID">
+                              {{ c.Name }}（NT$ {{ Number(c.CostPrice).toFixed(2) }} / {{ c.Unit }}）
+                            </option>
+                          </select>
+                        </div>
+                        <div class="col-6 col-sm-3">
+                          <label class="form-label small mb-1">數量</label>
+                          <input v-model.number="consumableForm.Qty" type="number" min="1" class="form-control form-control-sm" :disabled="consumableSaving" />
+                        </div>
+                        <div class="col-6 col-sm-3">
+                          <button class="btn btn-success btn-sm w-100" @click="addConsumable" :disabled="consumableSaving">
+                            <span v-if="consumableSaving" class="spinner-border spinner-border-sm me-1"></span>
+                            儲存
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div v-if="!detailConsumables.length" class="text-muted small">此訂單尚未記錄耗材用量</div>
+                    <table v-else class="table table-sm align-middle mb-0">
+                      <thead class="table-light">
+                        <tr>
+                          <th>耗材</th>
+                          <th class="text-center">數量</th>
+                          <th class="text-end">單位成本</th>
+                          <th class="text-end">小計</th>
+                          <th style="width:40px"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="c in detailConsumables" :key="c.ID">
+                          <td>{{ c.ConsumableName }}（{{ c.Unit }}）</td>
+                          <td class="text-center">{{ c.Qty }}</td>
+                          <td class="text-end text-muted">NT$ {{ Number(c.UnitCost).toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) }}</td>
+                          <td class="text-end fw-medium">NT$ {{ Number(c.Amount).toLocaleString('zh-TW', { minimumFractionDigits: 2 }) }}</td>
+                          <td>
+                            <button class="btn btn-xs btn-outline-danger" @click="deleteConsumable(c.ID)">✕</button>
+                          </td>
+                        </tr>
+                      </tbody>
+                      <tfoot class="table-light">
+                        <tr>
+                          <td colspan="3" class="text-end fw-semibold small">耗材合計</td>
+                          <td class="text-end fw-bold">NT$ {{ consumableTotalCost.toLocaleString('zh-TW', { minimumFractionDigits: 2 }) }}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
                     </table>
                   </div>
                 </div>

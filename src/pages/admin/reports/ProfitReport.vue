@@ -40,11 +40,11 @@ async function load() {
 
     if (error) throw error
     const orderList = data ?? []
+    const orderIds  = orderList.map(o => o.ID)
 
     // ② 額外成本（migration 執行後才有，安全查詢）
     let extraCostMap = {}
     try {
-      const orderIds = orderList.map(o => o.ID)
       if (orderIds.length) {
         const { data: costs } = await db
           .from('C_ORD_OrderExtraCostList')
@@ -56,10 +56,24 @@ async function load() {
       }
     } catch { /* migration 尚未執行時忽略 */ }
 
+    // ③ 耗材成本
+    let consumableCostMap = {}
+    try {
+      if (orderIds.length) {
+        const { data: oc } = await db
+          .from('C_ORD_OrderConsumableList')
+          .select('"OrderID", "Amount"')
+          .in('OrderID', orderIds)
+        for (const c of (oc ?? [])) {
+          consumableCostMap[c.OrderID] = (consumableCostMap[c.OrderID] ?? 0) + Number(c.Amount)
+        }
+      }
+    } catch { /* migration 尚未執行時忽略 */ }
+
     // 排除所有品項 UnitCost 都為 0 的訂單（無成本資料，毛利率會虛高）
     orders.value = orderList
       .filter(o => (o.C_ORD_OrderItemList ?? []).some(i => Number(i.UnitCost) > 0))
-      .map(o => computeProfit(o, extraCostMap[o.ID] ?? 0))
+      .map(o => computeProfit(o, extraCostMap[o.ID] ?? 0, consumableCostMap[o.ID] ?? 0))
   } catch (e) {
     errMsg.value = e?.message ?? String(e)
   } finally {
@@ -73,28 +87,30 @@ async function load() {
 // 金流手續費率（信用卡 1.5%、ATM 0，預設 1.5%）
 const FEE_RATE = 0.015
 
-function computeProfit(o, extraCostsTotal = 0) {
+function computeProfit(o, extraCostsTotal = 0, consumableCostTotal = 0) {
   const revenue   = Number(o.FinalAmount) || 0
   const itemsCost = (o.C_ORD_OrderItemList ?? []).reduce(
     (s, i) => s + (Number(i.UnitCost) || 0) * (Number(i.Qty) || 0), 0
   )
   // 優先用 DB 儲存的實際手續費，否則用預設費率估算
-  const payFee   = o.PaymentFee != null ? Number(o.PaymentFee) : Math.round(revenue * FEE_RATE)
-  const shipCost   = Number(o.ActualShippingCost) || 0
-  const extraCosts = extraCostsTotal
-  const totalCost = itemsCost + payFee + shipCost + extraCosts
-  const profit    = revenue - totalCost
-  const margin    = revenue > 0 ? (profit / revenue * 100) : 0
+  const payFee        = o.PaymentFee != null ? Number(o.PaymentFee) : Math.round(revenue * FEE_RATE)
+  const shipCost      = Number(o.ActualShippingCost) || 0
+  const extraCosts    = extraCostsTotal
+  const consumableCost = consumableCostTotal
+  const totalCost     = itemsCost + payFee + shipCost + extraCosts + consumableCost
+  const profit        = revenue - totalCost
+  const margin        = revenue > 0 ? (profit / revenue * 100) : 0
 
   return {
     ...o,
-    _itemsCost:  itemsCost,
-    _payFee:     payFee,
-    _shipCost:   shipCost,
-    _extraCosts: extraCosts,
-    _totalCost:  totalCost,
-    _profit:     profit,
-    _margin:     margin,
+    _itemsCost:     itemsCost,
+    _payFee:        payFee,
+    _shipCost:      shipCost,
+    _extraCosts:    extraCosts,
+    _consumableCost: consumableCost,
+    _totalCost:     totalCost,
+    _profit:        profit,
+    _margin:        margin,
   }
 }
 
@@ -105,13 +121,14 @@ const summary = computed(() => {
   const list = orders.value
   if (!list.length) return null
   const revenue    = list.reduce((s, o) => s + (Number(o.FinalAmount) || 0), 0)
-  const itemsCost  = list.reduce((s, o) => s + o._itemsCost,  0)
-  const payFee     = list.reduce((s, o) => s + o._payFee,     0)
-  const shipCost   = list.reduce((s, o) => s + o._shipCost,   0)
-  const extraCosts = list.reduce((s, o) => s + o._extraCosts, 0)
-  const profit     = list.reduce((s, o) => s + o._profit,     0)
-  const margin     = revenue > 0 ? (profit / revenue * 100) : 0
-  return { revenue, itemsCost, payFee, shipCost, extraCosts, profit, margin, count: list.length }
+  const itemsCost      = list.reduce((s, o) => s + o._itemsCost,       0)
+  const payFee         = list.reduce((s, o) => s + o._payFee,          0)
+  const shipCost       = list.reduce((s, o) => s + o._shipCost,        0)
+  const extraCosts     = list.reduce((s, o) => s + o._extraCosts,      0)
+  const consumableCost = list.reduce((s, o) => s + o._consumableCost,  0)
+  const profit         = list.reduce((s, o) => s + o._profit,          0)
+  const margin         = revenue > 0 ? (profit / revenue * 100) : 0
+  return { revenue, itemsCost, payFee, shipCost, extraCosts, consumableCost, profit, margin, count: list.length }
 })
 
 // ─────────────────────────────────────────────────────
@@ -214,6 +231,10 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
             <div class="fw-medium">{{ fmtMoney(summary.shipCost) }}</div>
           </div>
           <div class="col-6 col-md-3">
+            <div class="text-muted small">耗材成本（包材/贈品）</div>
+            <div class="fw-medium">{{ fmtMoney(summary.consumableCost) }}</div>
+          </div>
+          <div class="col-6 col-md-3">
             <div class="text-muted small">退換貨額外成本</div>
             <div class="fw-medium">{{ fmtMoney(summary.extraCosts) }}</div>
           </div>
@@ -242,6 +263,7 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
                 <th class="text-end">進貨成本</th>
                 <th class="text-end">手續費</th>
                 <th class="text-end">運費成本</th>
+                <th class="text-end">耗材成本</th>
                 <th class="text-end">退換費用</th>
                 <th class="text-end">毛利</th>
                 <th class="text-end">毛利率</th>
@@ -255,6 +277,7 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
                 <td class="text-end text-muted">{{ fmtMoney(o._itemsCost) }}</td>
                 <td class="text-end text-muted">{{ fmtMoney(o._payFee) }}</td>
                 <td class="text-end text-muted">{{ fmtMoney(o._shipCost) }}</td>
+                <td class="text-end text-muted">{{ fmtMoney(o._consumableCost) }}</td>
                 <td class="text-end text-muted">{{ fmtMoney(o._extraCosts) }}</td>
                 <td class="text-end fw-medium" :class="profitClass(o._profit)">{{ fmtMoney(o._profit) }}</td>
                 <td class="text-end" :class="profitClass(o._margin)">{{ fmtPct(o._margin) }}</td>
@@ -267,9 +290,10 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
 
     <!-- 備註 -->
     <div class="text-muted small mt-3">
-      ＊ 毛利 ＝ 營收 − 商品進貨成本 − 金流手續費（1.5%）− 實際出貨運費 − 退換貨額外費用<br>
+      ＊ 毛利 ＝ 營收 − 商品進貨成本 − 金流手續費（1.5%）− 實際出貨運費 − 耗材成本（包材/贈品）− 退換貨額外費用<br>
       ＊ 若訂單尚未填入實際運費（ActualShippingCost），該欄位計為 0<br>
-      ＊ 若商品規格尚未設定成本（CostPrice），該規格成本計為 0
+      ＊ 若商品規格尚未設定成本（CostPrice），該規格成本計為 0<br>
+      ＊ 耗材欄數字來自訂單出貨時紀錄的耗材用量，若未記錄顯示 NT$ 0
     </div>
 
   </div>

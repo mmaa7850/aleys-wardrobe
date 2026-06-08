@@ -217,7 +217,13 @@ const router = createRouter({
         { path: "inventory/setcosttypes", name: "admin-inventory-setcosttypes", component: () => import("@/pages/admin/inventory/SetCostTypes.vue"), meta: { permission: "CanManageProducts" } },
         { path: "inventory/purchases",    name: "admin-inventory-purchases",    component: () => import("@/pages/admin/inventory/Purchases.vue"),    meta: { permission: "CanManageProducts" } },
         { path: "inventory/purchases/:id", name: "admin-inventory-purchase-detail", component: () => import("@/pages/admin/inventory/PurchaseDetail.vue"), meta: { permission: "CanManageProducts" }, props: true },
+        { path: "inventory/consumables",   name: "admin-inventory-consumables",  component: () => import("@/pages/admin/inventory/Consumables.vue"),   meta: { permission: "CanManageProducts" } },
+        { path: "inventory/consumable-purchases", name: "admin-inventory-consumable-purchases", component: () => import("@/pages/admin/inventory/ConsumablePurchases.vue"), meta: { permission: "CanManageProducts" } },
+        { path: "inventory/consumable-purchases/:id", name: "admin-inventory-consumable-purchase-detail", component: () => import("@/pages/admin/inventory/ConsumablePurchaseDetail.vue"), meta: { permission: "CanManageProducts" }, props: true },
+        { path: "finance/expense-categories", name: "admin-finance-expense-categories", component: () => import("@/pages/admin/finance/ExpenseCategories.vue"), meta: { permission: "CanManageSettings" } },
+        { path: "finance/monthly-expenses",   name: "admin-finance-monthly-expenses",   component: () => import("@/pages/admin/finance/MonthlyExpenses.vue"),   meta: { permission: "CanManageSettings" } },
         { path: "reports/profit",         name: "admin-reports-profit",         component: () => import("@/pages/admin/reports/ProfitReport.vue") },
+        { path: "reports/store-profit",   name: "admin-reports-store-profit",   component: () => import("@/pages/admin/reports/StoreProfitReport.vue") },
 
         // { path: "marketing/coupons", name: "admin-marketing-coupons", component: () => import("@/pages/admin/marketing/Coupons.vue") },
         // { path: "marketing/banners", name: "admin-marketing-banners", component: () => import("@/pages/admin/marketing/Banners.vue") },
