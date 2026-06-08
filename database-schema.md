@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-06-01
+> 更新時間：2026-06-08
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -19,7 +19,8 @@
 | `add_cart_features.sql` | `C_CART_CartItemList` 新增 `Source` / `LiveSessionID` / `IsReward` / `RewardAmt`；`ProductID` / `VariantID` 改允許 NULL | ✅ 已執行 |
 | `setup_weekly_cron.sql` | pg_cron：每週日 16:00 UTC（台灣週一 00:00）自動銷單 + 回補庫存 + 軟刪除購物車現貨品 | ✅ 已執行 |
 | `cart_stock_functions.sql` | 新增 `decrement_stock(bigint, int)` / `restore_stock(bigint, int)` 原子性庫存函式 | ✅ 已執行 |
-| `add_purchase_system.sql` | 新增 `S_INV_SupplierList` / `S_INV_CostTypeList` / `C_INV_PurchaseOrderList` / `C_INV_PurchaseOrderItemList` / `C_INV_PurchaseOrderCostList` / `C_ORD_OrderExtraCostList`；`C_PRD_ProductVariantList` 新增 `CostPrice`；`C_ORD_OrderItemList` 新增 `UnitCost`；`C_ORD_OrderList` 新增 `ActualShippingCost` | ⬜ 待執行 |
+| `add_purchase_system.sql` | 新增 `S_INV_SupplierList` / `S_INV_CostTypeList` / `C_INV_PurchaseOrderList` / `C_INV_PurchaseOrderItemList` / `C_INV_PurchaseOrderCostList` / `C_ORD_OrderExtraCostList`；`C_PRD_ProductVariantList` 新增 `CostPrice`；`C_ORD_OrderItemList` 新增 `UnitCost`；`C_ORD_OrderList` 新增 `ActualShippingCost` | ✅ 已執行 |
+| `add_consumables_system.sql` | 新增 `C_INV_ConsumableList` / `C_INV_ConsumablePurchaseList` / `C_INV_ConsumablePurchaseItemList` / `C_ORD_OrderConsumableList` / `S_FIN_ExpenseCategoryList` / `C_FIN_MonthlyExpenseList`；預設 6 筆費用分類 | ✅ 已執行 |
 
 > ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
 > - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）
@@ -377,6 +378,91 @@ WITH CHECK (
 | Note | text | YES | — | |
 | CreatedDate | timestamptz | NO | now() | |
 
+### C_INV_ConsumableList
+耗材品項主檔（包材/贈品/其他）；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| Name | varchar(100) | NO | — | 耗材名稱，如「黑色破壞袋（小）」|
+| Category | varchar(20) | NO | '其他' | `包材` / `贈品` / `其他` |
+| Unit | varchar(20) | NO | '個' | 計量單位，如個/捲/張/片 |
+| CostPrice | numeric(10,4) | NO | 0 | 加權平均成本（確認進貨單時自動更新）|
+| StockQty | integer | NO | 0 | 目前庫存（確認進貨單後自動累加）|
+| Description | text | YES | — | |
+| IsActive | boolean | NO | true | |
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | now() | |
+
+### C_INV_ConsumablePurchaseList
+耗材進貨單主表；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| PurchaseNo | varchar(30) | NO | — | 格式 `CPO_YYYYMMDD_XXXXX` |
+| PurchaseDate | date | NO | CURRENT_DATE | |
+| Status | varchar(20) | NO | 'draft' | `draft`=草稿 / `confirmed`=已確認（確認後不可修改）|
+| Note | text | YES | — | |
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | now() | |
+
+### C_INV_ConsumablePurchaseItemList
+耗材進貨明細；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| PurchaseID | bigint | NO | — | FK → C_INV_ConsumablePurchaseList（CASCADE DELETE）|
+| ConsumableID | bigint | NO | — | FK → C_INV_ConsumableList |
+| ConsumableName | varchar(100) | NO | '' | 快取名稱 |
+| Qty | integer | NO | 1 | 進貨數量 |
+| UnitCost | numeric(10,4) | NO | 0 | 本次進貨單位成本 |
+| SubTotal | numeric(10,2) | NO | 0 | Qty × UnitCost |
+| CreatedDate | timestamptz | YES | now() | |
+
+> **確認進貨加權平均公式：**
+> `新CostPrice = (舊StockQty × 舊CostPrice + 本次Qty × 本次UnitCost) / (舊StockQty + 本次Qty)`
+
+### C_ORD_OrderConsumableList
+訂單耗材使用記錄（出貨時填入）；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| OrderID | bigint | NO | — | FK → C_ORD_OrderList（CASCADE DELETE）|
+| ConsumableID | bigint | YES | — | FK → C_INV_ConsumableList（允許 NULL，耗材停用仍保留記錄）|
+| ConsumableName | varchar(100) | NO | — | 快取名稱 |
+| Unit | varchar(20) | NO | '個' | 快取單位 |
+| Qty | integer | NO | 1 | 使用數量 |
+| UnitCost | numeric(10,4) | NO | 0 | 記錄當下的耗材單位成本 |
+| Amount | numeric(10,2) | NO | 0 | Qty × UnitCost |
+| CreatedDate | timestamptz | YES | now() | |
+
+### S_FIN_ExpenseCategoryList
+費用分類設定；SELECT=所有登入者，寫入=`is_admin()`；預設 6 筆分類
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| Name | varchar(50) | NO | — | 如「租金」「水電費」|
+| Description | text | YES | — | |
+| SortOrder | integer | NO | 0 | |
+| IsActive | boolean | NO | true | |
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | now() | |
+
+> 預設分類：租金（1）/ 水電費（2）/ 設備（3）/ 文具耗材（4）/ 人事費用（5）/ 其他（6）
+
+### C_FIN_MonthlyExpenseList
+月度費用記錄；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| Year | integer | NO | — | 年份，如 2026 |
+| Month | integer | NO | — | 月份 1～12（CHECK 約束）|
+| CategoryID | bigint | YES | — | FK → S_FIN_ExpenseCategoryList |
+| Name | varchar(100) | NO | — | 費用說明，如「6月房租」|
+| Amount | numeric(10,2) | NO | 0 | |
+| Note | text | YES | — | |
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | now() | |
+
 ### C_INV_PurchaseOrderList
 進貨單主表；RLS `is_staff()` ALL
 | 欄位 | 型別 | Nullable | Default | 說明 |
@@ -726,6 +812,29 @@ WITH CHECK (
 | Policy | Role | CMD | 條件 |
 |--------|------|-----|------|
 | order_extra_cost_staff_all | authenticated | ALL | is_staff() |
+
+### C_INV_ConsumableList / C_INV_ConsumablePurchaseList / C_INV_ConsumablePurchaseItemList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| consumable_staff_all | authenticated | ALL | is_staff() |
+| consumable_purchase_staff_all | authenticated | ALL | is_staff() |
+| consumable_purchase_item_staff_all | authenticated | ALL | is_staff() |
+
+### C_ORD_OrderConsumableList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| order_consumable_staff_all | authenticated | ALL | is_staff() |
+
+### S_FIN_ExpenseCategoryList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| expense_cat_staff_read | authenticated | SELECT | true（所有登入者可讀，月度費用頁面下拉需要）|
+| expense_cat_admin_write | authenticated | ALL | is_admin()（僅超管可新增/編輯分類）|
+
+### C_FIN_MonthlyExpenseList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| monthly_expense_staff_all | authenticated | ALL | is_staff() |
 
 ### LineBindToken
 > 無公開 policy；僅由 `line-webhook` 和 `line-bind` Edge Functions 以 service_role（繞過 RLS）讀寫。已啟用 RLS（`ENABLE ROW LEVEL SECURITY`）。
