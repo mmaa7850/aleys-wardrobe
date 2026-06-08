@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-06-03
+> 更新時間：2026-06-08
 
 ---
 
@@ -44,6 +44,7 @@
 - **PendingList Tab2 被封鎖名單**：`/admin/orders/pending` 新增 Tab2「本週被封鎖名單」，呼叫 `get-blocked-members` Edge Function，顯示本週銷單後被封鎖的會員及其被取消的購物車品項明細
 - **直播即時搶標（live-bid-poll 起標）**：`start_bid` action — 起標時在 FB 直播貼出格式化起標公告（含商品名稱、直播價、留言格式範例）並在 `C_LIV_ActiveBidList` 建立 open 記錄；後台場次詳情「起標」按鈕（已開標中顯示「● 開標中」badge，未直播時 disable）
 - **批次進貨 / 成本追蹤 / 毛利報表**：6 張新資料表 + 3 個欄位異動；供應商 CRUD、成本項目 CRUD、進貨單列表 / 詳情（加權平均成本計算 + 庫存更新）；出貨 Modal 補箱數自動計算 `ActualShippingCost`；訂單詳情補「額外成本」區塊；毛利報表（日期篩選 + 成本拆解）；`create-payment` 快照 `UnitCost`
+- **耗材管理系統 + 月度費用 + 賣場淨利報表**：耗材品項 CRUD（包材/贈品/其他）；耗材進貨單（加權平均成本更新）；訂單詳情新增耗材用量記錄區塊（出貨時選品項填數量，成本自動帶入）；費用分類設定、月度費用記錄頁面；賣場淨利報表（訂單毛利 − 月度費用 = 本月淨利）；毛利報表補耗材成本欄；migration `add_consumables_system.sql`（public/staging 分區）
 - **Redeploy 後舊 chunk 消失導致按鈕失效修正**：`main.js` 監聽 `vite:preloadError` + `router.onError` 捕捉 `ChunkLoadError`，自動重新整理到最新版本
 - **GA4 追蹤碼整合**：`gtag.js` 已完成（`initGA` / `trackPageView` / `trackViewItem` / `trackAddToCart` / `trackBeginCheckout` / `trackPurchase` / `setUserId`）；GA4 資料串流已建立；Vercel 測試專案已加入 `VITE_GA_MEASUREMENT_ID`；登入後自動傳會員 ID 給 GA4（User-ID 精準識別）
 - **加入購物車前強制登入並綁定 LINE**：未登入 → 導向 `/login?redirect=`；已登入但未綁定 LINE → 導向 `/account?requireLine=1`（頁面顯示黃色提示條並自動捲動到 LINE 綁定區塊）
@@ -215,12 +216,15 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ```
 訂單毛利 = FinalAmount
-         - Σ(UnitCost × Qty)       商品成本（建單快照）
-         - PaymentFee              金流手續費
-         - ActualShippingCost      實際出貨運費
-         - Σ(OrderExtraCostList)   退換貨等額外成本
+         - Σ(UnitCost × Qty)            商品成本（建單快照）
+         - PaymentFee                   金流手續費
+         - ActualShippingCost           實際出貨運費
+         - Σ(OrderConsumableList.Amount) 耗材成本（包材/贈品）
+         - Σ(OrderExtraCostList.Amount)  退換貨等額外成本
 
 毛利率 = 訂單毛利 ÷ FinalAmount × 100%
+
+賣場月度淨利 = 當月訂單毛利合計 - 月度固定費用（C_FIN_MonthlyExpenseList）
 ```
 
 #### 毛利報表內容

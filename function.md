@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-06-01
+> 更新時間：2026-06-08
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -53,12 +53,17 @@
 | 標籤設定 | `/admin/products/settags` | CanManageProducts | 管理商品標籤（`S_PRD_TagList`） |
 | 庫存總覽 | `/admin/inventory/overview` | CanManageProducts | 所有上架商品各 variant 庫存、低庫存（≤5）/售完警示、可直接修改數量並建立異動紀錄 |
 | 庫存紀錄 | `/admin/inventory/logs` | CanManageProducts | 庫存異動歷史（異動量、前後庫存、原因、時間） |
-| 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單；依訂單號/Email 搜尋、付款狀態/訂單狀態篩選；點開 Modal 分三 Tab：**訂單資訊**（可修改收件資訊、備注、訂單狀態）、**品項**、**狀態紀錄**；**宅配出貨**：填物流公司 + 單號 → 標記已出貨（更新 HomeDelivery* + ShippingStatus + **StatusID 自動設為 shipped**）；**退款**：依付款方式顯示對應退款按鈕（信用卡→藍新API / ATM/LINE Pay→手動匯款 / 錢包→退回錢包），退款後 **StatusID 自動設為 refunded**；**電子發票**：已付款訂單可手動補開（呼叫 `issue-invoice`）、作廢（全額退款用）、開立折讓（部分退款用）；錢包全額付款訂單顯示「毋需開立」；**金流資訊卡**：顯示訂單金額/實收金額/錢包折抵/手續費/**淨收金額**（實付－手續費）；付款方式全中文顯示 |
+| 耗材品項 | `/admin/inventory/consumables` | CanManageProducts | 包材/贈品/其他耗材 CRUD；單位成本與庫存由進貨單自動維護（加權平均）；可啟用/停用 |
+| 耗材進貨 | `/admin/inventory/consumable-purchases` | CanManageProducts | 耗材採購單列表（PurchaseNo 自動產生）；點入詳情頁操作品項與確認進貨 |
+| 耗材進貨詳情 | `/admin/inventory/consumable-purchases/:id` | CanManageProducts | 新增/編輯/刪除進貨品項；確認進貨後更新耗材加權平均成本與庫存；確認後不可修改 |
+| 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單；依訂單號/Email 搜尋、付款狀態/訂單狀態篩選；點開 Modal 分三 Tab：**訂單資訊**（可修改收件資訊、備注、訂單狀態）、**品項**、**狀態紀錄**；**宅配出貨**：填物流公司 + 單號 → 標記已出貨（更新 HomeDelivery* + ShippingStatus + **StatusID 自動設為 shipped**）；**退款**：依付款方式顯示對應退款按鈕（信用卡→藍新API / ATM/LINE Pay→手動匯款 / 錢包→退回錢包），退款後 **StatusID 自動設為 refunded**；**電子發票**：已付款訂單可手動補開（呼叫 `issue-invoice`）、作廢（全額退款用）、開立折讓（部分退款用）；錢包全額付款訂單顯示「毋需開立」；**耗材用量**：出貨時選擇包材/贈品品項 + 數量，記錄至 `C_ORD_OrderConsumableList`，成本自動帶入該耗材當前單位成本；顯示合計耗材成本；**金流資訊卡**：顯示訂單金額/實收金額/錢包折抵/手續費/**淨收金額**（實付－手續費）；付款方式全中文顯示 |
 | 訂單狀態管理 | `/admin/orders/setstatus` | CanManageOrders | 管理訂單狀態選項（`S_ORD_StatusList`） |
 | 優惠券設定 | `/admin/marketing/setcoupons` | CanManageMarketing | 建立/管理優惠券（優惠碼、折扣金額、最低消費門檻、`IsAutoApply`、有效期、使用次數） |
 | Banner 設定 | `/admin/marketing/setbanners` | CanManageMarketing | 建立/管理 Banner（`S_MKT_BannerList`）；**圖片直接上傳** Supabase Storage（`banners` bucket）或貼外部 URL；**顯示位置**：`home-hero`（首頁 Hero 裝飾框內，建議 3:4）/ `home-banner`（Ticker 下方全寬，建議 16:5）；日期排程；列表快速開關顯示/隱藏；刪除同步移除 Storage 檔案 |
 | 會員列表 | `/admin/members` | CanManageMembers | 全部一般會員（排除管理員帳號）、搜尋/等級篩選、可直接切換會員等級；**購物車管理**按鈕（Modal）：顯示該會員購物車內所有品項（含商品名稱/顏色/尺寸/數量），可逐筆移除並回補庫存（呼叫 `manage-member-cart`），或合併同款品項 / 調整數量 |
 | 會員等級設定 | `/admin/members/levels` | CanManageMembers | 管理會員等級（`S_MBR_MemberLevelList`） |
+| 費用分類設定 | `/admin/finance/expense-categories` | CanManageSettings | 管理月度費用分類（租金/水電費/設備/文具耗材/人事費用/其他）；排序/啟用停用 |
+| 月度費用 | `/admin/finance/monthly-expenses` | CanManageSettings | 按年月記錄固定與非固定營運費用（選分類 + 說明 + 金額）；月合計即時顯示 |
 | 付款方式設定 | `/admin/settings/setpaymethods` | CanManageSettings | 管理付款方式（`S_PAY_PayMethodList`） |
 | 配送方式設定 | `/admin/settings/setshippingmethods` | CanManageSettings | 管理配送方式（名稱、`MethodCode`、`Fee`、啟用）；`MethodCode` 決定結帳流程（`cvscom` / `home`） |
 | 系統設定分類 | `/admin/settings/setconfigcategories` | CanManageSettings | 管理設定分類（`S_SYS_ConfigCategoryList`） |
@@ -72,6 +77,8 @@
 | **報表 — 優惠券效益** | `/admin/reports/coupons` | 全部 | 各券：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃；手動碼 vs 自動折抵分類顯示 |
 | **報表 — 訂單狀態分佈** | `/admin/reports/orders` | 全部 | 全部訂單甜甜圈圖（付款狀態4種：待付款/已付款/付款失敗/已退款）；佔比表格；點擊跳訂單列表 |
 | **報表 — 會員成長趨勢** | `/admin/reports/members` | 全部 | 近12個月月新增柱狀圖；3張 stat card（累積總數/本月活躍/回購會員數） |
+| **報表 — 毛利報表** | `/admin/reports/profit` | 全部 | 日期區間篩選；訂單級毛利明細（含耗材成本欄）；成本拆解彙總（進貨成本/手續費/運費/耗材/退換費用） |
+| **報表 — 賣場淨利報表** | `/admin/reports/store-profit` | 全部 | 月份選擇；第一層訂單毛利彙總 + 第二層月度固定費用 = 本月淨利；淨利率；訂單明細含耗材欄 |
 
 ---
 
@@ -149,6 +156,16 @@
 
 ### 庫存
 - `C_INV_StockLog` — 庫存異動紀錄
+
+### 耗材
+- `C_INV_ConsumableList` — 耗材品項主檔（Name/Category:包材|贈品|其他/Unit/CostPrice 加權平均/StockQty/IsActive）
+- `C_INV_ConsumablePurchaseList` — 耗材進貨單（PurchaseNo/PurchaseDate/Status:draft|confirmed）
+- `C_INV_ConsumablePurchaseItemList` — 耗材進貨明細（PurchaseID/ConsumableID/Qty/UnitCost/SubTotal）
+- `C_ORD_OrderConsumableList` — 訂單耗材使用記錄（OrderID/ConsumableID/ConsumableName/Unit/Qty/UnitCost/Amount）
+
+### 財務
+- `S_FIN_ExpenseCategoryList` — 費用分類設定（Name/Description/SortOrder/IsActive）
+- `C_FIN_MonthlyExpenseList` — 月度費用記錄（Year/Month/CategoryID/Name/Amount）
 
 ### 會員等級
 - `S_MBR_MemberLevelList` — 會員等級設定
