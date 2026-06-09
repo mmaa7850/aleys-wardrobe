@@ -13,7 +13,7 @@
 |------|------|------|
 | 首頁 | `/` | Hero 區塊（左側文字 + 右側裝飾框）、跑馬燈 Ticker、**動態 Banner 橫幅**（`home-banner`，Ticker 下方全寬，多張輪播）、最新上架 8 件商品卡片、探索風格分類卡、品牌故事；管理員可見 FAB 快速進入後台 |
 | 商品列表 | `/products` | 分類篩選 + 關鍵字搜尋、商品卡片（圖片/影片、售價/原價劃線/SALE badge）、Hover 顯示「查看商品」 |
-| 商品詳情 | `/products/:id` | 圖片/影片 Gallery（主圖 + 縮圖列）、顏色→尺寸選擇（依庫存過濾）、數量選擇器（上限卡庫存）、商品描述/尺寸規格 Tab；**預購模式**：`IsPreOrder=true` 且庫存歸零時顯示預購 badge + 預計出貨日 + 說明，按鈕改「立即預購」；加入購物車、收藏按鈕 |
+| 商品詳情 | `/products/:id` | 圖片/影片 Gallery（主圖 + 縮圖列）、顏色→尺寸選擇（依庫存過濾）、數量選擇器（上限卡庫存）、商品描述/尺寸規格 Tab；**預購模式**：`IsPreOrder=true` 且庫存歸零時顯示預購 badge + 預計出貨日 + 說明，按鈕改「立即預購」；加入購物車、收藏按鈕；**商品點擊追蹤**（`C_ANL_ProductClickLog`，LocalStorage 每日去重，自動偵測來源） |
 | 購物車 | `/cart` | 品項列表拆為**現貨**與**預購**兩個區塊（各自有獨立「前往結帳」按鈕，以 `?type=stock` / `?type=preorder` 帶入結帳）；數量 ± 控制（加入時已扣庫存，調整時同步增減）、刪除並還庫存；預購品顯示「三週內出貨」固定文字；合計金額分區顯示；已取消（`CancelledAt IS NOT NULL`）品項自動過濾 |
 | 結帳 | `/checkout` | 自動從會員資料填入姓名/電話；**電話格式驗證**（台灣手機/市話，`/^0\d{8,9}$/`，允許含連字號）；**錯誤訊息顯示在對應欄位下方**（姓名/電話/地址/發票 分別顯示）；**配送方式**從 DB 動態載入，超商取貨（`cvscom`）/ 宅配到府（`home`）驅動不同表單欄位；**手動優惠碼**輸入驗證；**滿額自動折抵**；**錢包折抵**（勾選後以 `walletDeductAmt` 傳給 Edge Function，全額折抵時不送藍新直接完成訂單）；**電子發票載具選擇**（紙本/手機條碼/自然人憑證/捐贈/公司戶三聯式）；金額明細；送出後呼叫 `create-payment` Edge Function，自動 submit 藍新付款表單 |
 | 優惠券專區 | `/coupons` | 僅一般會員可見（管理員導首頁）；分兩區：**滿額自動折抵**（金色 badge、無需輸入）、**優惠碼**（顯示代碼 + 一鍵複製）；從 DB 動態載入有效期內且 `IsActive=true` 的優惠券 |
@@ -55,15 +55,19 @@
 | 庫存紀錄 | `/admin/inventory/logs` | CanManageProducts | 庫存異動歷史（異動量、前後庫存、原因、時間） |
 | 耗材品項 | `/admin/inventory/consumables` | CanManageProducts | 包材/贈品/其他耗材 CRUD；單位成本與庫存由進貨單自動維護（加權平均）；可啟用/停用 |
 | 耗材進貨 | `/admin/inventory/consumable-purchases` | CanManageProducts | 耗材採購單列表（PurchaseNo 自動產生）；點入詳情頁操作品項與確認進貨 |
-| 耗材進貨詳情 | `/admin/inventory/consumable-purchases/:id` | CanManageProducts | 新增/編輯/刪除進貨品項；確認進貨後更新耗材加權平均成本與庫存；確認後不可修改 |
+| 耗材進貨詳情 | `/admin/inventory/consumable-purchases/:id` | CanManageProducts | 新增/編輯/刪除進貨品項；確認進貨後更新耗材加權平均成本與庫存；確認後不可修改；**收據/憑證附件上傳**（即時儲存至 `receipts` bucket，支援圖片預覽） |
 | 訂單列表 | `/admin/orders` | CanManageOrders | 全部訂單；依訂單號/Email 搜尋、付款狀態/訂單狀態篩選；點開 Modal 分三 Tab：**訂單資訊**（可修改收件資訊、備注、訂單狀態）、**品項**、**狀態紀錄**；**宅配出貨**：填物流公司 + 單號 → 標記已出貨（更新 HomeDelivery* + ShippingStatus + **StatusID 自動設為 shipped**）；**退款**：依付款方式顯示對應退款按鈕（信用卡→藍新API / ATM/LINE Pay→手動匯款 / 錢包→退回錢包），退款後 **StatusID 自動設為 refunded**；**電子發票**：已付款訂單可手動補開（呼叫 `issue-invoice`）、作廢（全額退款用）、開立折讓（部分退款用）；錢包全額付款訂單顯示「毋需開立」；**耗材用量**：出貨時選擇包材/贈品品項 + 數量，記錄至 `C_ORD_OrderConsumableList`，成本自動帶入該耗材當前單位成本；顯示合計耗材成本；**金流資訊卡**：顯示訂單金額/實收金額/錢包折抵/手續費/**淨收金額**（實付－手續費）；付款方式全中文顯示 |
 | 訂單狀態管理 | `/admin/orders/setstatus` | CanManageOrders | 管理訂單狀態選項（`S_ORD_StatusList`） |
 | 優惠券設定 | `/admin/marketing/setcoupons` | CanManageMarketing | 建立/管理優惠券（優惠碼、折扣金額、最低消費門檻、`IsAutoApply`、有效期、使用次數） |
 | Banner 設定 | `/admin/marketing/setbanners` | CanManageMarketing | 建立/管理 Banner（`S_MKT_BannerList`）；**圖片直接上傳** Supabase Storage（`banners` bucket）或貼外部 URL；**顯示位置**：`home-hero`（首頁 Hero 裝飾框內，建議 3:4）/ `home-banner`（Ticker 下方全寬，建議 16:5）；日期排程；列表快速開關顯示/隱藏；刪除同步移除 Storage 檔案 |
 | 會員列表 | `/admin/members` | CanManageMembers | 全部一般會員（排除管理員帳號）、搜尋/等級篩選、可直接切換會員等級；**購物車管理**按鈕（Modal）：顯示該會員購物車內所有品項（含商品名稱/顏色/尺寸/數量），可逐筆移除並回補庫存（呼叫 `manage-member-cart`），或合併同款品項 / 調整數量 |
 | 會員等級設定 | `/admin/members/levels` | CanManageMembers | 管理會員等級（`S_MBR_MemberLevelList`） |
+| 供應商設定 | `/admin/inventory/suppliers` | CanManageProducts | 供應商 CRUD（名稱/聯絡人/電話/Email/備注）；可啟用/停用 |
+| 附加成本類型 | `/admin/inventory/setcosttypes` | CanManageProducts | 進貨附加成本項目設定（大陸段物流費/過境運費/關稅/報關費等，可自訂）；排序/啟用停用 |
+| 進貨單列表 | `/admin/inventory/purchases` | CanManageProducts | 進貨單建立與管理；狀態篩選（草稿/已確認）；點入詳情頁 |
+| 進貨單詳情 | `/admin/inventory/purchases/:id` | CanManageProducts | 進貨單基本資訊（供應商/日期/備注）；進貨明細（商品 card 選擇 + 規格批次填入）；附加成本（運費/關稅等多筆）；confirm 後加權平均成本計算 + 庫存更新；**收據/憑證附件上傳**（即時儲存至 `receipts` bucket，支援圖片預覽與 PDF 連結）|
 | 費用分類設定 | `/admin/finance/expense-categories` | CanManageSettings | 管理月度費用分類（租金/水電費/設備/文具耗材/人事費用/其他）；排序/啟用停用 |
-| 月度費用 | `/admin/finance/monthly-expenses` | CanManageSettings | 按年月記錄固定與非固定營運費用（選分類 + 說明 + 金額）；月合計即時顯示 |
+| 月度費用 | `/admin/finance/monthly-expenses` | CanManageSettings | 按年月記錄固定與非固定營運費用（選分類 + 說明 + 金額）；月合計即時顯示；**支援選填收據/憑證上傳**（JPG/PNG/PDF）；表格顯示 🖼️/📄 圖示，可點擊查看原檔 |
 | 付款方式設定 | `/admin/settings/setpaymethods` | CanManageSettings | 管理付款方式（`S_PAY_PayMethodList`） |
 | 配送方式設定 | `/admin/settings/setshippingmethods` | CanManageSettings | 管理配送方式（名稱、`MethodCode`、`Fee`、啟用）；`MethodCode` 決定結帳流程（`cvscom` / `home`） |
 | 系統設定分類 | `/admin/settings/setconfigcategories` | CanManageSettings | 管理設定分類（`S_SYS_ConfigCategoryList`） |
@@ -72,13 +76,14 @@
 | 待結清單 | `/admin/orders/pending` | CanManageOrders | **Tab1 購物車待結帳**：列出有購物車品項的會員，可發 LINE 通知付款連結；**Tab2 本週被封鎖名單**：顯示本週銷單後被封鎖的會員（`IsBlocked=true`），列出被取消的購物車品項明細（呼叫 `get-blocked-members`）；**測試按鈕**：手動觸發 `cancel-orders` 銷單（預計正式上線後移除）|
 | 直播場次列表 | `/admin/live` | CanManageOrders | 直播場次 CRUD（建立/管理）；顯示場次標題、日期、狀態 |
 | 直播場次詳情 | `/admin/live/:id` | CanManageOrders | 三個 Tab：**商品對照表**（代碼↔商品↔直播價，可新增/編輯/刪除）/ **留言解析建單**（貼入 FB 留言文字 → 解析 → 批次建單 → LINE 通知）/ **FB 直播監控**（連接 FB 直播 → 即時輪詢留言 → 自動搶標/截標；起標按鈕顯示開標中 badge，截標按鈕截止）|
-| **報表 — 銷售總覽** | `/admin/reports/sales` | 全部 | 今日/本週/本月/自訂區間切換；4 張 stat card（已付款營收、訂單數、客單價、退款金額）；低庫存警示卡片；每日已付款營收折線圖（Chart.js） |
-| **報表 — 商品排行** | `/admin/reports/products` | 全部 | 已付款訂單統計；依銷售金額或數量排序；時間區間可選（本週/本月/近3月/自訂）；前3名 🥇🥈🥉 |
+| **報表 — 銷售總覽** | `/admin/reports/sales` | 全部 | 今日/本週/本月/自訂區間切換；stat card：已付款營收/訂單數/客單價/退款金額/**商品點擊數**/**訂單轉換率**/**買家數**；低庫存警示卡片；每日已付款營收折線圖（Chart.js） |
+| **報表 — 商品排行** | `/admin/reports/products` | 全部 | 已付款訂單統計；本週/本月/近3月/自訂；依銷售額/數量/點擊數/訂單數排序；欄位：排名/商品名稱/**銷售佔比（進度條）**/銷售額/**商品點擊數**/**訂單數**/件數/**訂單轉換率**/**平均客單價**/**買家數** |
 | **報表 — 優惠券效益** | `/admin/reports/coupons` | 全部 | 各券：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃；手動碼 vs 自動折抵分類顯示 |
 | **報表 — 訂單狀態分佈** | `/admin/reports/orders` | 全部 | 全部訂單甜甜圈圖（付款狀態4種：待付款/已付款/付款失敗/已退款）；佔比表格；點擊跳訂單列表 |
 | **報表 — 會員成長趨勢** | `/admin/reports/members` | 全部 | 近12個月月新增柱狀圖；3張 stat card（累積總數/本月活躍/回購會員數） |
-| **報表 — 毛利報表** | `/admin/reports/profit` | 全部 | 日期區間篩選；訂單級毛利明細（含耗材成本欄）；成本拆解彙總（進貨成本/手續費/運費/耗材/退換費用） |
-| **報表 — 賣場淨利報表** | `/admin/reports/store-profit` | 全部 | 月份選擇；第一層訂單毛利彙總 + 第二層月度固定費用 = 本月淨利；淨利率；訂單明細含耗材欄 |
+| **報表 — 毛利報表** | `/admin/reports/profit` | 全部 | 日期區間篩選；訂單級毛利明細（含耗材成本欄）；成本拆解彙總（進貨成本/手續費/運費/耗材/退換費用）；**淨利率**欄位（原毛利率）|
+| **報表 — 賣場淨利報表** | `/admin/reports/store-profit` | 全部 | 月份選擇；第一層訂單毛利彙總 + 第二層月度固定費用 = 本月淨利；**淨利率**（原毛利率）；訂單明細含耗材欄 |
+| **報表 — 流量來源分析** | `/admin/reports/traffic` | 全部 | 查詢期間內各來源點擊分布；Chart.js 長條圖；表格顯示來源/點擊數/點擊佔比（進度條）；來源分類：廣告來源/購物車/願望清單/直接；說明來源偵測邏輯 |
 
 ---
 
@@ -185,6 +190,7 @@
 |--------|------|
 | `product-pictures` | 商品圖片與影片（Public；管理員上傳/刪除） |
 | `banners` | 首頁 Banner 圖片（Public；管理員上傳/刪除） |
+| `receipts` | 成本記錄收據/憑證附件（Public；管理員上傳/刪除；支援圖片與 PDF） |
 
 ---
 

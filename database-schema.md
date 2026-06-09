@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-06-08
+> 更新時間：2026-06-09
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -21,6 +21,8 @@
 | `cart_stock_functions.sql` | 新增 `decrement_stock(bigint, int)` / `restore_stock(bigint, int)` 原子性庫存函式 | ✅ 已執行 |
 | `add_purchase_system.sql` | 新增 `S_INV_SupplierList` / `S_INV_CostTypeList` / `C_INV_PurchaseOrderList` / `C_INV_PurchaseOrderItemList` / `C_INV_PurchaseOrderCostList` / `C_ORD_OrderExtraCostList`；`C_PRD_ProductVariantList` 新增 `CostPrice`；`C_ORD_OrderItemList` 新增 `UnitCost`；`C_ORD_OrderList` 新增 `ActualShippingCost` | ✅ 已執行 |
 | `add_consumables_system.sql` | 新增 `C_INV_ConsumableList` / `C_INV_ConsumablePurchaseList` / `C_INV_ConsumablePurchaseItemList` / `C_ORD_OrderConsumableList` / `S_FIN_ExpenseCategoryList` / `C_FIN_MonthlyExpenseList`；預設 6 筆費用分類 | ✅ 已執行 |
+| `add_analytics_tracking.sql` | 新增 `C_ANL_ProductClickLog`（商品點擊追蹤）；RLS：anon/authenticated 可 INSERT，僅 staff 可 SELECT | ✅ 已執行 |
+| `add_receipt_storage.sql` | `C_FIN_MonthlyExpenseList` / `C_INV_PurchaseOrderList` / `C_INV_ConsumablePurchaseList` 各新增 `ReceiptStoragePath VARCHAR(500)` | ⚠️ 待執行 |
 
 > ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
 > - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）
@@ -402,6 +404,7 @@ WITH CHECK (
 | PurchaseDate | date | NO | CURRENT_DATE | |
 | Status | varchar(20) | NO | 'draft' | `draft`=草稿 / `confirmed`=已確認（確認後不可修改）|
 | Note | text | YES | — | |
+| ReceiptStoragePath | varchar(500) | YES | — | 收據/憑證附件路徑（`receipts` bucket）|
 | CreatedDate | timestamptz | YES | now() | |
 | UpdatedDate | timestamptz | YES | now() | |
 
@@ -460,8 +463,22 @@ WITH CHECK (
 | Name | varchar(100) | NO | — | 費用說明，如「6月房租」|
 | Amount | numeric(10,2) | NO | 0 | |
 | Note | text | YES | — | |
+| ReceiptStoragePath | varchar(500) | YES | — | 收據/憑證附件路徑（`receipts` bucket）|
 | CreatedDate | timestamptz | YES | now() | |
 | UpdatedDate | timestamptz | YES | now() | |
+
+### C_ANL_ProductClickLog
+商品點擊追蹤記錄；每次訪客進入商品詳情頁時 fire-and-forget 插入一筆（LocalStorage 每日去重）；RLS：anon/authenticated 可 INSERT，staff 可 SELECT
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| ProductID | bigint | YES | — | FK → C_PRD_ProductList（允許 NULL 以防商品被刪）|
+| ProductName | varchar(200) | NO | '' | 快取商品名稱 |
+| Source | varchar(30) | NO | '直接' | `廣告來源`=外部網站或 ?src=line / `購物車`=從 /cart 進入 / `願望清單`=從 /wishlist 進入 / `直接`=直接或站內 |
+| CreatedDate | timestamptz | NO | now() | |
+
+> 來源偵測：`document.referrer` hostname 非本站 → 廣告來源；`?src=line` → 廣告來源；referrer 含 `/cart` → 購物車；含 `/wishlist` → 願望清單；其他 → 直接
+> 去重機制：LocalStorage key `ck_YYYY-MM-DD_{productId}`，同商品同天只記錄一次
 
 ### C_INV_PurchaseOrderList
 進貨單主表；RLS `is_staff()` ALL
@@ -474,6 +491,7 @@ WITH CHECK (
 | Status | varchar(20) | NO | 'draft' | `draft`=草稿 / `confirmed`=已確認 |
 | TotalCost | numeric(12,4) | YES | — | 商品成本 + 附加成本（confirm 時計算）|
 | Note | text | YES | — | |
+| ReceiptStoragePath | varchar(500) | YES | — | 收據/憑證附件路徑（`receipts` bucket）|
 | CreatedDate | timestamptz | NO | now() | |
 | UpdatedDate | timestamptz | NO | now() | |
 
@@ -835,6 +853,13 @@ WITH CHECK (
 | Policy | Role | CMD | 條件 |
 |--------|------|-----|------|
 | monthly_expense_staff_all | authenticated | ALL | is_staff() |
+
+### C_ANL_ProductClickLog
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| click_log_anon_insert | anon | INSERT | true（匿名訪客可寫入點擊）|
+| click_log_auth_insert | authenticated | INSERT | true（登入用戶可寫入點擊）|
+| click_log_staff_select | authenticated | SELECT | is_staff() |
 
 ### LineBindToken
 > 無公開 policy；僅由 `line-webhook` 和 `line-bind` Edge Functions 以 service_role（繞過 RLS）讀寫。已啟用 RLS（`ENABLE ROW LEVEL SECURITY`）。

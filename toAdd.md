@@ -49,6 +49,9 @@
 - **GA4 追蹤碼整合**：`gtag.js` 已完成（`initGA` / `trackPageView` / `trackViewItem` / `trackAddToCart` / `trackBeginCheckout` / `trackPurchase` / `setUserId`）；GA4 資料串流已建立；Vercel 測試專案已加入 `VITE_GA_MEASUREMENT_ID`；登入後自動傳會員 ID 給 GA4（User-ID 精準識別）
 - **加入購物車前強制登入並綁定 LINE**：未登入 → 導向 `/login?redirect=`；已登入但未綁定 LINE → 導向 `/account?requireLine=1`（頁面顯示黃色提示條並自動捲動到 LINE 綁定區塊）
 - **購物車 Bug 修正**：① `loadAdminProfile` 改 `.maybeSingle()`，消費者不在後台帳號表時不再報 406；② `addItem` 先載入 items 再檢查重複；③ 修正週銷單 soft-delete 後再次加入相同商品衝突的問題（偵測到 `CancelledAt IS NOT NULL` 的舊 row 則 UPDATE 復活而非 INSERT）
+- **蝦皮式分析報表模組**：商品點擊數追蹤（`C_ANL_ProductClickLog`，`add_analytics_tracking.sql`）；LocalStorage 每日去重（key: `ck_YYYY-MM-DD_productId`）；前台商品詳情 fire-and-forget 插入；來源偵測（廣告來源/購物車/願望清單/直接）；商品排行完整重寫（銷售佔比/點擊數/訂單轉換率/平均客單價/買家數欄位）；銷售總覽新增商品點擊數/訂單轉換率/買家數 stat card；新增「流量來源分析」報表頁（Chart.js 長條圖 + 來源佔比表格）；側欄新增入口；i18n 補齊缺少的中文翻譯 key（consumables/finance 群組）
+- **毛利率 → 淨利率**：毛利報表（`ProfitReport.vue`）與賣場淨利報表（`StoreProfitReport.vue`）中「毛利率」欄位更名為「淨利率」
+- **成本記錄收據/憑證附件上傳**：月度費用（Modal 底部加圖片上傳）、商品進貨單詳情（基本資訊卡片）、耗材進貨單詳情（獨立收據卡片）均支援選填 JPG/PNG/WebP/PDF 附件；上傳至 `receipts` Storage Bucket；表格顯示 🖼️/📄 圖示；刪除記錄時一併清除 Storage 檔案；migration `add_receipt_storage.sql`（三張資料表新增 `ReceiptStoragePath`）
 
 ---
 
@@ -289,6 +292,34 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 - 方案 C（正式等級制）目前側欄已有「會員等級」入口，可未來擴充
 
 **暫緩原因：** 目前資料量尚小，先觀察業績再決定門檻值。
+
+---
+
+## 🔵 待確認議題（需確認方向後再開發）
+
+### 11. 成本記錄日期精度
+
+目前月度費用 / 耗材進貨 / 商品進貨單只記錄到年月或日期欄位，使用者希望每筆成本都能精確記錄到日。
+
+**建議方向：**
+- **月度費用**：新增 `ExpenseDate`（DATE）欄位，UI 顯示完整日期；年月從日期自動推算，不須另存
+- **商品進貨單 `PurchaseDate`**：已是 DATE 欄位，主表不須異動
+- **進貨附加成本 `C_INV_PurchaseOrderCostList`**：新增 `PaidDate` 欄位，讓運費（廠商出貨時）與關稅（貨到倉庫後）各自記錄實際付款日期
+
+**待確認：** 上述方向是否符合需求？
+
+---
+
+### 12. 破壞袋耗材記錄方式
+
+目前設計為每筆訂單出貨時手動登記耗材使用量（包含破壞袋類型與數量），出貨量大時作業負擔重。
+
+**討論方向：**
+- **A. 每單預設自動扣（最省事）**：每筆訂單預設消耗 1 個破壞袋，確認出貨時系統自動扣庫存，特殊情況才手動調整
+- **B. 只追蹤進貨不扣每單**：破壞袋只在「耗材進貨」時記錄成本，不扣每單庫存；月底以「進貨量 − 期末庫存」算消耗
+- **C. 維持現狀（每單手動）**：成本最精確但作業最費工
+
+**待確認：** 追蹤目的主要是「庫存控制」還是「精確計算每單耗材成本」？
 
 ---
 
