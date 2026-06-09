@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { Modal } from 'bootstrap'
 import { db } from '@/lib/db'
+import { supabase } from '@/lib/supabase'
 
 // ── filters ───────────────────────────────────────────────────
 const now      = new Date()
@@ -25,8 +26,45 @@ let modalInstance = null
 const mode    = ref('create')
 const saving  = ref(false)
 const saveErr = ref('')
-const form    = ref({ ID: null, CategoryID: '', Name: '', Amount: 0, Note: '' })
+const form    = ref({ ID: null, CategoryID: '', Name: '', Amount: 0, Note: '', ReceiptStoragePath: null })
 
+// ── 收據 ──────────────────────────────────────────────────────
+const receiptFile       = ref(null)       // File | null（新選取的檔案）
+const receiptPreviewUrl = ref('')         // 目前顯示的預覽 URL
+const receiptFileInput  = ref(null)       // <input type="file"> ref
+
+function getReceiptPublicUrl(path) {
+  if (!path) return null
+  const { data } = supabase.storage.from('receipts').getPublicUrl(path)
+  return data?.publicUrl ?? null
+}
+
+function isImagePath(path) {
+  return /\.(jpe?g|png|gif|webp|heic|avif)$/i.test(path ?? '')
+}
+
+function onReceiptFileChange(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  receiptFile.value = file
+  receiptPreviewUrl.value = URL.createObjectURL(file)
+}
+
+function removeReceipt() {
+  form.value.ReceiptStoragePath = null
+  receiptFile.value = null
+  receiptPreviewUrl.value = ''
+  if (receiptFileInput.value) receiptFileInput.value.value = ''
+}
+
+function cancelNewFile() {
+  receiptFile.value = null
+  if (receiptFileInput.value) receiptFileInput.value.value = ''
+  // 還原為目前已儲存的收據預覽
+  receiptPreviewUrl.value = getReceiptPublicUrl(form.value.ReceiptStoragePath) ?? ''
+}
+
+// ── lifecycle ─────────────────────────────────────────────────
 onMounted(async () => {
   await nextTick()
   if (modalEl.value) modalInstance = new Modal(modalEl.value, { backdrop: 'static' })
@@ -47,7 +85,7 @@ async function load() {
   errMsg.value  = ''
   const { data, error } = await db
     .from('C_FIN_MonthlyExpenseList')
-    .select('ID, "CategoryID", "Name", "Amount", "Note", S_FIN_ExpenseCategoryList("Name")')
+    .select('ID, "CategoryID", "Name", "Amount", "Note", "ReceiptStoragePath", S_FIN_ExpenseCategoryList("Name")')
     .eq('Year',  selYear.value)
     .eq('Month', selMonth.value)
     .order('ID')
@@ -59,14 +97,27 @@ async function load() {
 function openCreate() {
   mode.value    = 'create'
   saveErr.value = ''
-  form.value    = { ID: null, CategoryID: categories.value[0]?.ID ?? '', Name: '', Amount: 0, Note: '' }
+  receiptFile.value = null
+  receiptPreviewUrl.value = ''
+  if (receiptFileInput.value) receiptFileInput.value.value = ''
+  form.value = { ID: null, CategoryID: categories.value[0]?.ID ?? '', Name: '', Amount: 0, Note: '', ReceiptStoragePath: null }
   modalInstance?.show()
 }
 
 function openEdit(row) {
   mode.value    = 'edit'
   saveErr.value = ''
-  form.value    = { ID: row.ID, CategoryID: row.CategoryID, Name: row.Name ?? '', Amount: Number(row.Amount ?? 0), Note: row.Note ?? '' }
+  receiptFile.value = null
+  if (receiptFileInput.value) receiptFileInput.value.value = ''
+  form.value = {
+    ID: row.ID,
+    CategoryID: row.CategoryID,
+    Name: row.Name ?? '',
+    Amount: Number(row.Amount ?? 0),
+    Note: row.Note ?? '',
+    ReceiptStoragePath: row.ReceiptStoragePath ?? null,
+  }
+  receiptPreviewUrl.value = getReceiptPublicUrl(row.ReceiptStoragePath) ?? ''
   modalInstance?.show()
 }
 
@@ -74,23 +125,40 @@ async function submit() {
   if (!form.value.CategoryID) { saveErr.value = '請選擇費用分類'; return }
   if (!form.value.Name?.trim()) { saveErr.value = '請填寫費用說明'; return }
   if (Number(form.value.Amount) <= 0) { saveErr.value = '金額必須大於 0'; return }
-  saving.value  = true
+
+  saving.value = true
+  saveErr.value = ''
+
+  // ── 上傳新收據 ─────────────────────────────────────────
+  let receiptPath = form.value.ReceiptStoragePath
+  if (receiptFile.value) {
+    const file = receiptFile.value
+    const ext  = file.name.split('.').pop().toLowerCase()
+    const path = `expenses/${selYear.value}/${selMonth.value}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const { error: upErr } = await supabase.storage.from('receipts').upload(path, file)
+    if (upErr) { saveErr.value = '收據上傳失敗：' + upErr.message; saving.value = false; return }
+    receiptPath = path
+  }
+
   const now2 = new Date().toISOString()
   const payload = {
-    CategoryID: Number(form.value.CategoryID),
-    Name:       form.value.Name.trim(),
-    Amount:     parseFloat(Number(form.value.Amount).toFixed(2)),
-    Note:       form.value.Note?.trim() || null,
-    Year:       selYear.value,
-    Month:      selMonth.value,
-    UpdatedDate: now2,
+    CategoryID:          Number(form.value.CategoryID),
+    Name:                form.value.Name.trim(),
+    Amount:              parseFloat(Number(form.value.Amount).toFixed(2)),
+    Note:                form.value.Note?.trim() || null,
+    Year:                selYear.value,
+    Month:               selMonth.value,
+    ReceiptStoragePath:  receiptPath ?? null,
+    UpdatedDate:         now2,
   }
+
   let error
   if (mode.value === 'create') {
     ;({ error } = await db.from('C_FIN_MonthlyExpenseList').insert({ ...payload, CreatedDate: now2 }))
   } else {
     ;({ error } = await db.from('C_FIN_MonthlyExpenseList').update(payload).eq('ID', form.value.ID))
   }
+
   saving.value = false
   if (error) { saveErr.value = error.message; return }
   modalInstance?.hide()
@@ -99,12 +167,18 @@ async function submit() {
 
 async function deleteRow(id) {
   if (!confirm('確定刪除此費用記錄？')) return
+  // 先取得 storage path 再刪除記錄
+  const row = rows.value.find(r => r.ID === id)
   const { error } = await db.from('C_FIN_MonthlyExpenseList').delete().eq('ID', id)
   if (error) { errMsg.value = error.message; return }
+  // 刪除 storage 上的收據（fire-and-forget）
+  if (row?.ReceiptStoragePath) {
+    supabase.storage.from('receipts').remove([row.ReceiptStoragePath]).catch(() => {})
+  }
   await load()
 }
 
-const fmt = (n) => Number(n ?? 0).toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+const fmt    = (n) => Number(n ?? 0).toLocaleString('zh-TW', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
 const fmtDec = (n) => Number(n ?? 0).toLocaleString('zh-TW', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 function catName(row) {
@@ -160,12 +234,13 @@ function catName(row) {
                 <th>費用說明</th>
                 <th class="text-end">金額（NT$）</th>
                 <th>備註</th>
+                <th class="text-center">收據</th>
                 <th class="text-end">操作</th>
               </tr>
             </thead>
             <tbody>
               <tr v-if="!rows.length">
-                <td colspan="5" class="text-center text-muted py-5">
+                <td colspan="6" class="text-center text-muted py-5">
                   {{ selYear }}年{{ selMonth }}月 尚無費用記錄
                 </td>
               </tr>
@@ -174,6 +249,19 @@ function catName(row) {
                 <td class="fw-medium">{{ r.Name }}</td>
                 <td class="text-end font-monospace">{{ fmtDec(r.Amount) }}</td>
                 <td class="text-muted small">{{ r.Note || '—' }}</td>
+                <td class="text-center">
+                  <a
+                    v-if="r.ReceiptStoragePath"
+                    :href="getReceiptPublicUrl(r.ReceiptStoragePath)"
+                    target="_blank" rel="noopener"
+                    class="text-decoration-none"
+                    title="查看收據"
+                  >
+                    <span v-if="isImagePath(r.ReceiptStoragePath)">🖼️</span>
+                    <span v-else>📄</span>
+                  </a>
+                  <span v-else class="text-muted">—</span>
+                </td>
                 <td class="text-end">
                   <div class="btn-group btn-group-sm">
                     <button class="btn btn-outline-primary" @click="openEdit(r)">✎</button>
@@ -186,7 +274,7 @@ function catName(row) {
               <tr>
                 <td colspan="2" class="fw-semibold text-end">合計</td>
                 <td class="text-end fw-bold font-monospace">{{ fmtDec(total) }}</td>
-                <td colspan="2"></td>
+                <td colspan="3"></td>
               </tr>
             </tfoot>
           </table>
@@ -230,6 +318,47 @@ function catName(row) {
               <label class="form-label">備註</label>
               <input v-model="form.Note" type="text" class="form-control" placeholder="選填" :disabled="saving" />
             </div>
+
+            <!-- 收據 / 憑證 -->
+            <div class="mb-1">
+              <label class="form-label mb-1">收據 / 憑證（選填）</label>
+
+              <!-- 已有收據 & 未選新檔案 -->
+              <div v-if="form.ReceiptStoragePath && !receiptFile" class="d-flex align-items-center gap-2 mb-2">
+                <a :href="getReceiptPublicUrl(form.ReceiptStoragePath)" target="_blank" rel="noopener" class="receipt-thumb-link">
+                  <img
+                    v-if="isImagePath(form.ReceiptStoragePath)"
+                    :src="getReceiptPublicUrl(form.ReceiptStoragePath)"
+                    class="receipt-thumb"
+                    alt="收據預覽"
+                  />
+                  <span v-else class="btn btn-sm btn-outline-secondary">📄 查看收據</span>
+                </a>
+                <button class="btn btn-sm btn-outline-danger" @click="removeReceipt" :disabled="saving">移除收據</button>
+              </div>
+
+              <!-- 新選檔案預覽 -->
+              <div v-if="receiptFile" class="d-flex align-items-center gap-2 mb-2">
+                <img
+                  v-if="receiptFile.type.startsWith('image/')"
+                  :src="receiptPreviewUrl"
+                  class="receipt-thumb"
+                  alt="新收據預覽"
+                />
+                <span v-else class="text-muted small">📄 {{ receiptFile.name }}</span>
+                <button class="btn btn-sm btn-outline-secondary" @click="cancelNewFile" :disabled="saving">取消</button>
+              </div>
+
+              <input
+                ref="receiptFileInput"
+                type="file"
+                class="form-control form-control-sm"
+                accept="image/jpeg,image/png,image/webp,.pdf"
+                @change="onReceiptFileChange"
+                :disabled="saving"
+              />
+              <div class="form-text">支援 JPG / PNG / WebP / PDF，選填</div>
+            </div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-primary" @click="submit" :disabled="saving">
@@ -242,3 +371,17 @@ function catName(row) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.receipt-thumb {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+.receipt-thumb-link {
+  display: inline-block;
+  line-height: 0;
+}
+</style>

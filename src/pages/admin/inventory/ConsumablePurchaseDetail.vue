@@ -3,6 +3,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal } from 'bootstrap'
 import { db } from '@/lib/db'
+import { supabase } from '@/lib/supabase'
 
 const props  = defineProps({ id: String })
 const router = useRouter()
@@ -25,6 +26,65 @@ const form    = ref({ ID: null, ConsumableID: '', Qty: 1, UnitCost: 0 })
 
 const isDraft = computed(() => order.value?.Status === 'draft')
 const total   = computed(() => items.value.reduce((s, i) => s + Number(i.SubTotal ?? 0), 0))
+
+// ── 收據上傳 ───────────────────────────────────────────
+const receiptFile       = ref(null)
+const receiptPreviewUrl = ref('')
+const receiptUploading  = ref(false)
+const receiptError      = ref('')
+const receiptFileInput  = ref(null)
+
+function getReceiptPublicUrl(path) {
+  if (!path) return null
+  const { data } = supabase.storage.from('receipts').getPublicUrl(path)
+  return data?.publicUrl ?? null
+}
+function isImagePath(path) {
+  return /\.(jpe?g|png|gif|webp|heic|avif)$/i.test(path ?? '')
+}
+function onReceiptFileChange(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  receiptFile.value = file
+  receiptPreviewUrl.value = URL.createObjectURL(file)
+}
+async function uploadReceipt() {
+  if (!receiptFile.value) return
+  receiptUploading.value = true
+  receiptError.value = ''
+  try {
+    const file = receiptFile.value
+    const ext  = file.name.split('.').pop().toLowerCase()
+    const path = `consumable-purchases/${props.id}/${Date.now()}.${ext}`
+    const { error: upErr } = await supabase.storage.from('receipts').upload(path, file, { upsert: true })
+    if (upErr) throw upErr
+    const { error: dbErr } = await db.from('C_INV_ConsumablePurchaseList')
+      .update({ ReceiptStoragePath: path, UpdatedDate: new Date().toISOString() })
+      .eq('ID', props.id)
+    if (dbErr) throw dbErr
+    order.value.ReceiptStoragePath = path
+    receiptPreviewUrl.value = getReceiptPublicUrl(path) ?? ''
+    receiptFile.value = null
+    if (receiptFileInput.value) receiptFileInput.value.value = ''
+  } catch (e) {
+    receiptError.value = '上傳失敗：' + (e?.message ?? String(e))
+  } finally {
+    receiptUploading.value = false
+  }
+}
+async function removeReceipt() {
+  if (!confirm('確定移除此收據？')) return
+  const oldPath = order.value.ReceiptStoragePath
+  const { error } = await db.from('C_INV_ConsumablePurchaseList')
+    .update({ ReceiptStoragePath: null, UpdatedDate: new Date().toISOString() })
+    .eq('ID', props.id)
+  if (error) { errMsg.value = error.message; return }
+  if (oldPath) supabase.storage.from('receipts').remove([oldPath]).catch(() => {})
+  order.value.ReceiptStoragePath = null
+  receiptPreviewUrl.value = ''
+  receiptFile.value = null
+  if (receiptFileInput.value) receiptFileInput.value.value = ''
+}
 
 onMounted(async () => {
   await nextTick()
@@ -49,6 +109,7 @@ async function load() {
   order.value       = o
   items.value       = its ?? []
   consumables.value = cs ?? []
+  receiptPreviewUrl.value = getReceiptPublicUrl(o?.ReceiptStoragePath) ?? ''
   loading.value = false
 }
 
@@ -190,6 +251,39 @@ const STATUS_CLASS = { draft: 'badge bg-warning text-dark', confirmed: 'badge bg
     </div>
 
     <template v-else-if="order">
+
+      <!-- 收據 / 憑證 -->
+      <div class="card border-0 shadow-sm mb-4">
+        <div class="card-header bg-white fw-medium border-bottom">收據 / 憑證（選填）</div>
+        <div class="card-body">
+          <div class="d-flex align-items-start gap-3 flex-wrap">
+            <!-- 已儲存收據 & 未選新檔案 -->
+            <div v-if="order.ReceiptStoragePath && !receiptFile" class="receipt-thumb-wrap text-center">
+              <a :href="receiptPreviewUrl" target="_blank" rel="noopener">
+                <img v-if="isImagePath(order.ReceiptStoragePath)" :src="receiptPreviewUrl" class="receipt-thumb" alt="收據" />
+                <span v-else class="btn btn-sm btn-outline-secondary">📄 查看收據</span>
+              </a>
+              <button class="btn btn-xs btn-outline-danger mt-1 d-block w-100" @click="removeReceipt">移除</button>
+            </div>
+            <!-- 新選檔案預覽 -->
+            <div v-if="receiptFile" class="receipt-thumb-wrap text-center">
+              <img v-if="receiptFile.type.startsWith('image/')" :src="receiptPreviewUrl" class="receipt-thumb" alt="預覽" />
+              <span v-else class="text-muted small d-block py-2">📄 {{ receiptFile.name }}</span>
+              <button class="btn btn-xs btn-success mt-1 d-block w-100" @click="uploadReceipt" :disabled="receiptUploading">
+                <span v-if="receiptUploading" class="spinner-border spinner-border-sm me-1"></span>上傳
+              </button>
+              <button class="btn btn-xs btn-outline-secondary mt-1 d-block w-100" @click="receiptFile=null; receiptPreviewUrl=getReceiptPublicUrl(order.ReceiptStoragePath)??''" :disabled="receiptUploading">取消</button>
+            </div>
+            <!-- 選檔按鈕 -->
+            <div>
+              <input ref="receiptFileInput" type="file" class="form-control form-control-sm" accept="image/jpeg,image/png,image/webp,.pdf" @change="onReceiptFileChange" style="max-width:240px" />
+              <div class="form-text">JPG / PNG / WebP / PDF，選填</div>
+              <div v-if="receiptError" class="text-danger small mt-1">{{ receiptError }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 進貨明細 -->
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white d-flex align-items-center justify-content-between">
@@ -293,4 +387,14 @@ const STATUS_CLASS = { draft: 'badge bg-warning text-dark', confirmed: 'badge bg
 
 <style scoped>
 .btn-xs { padding: 2px 6px; font-size: 11px; }
+
+.receipt-thumb-wrap { min-width: 72px; }
+.receipt-thumb {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  display: block;
+}
 </style>
