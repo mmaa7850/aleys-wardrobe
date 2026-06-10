@@ -22,8 +22,8 @@
 | `add_purchase_system.sql` | 新增 `S_INV_SupplierList` / `S_INV_CostTypeList` / `C_INV_PurchaseOrderList` / `C_INV_PurchaseOrderItemList` / `C_INV_PurchaseOrderCostList` / `C_ORD_OrderExtraCostList`；`C_PRD_ProductVariantList` 新增 `CostPrice`；`C_ORD_OrderItemList` 新增 `UnitCost`；`C_ORD_OrderList` 新增 `ActualShippingCost` | ✅ 已執行 |
 | `add_consumables_system.sql` | 新增 `C_INV_ConsumableList` / `C_INV_ConsumablePurchaseList` / `C_INV_ConsumablePurchaseItemList` / `C_ORD_OrderConsumableList` / `S_FIN_ExpenseCategoryList` / `C_FIN_MonthlyExpenseList`；預設 6 筆費用分類 | ✅ 已執行 |
 | `add_analytics_tracking.sql` | 新增 `C_ANL_ProductClickLog`（商品點擊追蹤）；RLS：anon/authenticated 可 INSERT，僅 staff 可 SELECT | ✅ 已執行 |
-| `add_receipt_storage.sql` | `C_FIN_MonthlyExpenseList` / `C_INV_PurchaseOrderList` / `C_INV_ConsumablePurchaseList` 各新增 `ReceiptStoragePath VARCHAR(500)` | ⚠️ 待執行 |
-| `add_expense_date.sql` | `C_FIN_MonthlyExpenseList` 的 `Year` + `Month` 兩欄改為 `ExpenseDate DATE`（舊資料 backfill 為當月 1 日）；頁面名稱改為「費用記錄」 | ⚠️ 待執行 |
+| `add_receipt_storage.sql` | `C_FIN_MonthlyExpenseList` / `C_INV_PurchaseOrderList` / `C_INV_ConsumablePurchaseList` 各新增 `ReceiptStoragePath VARCHAR(500)` | ✅ 已執行 |
+| `add_expense_date.sql` | `C_FIN_MonthlyExpenseList` 的 `Year` + `Month` 兩欄改為 `ExpenseDate DATE`（舊資料 backfill 為當月 1 日）；頁面名稱改為「費用記錄」 | ✅ 已執行 |
 
 > ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
 > - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）
