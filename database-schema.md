@@ -846,7 +846,7 @@ WITH CHECK (
 ### S_FIN_ExpenseCategoryList
 | Policy | Role | CMD | 條件 |
 |--------|------|-----|------|
-| expense_cat_staff_read | authenticated | SELECT | true（所有登入者可讀，月度費用頁面下拉需要）|
+| expense_cat_staff_read | authenticated | SELECT | true（所有登入者可讀，費用記錄頁面下拉需要）|
 | expense_cat_admin_write | authenticated | ALL | is_admin()（僅超管可新增/編輯分類）|
 
 ### C_FIN_MonthlyExpenseList

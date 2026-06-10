@@ -66,8 +66,8 @@
 | 附加成本類型 | `/admin/inventory/setcosttypes` | CanManageProducts | 進貨附加成本項目設定（大陸段物流費/過境運費/關稅/報關費等，可自訂）；排序/啟用停用 |
 | 進貨單列表 | `/admin/inventory/purchases` | CanManageProducts | 進貨單建立與管理；狀態篩選（草稿/已確認）；點入詳情頁 |
 | 進貨單詳情 | `/admin/inventory/purchases/:id` | CanManageProducts | 進貨單基本資訊（供應商/日期/備注）；進貨明細（商品 card 選擇 + 規格批次填入）；附加成本（運費/關稅等多筆）；confirm 後加權平均成本計算 + 庫存更新；**收據/憑證附件上傳**（即時儲存至 `receipts` bucket，支援圖片預覽與 PDF 連結）|
-| 費用分類設定 | `/admin/finance/expense-categories` | CanManageSettings | 管理月度費用分類（租金/水電費/設備/文具耗材/人事費用/其他）；排序/啟用停用 |
-| 月度費用 | `/admin/finance/monthly-expenses` | CanManageSettings | 按年月記錄固定與非固定營運費用（選分類 + 說明 + 金額）；月合計即時顯示；**支援選填收據/憑證上傳**（JPG/PNG/PDF）；表格顯示 🖼️/📄 圖示，可點擊查看原檔 |
+| 費用分類設定 | `/admin/finance/expense-categories` | CanManageSettings | 管理費用記錄分類（租金/水電費/設備/文具耗材/人事費用/其他）；排序/啟用停用 |
+| 費用記錄 | `/admin/finance/monthly-expenses` | CanManageSettings | 記錄固定與非固定營運費用；每筆記錄到**日期**（`ExpenseDate`）；以年/月篩選顯示；日期欄於列表中顯示；月合計即時顯示；**支援選填收據/憑證上傳**（JPG/PNG/PDF）；表格顯示 🖼️/📄 圖示，可點擊查看原檔 |
 | 付款方式設定 | `/admin/settings/setpaymethods` | CanManageSettings | 管理付款方式（`S_PAY_PayMethodList`） |
 | 配送方式設定 | `/admin/settings/setshippingmethods` | CanManageSettings | 管理配送方式（名稱、`MethodCode`、`Fee`、啟用）；`MethodCode` 決定結帳流程（`cvscom` / `home`） |
 | 系統設定分類 | `/admin/settings/setconfigcategories` | CanManageSettings | 管理設定分類（`S_SYS_ConfigCategoryList`） |
@@ -170,7 +170,7 @@
 
 ### 財務
 - `S_FIN_ExpenseCategoryList` — 費用分類設定（Name/Description/SortOrder/IsActive）
-- `C_FIN_MonthlyExpenseList` — 月度費用記錄（Year/Month/CategoryID/Name/Amount）
+- `C_FIN_MonthlyExpenseList` — 費用記錄（ExpenseDate/CategoryID/Name/Amount/ReceiptStoragePath）
 
 ### 會員等級
 - `S_MBR_MemberLevelList` — 會員等級設定
