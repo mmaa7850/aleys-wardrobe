@@ -29,7 +29,7 @@ export default {
       consumablePurchases: "Consumable Purchases",
       finance: "Finance",
       expenseCategories: "Expense Categories",
-      monthlyExpenses: "Monthly Expenses",
+      monthlyExpenses: "Expense Records",
       reportProfit: "Profit Report",
       reportStoreProfit: "Store Net Profit",
       reportTraffic: "Traffic Sources",

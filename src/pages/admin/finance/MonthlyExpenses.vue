@@ -26,12 +26,12 @@ let modalInstance = null
 const mode    = ref('create')
 const saving  = ref(false)
 const saveErr = ref('')
-const form    = ref({ ID: null, CategoryID: '', Name: '', Amount: 0, Note: '', ReceiptStoragePath: null })
+const form    = ref({ ID: null, CategoryID: '', Name: '', Amount: 0, Note: '', ExpenseDate: '', ReceiptStoragePath: null })
 
 // ── 收據 ──────────────────────────────────────────────────────
-const receiptFile       = ref(null)       // File | null（新選取的檔案）
-const receiptPreviewUrl = ref('')         // 目前顯示的預覽 URL
-const receiptFileInput  = ref(null)       // <input type="file"> ref
+const receiptFile       = ref(null)
+const receiptPreviewUrl = ref('')
+const receiptFileInput  = ref(null)
 
 function getReceiptPublicUrl(path) {
   if (!path) return null
@@ -60,7 +60,6 @@ function removeReceipt() {
 function cancelNewFile() {
   receiptFile.value = null
   if (receiptFileInput.value) receiptFileInput.value.value = ''
-  // 還原為目前已儲存的收據預覽
   receiptPreviewUrl.value = getReceiptPublicUrl(form.value.ReceiptStoragePath) ?? ''
 }
 
@@ -83,15 +82,32 @@ async function loadCategories() {
 async function load() {
   loading.value = true
   errMsg.value  = ''
+  const y       = selYear.value
+  const m       = String(selMonth.value).padStart(2, '0')
+  const lastDay = new Date(y, selMonth.value, 0).getDate()
+  const dateFrom = `${y}-${m}-01`
+  const dateTo   = `${y}-${m}-${String(lastDay).padStart(2, '0')}`
   const { data, error } = await db
     .from('C_FIN_MonthlyExpenseList')
-    .select('ID, "CategoryID", "Name", "Amount", "Note", "ReceiptStoragePath", S_FIN_ExpenseCategoryList("Name")')
-    .eq('Year',  selYear.value)
-    .eq('Month', selMonth.value)
+    .select('ID, "CategoryID", "Name", "Amount", "Note", "ExpenseDate", "ReceiptStoragePath", S_FIN_ExpenseCategoryList("Name")')
+    .gte('ExpenseDate', dateFrom)
+    .lte('ExpenseDate', dateTo)
+    .order('ExpenseDate')
     .order('ID')
   if (error) errMsg.value = error.message
   else rows.value = data ?? []
   loading.value = false
+}
+
+// 預設日期：今天（若超出選取月份則用月份第一天）
+function defaultDate() {
+  const y = selYear.value
+  const m = selMonth.value
+  const today = new Date()
+  if (today.getFullYear() === y && today.getMonth() + 1 === m) {
+    return today.toISOString().slice(0, 10)
+  }
+  return `${y}-${String(m).padStart(2, '0')}-01`
 }
 
 function openCreate() {
@@ -100,7 +116,7 @@ function openCreate() {
   receiptFile.value = null
   receiptPreviewUrl.value = ''
   if (receiptFileInput.value) receiptFileInput.value.value = ''
-  form.value = { ID: null, CategoryID: categories.value[0]?.ID ?? '', Name: '', Amount: 0, Note: '', ReceiptStoragePath: null }
+  form.value = { ID: null, CategoryID: categories.value[0]?.ID ?? '', Name: '', Amount: 0, Note: '', ExpenseDate: defaultDate(), ReceiptStoragePath: null }
   modalInstance?.show()
 }
 
@@ -115,6 +131,7 @@ function openEdit(row) {
     Name: row.Name ?? '',
     Amount: Number(row.Amount ?? 0),
     Note: row.Note ?? '',
+    ExpenseDate: row.ExpenseDate ?? defaultDate(),
     ReceiptStoragePath: row.ReceiptStoragePath ?? null,
   }
   receiptPreviewUrl.value = getReceiptPublicUrl(row.ReceiptStoragePath) ?? ''
@@ -125,6 +142,7 @@ async function submit() {
   if (!form.value.CategoryID) { saveErr.value = '請選擇費用分類'; return }
   if (!form.value.Name?.trim()) { saveErr.value = '請填寫費用說明'; return }
   if (Number(form.value.Amount) <= 0) { saveErr.value = '金額必須大於 0'; return }
+  if (!form.value.ExpenseDate) { saveErr.value = '請選擇費用日期'; return }
 
   saving.value = true
   saveErr.value = ''
@@ -132,9 +150,10 @@ async function submit() {
   // ── 上傳新收據 ─────────────────────────────────────────
   let receiptPath = form.value.ReceiptStoragePath
   if (receiptFile.value) {
-    const file = receiptFile.value
-    const ext  = file.name.split('.').pop().toLowerCase()
-    const path = `expenses/${selYear.value}/${selMonth.value}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    const file  = receiptFile.value
+    const ext   = file.name.split('.').pop().toLowerCase()
+    const [fy, fm] = form.value.ExpenseDate.split('-')
+    const path  = `expenses/${fy}/${fm}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
     const { error: upErr } = await supabase.storage.from('receipts').upload(path, file)
     if (upErr) { saveErr.value = '收據上傳失敗：' + upErr.message; saving.value = false; return }
     receiptPath = path
@@ -142,14 +161,13 @@ async function submit() {
 
   const now2 = new Date().toISOString()
   const payload = {
-    CategoryID:          Number(form.value.CategoryID),
-    Name:                form.value.Name.trim(),
-    Amount:              parseFloat(Number(form.value.Amount).toFixed(2)),
-    Note:                form.value.Note?.trim() || null,
-    Year:                selYear.value,
-    Month:               selMonth.value,
-    ReceiptStoragePath:  receiptPath ?? null,
-    UpdatedDate:         now2,
+    CategoryID:         Number(form.value.CategoryID),
+    Name:               form.value.Name.trim(),
+    Amount:             parseFloat(Number(form.value.Amount).toFixed(2)),
+    Note:               form.value.Note?.trim() || null,
+    ExpenseDate:        form.value.ExpenseDate,
+    ReceiptStoragePath: receiptPath ?? null,
+    UpdatedDate:        now2,
   }
 
   let error
@@ -167,11 +185,9 @@ async function submit() {
 
 async function deleteRow(id) {
   if (!confirm('確定刪除此費用記錄？')) return
-  // 先取得 storage path 再刪除記錄
   const row = rows.value.find(r => r.ID === id)
   const { error } = await db.from('C_FIN_MonthlyExpenseList').delete().eq('ID', id)
   if (error) { errMsg.value = error.message; return }
-  // 刪除 storage 上的收據（fire-and-forget）
   if (row?.ReceiptStoragePath) {
     supabase.storage.from('receipts').remove([row.ReceiptStoragePath]).catch(() => {})
   }
@@ -184,14 +200,19 @@ const fmtDec = (n) => Number(n ?? 0).toLocaleString('zh-TW', { minimumFractionDi
 function catName(row) {
   return row.S_FIN_ExpenseCategoryList?.Name ?? '—'
 }
+
+function fmtDate(d) {
+  if (!d) return '—'
+  return d.slice(0, 10)
+}
 </script>
 
 <template>
   <div class="container-fluid py-4">
     <div class="d-flex align-items-center justify-content-between mb-3">
       <div>
-        <h4 class="mb-0 fw-semibold">月度費用</h4>
-        <small class="text-muted">記錄每月固定與非固定的營運費用（租金、水電、設備…）</small>
+        <h4 class="mb-0 fw-semibold">費用記錄</h4>
+        <small class="text-muted">記錄每筆固定與非固定的營運費用（租金、水電、設備…）</small>
       </div>
       <button class="btn btn-primary btn-sm" @click="openCreate">＋ 新增費用</button>
     </div>
@@ -230,6 +251,7 @@ function catName(row) {
           <table class="table table-hover align-middle mb-0" style="font-size:13px">
             <thead class="table-light">
               <tr>
+                <th>日期</th>
                 <th>分類</th>
                 <th>費用說明</th>
                 <th class="text-end">金額（NT$）</th>
@@ -240,11 +262,12 @@ function catName(row) {
             </thead>
             <tbody>
               <tr v-if="!rows.length">
-                <td colspan="6" class="text-center text-muted py-5">
+                <td colspan="7" class="text-center text-muted py-5">
                   {{ selYear }}年{{ selMonth }}月 尚無費用記錄
                 </td>
               </tr>
               <tr v-for="r in rows" :key="r.ID">
+                <td class="text-nowrap font-monospace small">{{ fmtDate(r.ExpenseDate) }}</td>
                 <td><span class="badge bg-info text-dark">{{ catName(r) }}</span></td>
                 <td class="fw-medium">{{ r.Name }}</td>
                 <td class="text-end font-monospace">{{ fmtDec(r.Amount) }}</td>
@@ -272,7 +295,7 @@ function catName(row) {
             </tbody>
             <tfoot v-if="rows.length" class="table-light">
               <tr>
-                <td colspan="2" class="fw-semibold text-end">合計</td>
+                <td colspan="3" class="fw-semibold text-end">合計</td>
                 <td class="text-end fw-bold font-monospace">{{ fmtDec(total) }}</td>
                 <td colspan="3"></td>
               </tr>
@@ -293,12 +316,10 @@ function catName(row) {
           <div class="modal-body">
             <div v-if="saveErr" class="alert alert-danger py-2">{{ saveErr }}</div>
 
-            <div class="row g-2 mb-3">
-              <div class="col-12">
-                <div class="text-muted small mb-1">紀錄月份：{{ selYear }}年{{ selMonth }}月</div>
-              </div>
+            <div class="mb-3">
+              <label class="form-label">費用日期 *</label>
+              <input v-model="form.ExpenseDate" type="date" class="form-control" :disabled="saving" />
             </div>
-
             <div class="mb-3">
               <label class="form-label">費用分類 *</label>
               <select v-model.number="form.CategoryID" class="form-select" :disabled="saving">

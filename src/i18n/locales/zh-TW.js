@@ -28,7 +28,7 @@ export default {
       suppliers: "供應商",
       costTypes: "成本項目",
       finance: "財務",
-      monthlyExpenses: "月度費用",
+      monthlyExpenses: "費用記錄",
       expenseCategories: "費用分類",
       reportProfit: "毛利報表",
       reportStoreProfit: "賣場淨利報表",

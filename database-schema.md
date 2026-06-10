@@ -23,6 +23,7 @@
 | `add_consumables_system.sql` | 新增 `C_INV_ConsumableList` / `C_INV_ConsumablePurchaseList` / `C_INV_ConsumablePurchaseItemList` / `C_ORD_OrderConsumableList` / `S_FIN_ExpenseCategoryList` / `C_FIN_MonthlyExpenseList`；預設 6 筆費用分類 | ✅ 已執行 |
 | `add_analytics_tracking.sql` | 新增 `C_ANL_ProductClickLog`（商品點擊追蹤）；RLS：anon/authenticated 可 INSERT，僅 staff 可 SELECT | ✅ 已執行 |
 | `add_receipt_storage.sql` | `C_FIN_MonthlyExpenseList` / `C_INV_PurchaseOrderList` / `C_INV_ConsumablePurchaseList` 各新增 `ReceiptStoragePath VARCHAR(500)` | ⚠️ 待執行 |
+| `add_expense_date.sql` | `C_FIN_MonthlyExpenseList` 的 `Year` + `Month` 兩欄改為 `ExpenseDate DATE`（舊資料 backfill 為當月 1 日）；頁面名稱改為「費用記錄」 | ⚠️ 待執行 |
 
 > ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
 > - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）
@@ -453,12 +454,11 @@ WITH CHECK (
 > 預設分類：租金（1）/ 水電費（2）/ 設備（3）/ 文具耗材（4）/ 人事費用（5）/ 其他（6）
 
 ### C_FIN_MonthlyExpenseList
-月度費用記錄；RLS `is_staff()` ALL
+費用記錄主表（原名月度費用）；RLS `is_staff()` ALL
 | 欄位 | 型別 | Nullable | Default | 說明 |
 |------|------|----------|---------|------|
 | ID | bigserial | NO | — | |
-| Year | integer | NO | — | 年份，如 2026 |
-| Month | integer | NO | — | 月份 1～12（CHECK 約束）|
+| ExpenseDate | date | NO | — | 費用實際日期（取代原本 Year + Month 欄位）|
 | CategoryID | bigint | YES | — | FK → S_FIN_ExpenseCategoryList |
 | Name | varchar(100) | NO | — | 費用說明，如「6月房租」|
 | Amount | numeric(10,2) | NO | 0 | |

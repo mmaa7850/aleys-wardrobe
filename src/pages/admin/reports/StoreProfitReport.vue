@@ -66,13 +66,13 @@ async function load() {
       } catch { /* 忽略 */ }
     }
 
-    // ④ 月度費用
+    // ④ 費用記錄
     const { data: expData, error: ee } = await db
       .from('C_FIN_MonthlyExpenseList')
-      .select('ID, "Name", "Amount", S_FIN_ExpenseCategoryList("Name")')
-      .eq('Year',  y)
-      .eq('Month', selMonth.value)
-      .order('ID')
+      .select('ID, "Name", "Amount", "ExpenseDate", S_FIN_ExpenseCategoryList("Name")')
+      .gte('ExpenseDate', `${y}-${m}-01`)
+      .lte('ExpenseDate', `${y}-${m}-${String(lastDay).padStart(2, '0')}`)
+      .order('ExpenseDate')
     if (ee) throw ee
 
     // 組合訂單資料
@@ -241,7 +241,7 @@ const clr = (n) => n >= 0 ? 'text-success' : 'text-danger'
         </div>
       </div>
 
-      <!-- ③ 月度費用 -->
+      <!-- ③ 費用記錄 -->
       <div class="card border-0 shadow-sm mb-4">
         <div class="card-header bg-white fw-medium border-bottom d-flex justify-content-between align-items-center">
           <span>第二層：月度固定費用</span>
@@ -249,7 +249,7 @@ const clr = (n) => n >= 0 ? 'text-success' : 'text-danger'
         </div>
         <div class="card-body p-0">
           <div v-if="!expenses.length" class="text-center text-muted py-4">
-            {{ selYear }}年{{ selMonth }}月 尚無月度費用記錄
+            {{ selYear }}年{{ selMonth }}月 尚無費用記錄記錄
             <div class="mt-1">
               <RouterLink to="/admin/finance/monthly-expenses" class="btn btn-sm btn-outline-primary">前往新增</RouterLink>
             </div>
@@ -291,7 +291,7 @@ const clr = (n) => n >= 0 ? 'text-success' : 'text-danger'
             </div>
             <div class="text-muted fs-5">－</div>
             <div>
-              <span class="text-muted">月度費用</span>
+              <span class="text-muted">費用記錄</span>
               <span class="fw-bold ms-2 text-danger">{{ fmtMoney(totalMonthlyExp) }}</span>
             </div>
             <div class="text-muted fs-5">＝</div>
