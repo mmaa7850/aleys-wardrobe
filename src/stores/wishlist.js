@@ -23,7 +23,7 @@ export const useWishlistStore = defineStore('wishlist', {
         .eq('MemberID', memberId)
 
       if (error) {
-        console.error('[wishlist] fetch error:', error)
+        if (import.meta.env.DEV) console.error('[wishlist] fetch error:', error)
         return
       }
 

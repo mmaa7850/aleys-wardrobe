@@ -125,7 +125,7 @@ export const useCartStore = defineStore('cart', {
 
         await this._loadItems()
       } catch (err) {
-        console.error('[cart] fetchCart error:', err)
+        if (import.meta.env.DEV) console.error('[cart] fetchCart error:', err)
       } finally {
         this.isLoading = false
       }

@@ -36,7 +36,7 @@ async function fetchPendingAtmTopups() {
     .eq('PaymentMethod', 'atm')
     .not('ATMBankCode', 'is', null)
     .order('CreatedDate', { ascending: false })
-  if (error) { console.error('[fetchPendingAtmTopups]', error.message); return }
+  if (error) { if (import.meta.env.DEV) console.error('[fetchPendingAtmTopups]', error.message); return }
   pendingAtmTopups.value = data ?? []
 }
 

@@ -46,7 +46,7 @@ const onResetPassword = async () => {
       router.push("/login");
     }, 1200);
   } catch (e) {
-    console.error("[Reset password error]", e);
+    if (import.meta.env.DEV) console.error("[Reset password error]", e);
     errorMsg.value = e?.message || "密碼更新失敗";
   } finally {
     isSubmitting.value = false;

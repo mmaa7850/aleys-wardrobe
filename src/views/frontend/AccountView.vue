@@ -66,7 +66,7 @@ async function fetchProfile() {
     .eq('UserID', auth.user.id)
     .maybeSingle()
 
-  if (fetchErr) console.error('[AccountView] fetch error:', fetchErr)
+  if (fetchErr && import.meta.env.DEV) console.error('[AccountView] fetch error:', fetchErr)
 
   profile.value       = data || {}
   form.value.Name     = data?.Name     || ''
@@ -292,7 +292,7 @@ onMounted(async () => {
             v-if="!lineUserID"
             :href="`https://line.me/R/ti/p/@563sjoch`"
             target="_blank"
-            rel="noopener"
+            rel="noopener noreferrer"
             class="ac-bind-btn"
           >
             加入好友綁定

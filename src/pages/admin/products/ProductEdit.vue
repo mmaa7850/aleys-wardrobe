@@ -38,8 +38,13 @@ const sizeSpecs = ref([]);
 // =============
 // Mode判斷
 // =============
-const routeId = computed(() => route.params.id);
-const isNew = computed(() => !routeId.value || String(routeId.value).toLowerCase() === "new");
+const routeId = computed(() => {
+  const raw = route.params.id;
+  if (!raw || String(raw).toLowerCase() === "new") return null;
+  const n = parseInt(raw, 10);
+  return isNaN(n) ? null : n;
+});
+const isNew = computed(() => !routeId.value);
 
 // =============
 // UI State
@@ -780,7 +785,7 @@ const deletePicture = async (pic) => {
         }
 
     } catch (err) {
-        console.error("[deletePicture]", err);
+        if (import.meta.env.DEV) console.error("[deletePicture]", err);
         picError.value = err?.message ?? String(err);
     } finally {
         picSaving.value = false;
@@ -1000,7 +1005,7 @@ const deleteProduct = async () => {
         router.push("/admin/products");
 
     } catch (err) {
-        console.error(err);
+        if (import.meta.env.DEV) console.error(err);
         errorMsg.value = err?.message ?? "刪除失敗";
     } finally {
         loading.value = false;

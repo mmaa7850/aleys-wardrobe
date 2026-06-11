@@ -57,7 +57,7 @@ async function selectMember(member) {
     walletUpdatedAt.value = data.updatedDate
     transactions.value    = data.transactions ?? []
   } catch (e) {
-    console.error('[WalletList] fetch error:', e)
+    if (import.meta.env.DEV) console.error('[WalletList] fetch error:', e)
   } finally {
     walletLoading.value = false
   }

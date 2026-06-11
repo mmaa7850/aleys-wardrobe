@@ -83,7 +83,7 @@ export const useAuthStore = defineStore("auth", {
         .maybeSingle();
 
       if (error) {
-        console.error("[loadAdminProfile] query failed:", error.message);
+        if (import.meta.env.DEV) console.error("[loadAdminProfile] query failed:", error.message);
         this.isAdmin = false;
         this.isActive = false;
         this.permissions = defaultPermissions();

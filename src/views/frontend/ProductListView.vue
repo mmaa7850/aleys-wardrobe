@@ -63,7 +63,7 @@ async function fetchProducts(reset = true) {
   const { data, error } = await query
 
   if (error) {
-    console.error('[ProductList] fetch error:', error)
+    if (import.meta.env.DEV) console.error('[ProductList] fetch error:', error)
     isLoading.value = false
     return
   }

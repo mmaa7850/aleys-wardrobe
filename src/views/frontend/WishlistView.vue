@@ -51,7 +51,7 @@ async function fetchWishlistProducts() {
     .eq('IsActive', true)
 
   if (error) {
-    console.error('[wishlist] fetchWishlistProducts error:', error)
+    if (import.meta.env.DEV) console.error('[wishlist] fetchWishlistProducts error:', error)
   } else {
     products.value = data || []
   }

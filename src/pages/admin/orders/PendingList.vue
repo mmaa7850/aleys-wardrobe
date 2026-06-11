@@ -208,7 +208,7 @@ async function sendLineNotify(row, tab) {
     if (!res.ok) throw new Error(await res.text())
     notifyStatus.value[k] = 'sent'
   } catch (e) {
-    console.error('[PendingList] LINE notify error:', e)
+    if (import.meta.env.DEV) console.error('[PendingList] LINE notify error:', e)
     notifyStatus.value[k] = 'failed'
   }
 }

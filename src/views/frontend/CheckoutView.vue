@@ -327,7 +327,7 @@ async function submitOrder() {
     paymentForm.value.submit()
 
   } catch (err) {
-    console.error('[checkout] submitOrder error:', err)
+    if (import.meta.env.DEV) console.error('[checkout] submitOrder error:', err)
     submitError.value = '訂單送出失敗，請稍後再試。'
     isSubmitting.value = false
   }

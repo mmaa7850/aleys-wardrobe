@@ -29,7 +29,8 @@ function switchMode(m) {
 function resolveRedirect() {
   if (auth.canEnterAdmin) return "/admin";
   const query = router.currentRoute.value.query.redirect;
-  return (typeof query === "string" && query) ? query : "/";
+  const isSafe = typeof query === "string" && query.startsWith("/") && !query.startsWith("//");
+  return isSafe ? query : "/";
 }
 
 const onLogin = async () => {
@@ -98,7 +99,8 @@ const onFbLogin = async () => {
   fbLoading.value = true;
   // localStorage 比 sessionStorage 更穩：OAuth 多次跳轉不會被清掉
   const redirectTarget = router.currentRoute.value.query.redirect;
-  if (typeof redirectTarget === "string" && redirectTarget) {
+  const isSafe = typeof redirectTarget === "string" && redirectTarget.startsWith("/") && !redirectTarget.startsWith("//");
+  if (isSafe) {
     localStorage.setItem("oauth_redirect", redirectTarget);
   }
   try {

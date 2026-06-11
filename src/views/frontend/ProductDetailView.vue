@@ -146,6 +146,9 @@ function getSizeName(id) {
 async function fetchData() {
   isLoading.value = true
 
+  const productId = parseInt(route.params.id, 10)
+  if (isNaN(productId)) { notFound.value = true; isLoading.value = false; return }
+
   const [{ data: prd, error: prdErr }, { data: clrs }, { data: szs }, { data: specs }] = await Promise.all([
     db.from('C_PRD_ProductList')
       .select(`
@@ -155,15 +158,14 @@ async function fetchData() {
         C_PRD_ProductPictureList(ID, StoragePath, AltText, IsMain, SortOrder, Type),
         C_PRD_ProductVariantList(ID, ColorID, SizeID, StockQty, IsActive)
       `)
-      .eq('ID', route.params.id)
+      .eq('ID', productId)
       .single(),
     db.from('S_PRD_ColorList').select('ID, Name'),
     db.from('S_PRD_SizeList').select('ID, Name').order('SortOrder'),
     db.from('C_PRD_ProductSizeSpecList')
       .select('SizeID, Bust, ClothLength, SleeveLength, ShoulderWidth, Waist, SkirtLength, Hip, Memo')
-      .eq('ProductID', route.params.id),
+      .eq('ProductID', productId),
   ])
-
 
   if (prdErr || !prd) { notFound.value = true; isLoading.value = false; return }
 
@@ -214,7 +216,7 @@ async function onAddToCart() {
     const sizeName  = sizes.value.find(s => s.ID === selectedSize.value)?.Name ?? ''
     trackAddToCart(product.value, qty.value, colorName, sizeName)
   } catch (err) {
-    console.error('[ProductDetail] addItem error:', err)
+    if (import.meta.env.DEV) console.error('[ProductDetail] addItem error:', err)
   } finally {
     addingToCart.value = false
   }

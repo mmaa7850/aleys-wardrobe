@@ -189,7 +189,7 @@ async function pollOnce() {
     if (recentOrders.value.length > 100) recentOrders.value.splice(100)
 
   } catch (e) {
-    console.error('[pollOnce]', e)
+    if (import.meta.env.DEV) console.error('[pollOnce]', e)
     monitorError.value = `輪詢失敗：${String(e)}`
   }
 }

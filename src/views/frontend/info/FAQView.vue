@@ -123,7 +123,7 @@ let globalIndex = 0
           <span class="faq-item__arrow">{{ openIndex === `${gi}-${ii}` ? '−' : '+' }}</span>
         </button>
         <div class="faq-item__a" v-show="openIndex === `${gi}-${ii}`">
-          <p v-html="item.a"></p>
+          <p>{{ item.a }}</p>
         </div>
       </div>
     </div>

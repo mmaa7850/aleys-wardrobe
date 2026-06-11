@@ -72,8 +72,11 @@ onMounted(async () => {
     .maybeSingle();
 
   // localStorage 跨 OAuth 跳轉仍保留，比 sessionStorage / URL param 都穩
-  const redirect = localStorage.getItem("oauth_redirect") || null;
+  const rawRedirect = localStorage.getItem("oauth_redirect") || null;
   localStorage.removeItem("oauth_redirect");
+  // 驗證只允許站內相對路徑，防止 open redirect
+  const isSafeRedirect = (url) => typeof url === "string" && url.startsWith("/") && !url.startsWith("//");
+  const redirect = isSafeRedirect(rawRedirect) ? rawRedirect : null;
 
   if (!data) {
     // 新用戶尚無 MemberList 記錄
