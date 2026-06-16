@@ -5,9 +5,8 @@ import { PDFDocument } from 'pdf-lib'
 const PTS_PER_MM = 2.8346
 
 // ── 尺寸設定 ─────────────────────────────────────────
-const widthMm   = ref(100)
-const heightMm  = ref(150)
-const topSkipMm = ref(0)   // 從頂部跳過幾 mm（用來跳過瀏覽器印入的時間戳記）
+const widthMm  = ref(100)
+const heightMm = ref(150)
 
 // ── 檔案 ─────────────────────────────────────────────
 const fileInput     = ref(null)
@@ -58,9 +57,8 @@ async function process() {
   downloadUrl.value = ''
 
   try {
-    const cropW  = widthMm.value   * PTS_PER_MM
-    const cropH  = heightMm.value  * PTS_PER_MM
-    const skipPt = topSkipMm.value * PTS_PER_MM  // 從頂部跳過的 points
+    const cropW = widthMm.value  * PTS_PER_MM
+    const cropH = heightMm.value * PTS_PER_MM
 
     const bytes  = await pdfFile.value.arrayBuffer()
     const srcDoc = await PDFDocument.load(bytes)
@@ -73,11 +71,11 @@ async function process() {
       const [embedded] = await newDoc.embedPages([srcPage])
       const newPage = newDoc.addPage([cropW, cropH])
 
-      // y = cropH - srcH：視覺頂端對齊
-      // + skipPt：再往下偏移，跳過頂部不需要的內容（如瀏覽器印入的日期列）
+      // 將來源頁面往下移，使來源的視覺頂端對齊新頁頂端
+      // PDF 座標原點在左下角，所以 y = cropH - srcH 可讓頂端對齊
       newPage.drawPage(embedded, {
         x: 0,
-        y: cropH - srcH + skipPt,
+        y: cropH - srcH,
         width:  srcW,
         height: srcH,
       })
@@ -101,7 +99,6 @@ function reset() {
   downloadUrl.value   = ''
   processErr.value    = ''
   fileErr.value       = ''
-  topSkipMm.value     = 0
   if (fileInput.value) fileInput.value.value = ''
 }
 </script>
@@ -139,15 +136,6 @@ function reset() {
             </div>
           </div>
         </div>
-
-          <div class="col-sm-5">
-            <label class="form-label">頂部跳過（mm）<span class="text-muted fw-normal">選填</span></label>
-            <div class="input-group input-group-sm">
-              <input v-model.number="topSkipMm" type="number" min="0" max="50" step="1" class="form-control" />
-              <span class="input-group-text">mm</span>
-            </div>
-            <div class="form-text">PDF 有日期時間列時填 5～10</div>
-          </div>
 
         <!-- 快速預設 -->
         <div class="mt-2 d-flex gap-2 flex-wrap">
@@ -226,9 +214,6 @@ function reset() {
           </div>
           <div class="text-muted small mt-2">
             共 {{ pageCount }} 頁，每頁 {{ widthMm }}×{{ heightMm }} mm
-          </div>
-          <div class="alert alert-warning py-2 small mt-2 mb-0">
-            ⚠️ 列印時請在瀏覽器的列印對話框中<strong>取消勾選「頁首和頁尾」</strong>，否則會出現日期時間等多餘文字。
           </div>
         </div>
       </div>
