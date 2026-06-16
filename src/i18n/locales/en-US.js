@@ -35,6 +35,8 @@ export default {
       reportTraffic: "Traffic Sources",
       reportCityStats: "City Stats",
       reportRefundRanking: "Refund Ranking",
+      tools: "Tools",
+      pdfCropper: "Shipping Label Crop",
       marketing: "Marketing",
       coupons: "Coupons",
       banners: "Banners",

@@ -35,6 +35,8 @@ export default {
       reportTraffic: "流量來源分析",
       reportCityStats: "縣市訂單統計",
       reportRefundRanking: "退款排行",
+      tools: "工具",
+      pdfCropper: "出貨單裁切",
       marketing: "行銷",
       coupons: "優惠券",
       banners: "Banner",
