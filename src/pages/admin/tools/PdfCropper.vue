@@ -8,47 +8,35 @@ const PTS_PER_MM = 2.8346
 const widthMm  = ref(100)
 const heightMm = ref(150)
 
-// ── PDF 來源（URL 載入）───────────────────────────────
-const pdfUrl       = ref('')
-const pdfBytes     = ref(null)   // ArrayBuffer
-const pageCount    = ref(0)
+// ── 檔案 ─────────────────────────────────────────────
+const fileInput     = ref(null)
+const pdfFile       = ref(null)
+const pageCount     = ref(0)
 const srcPageSizeMm = ref(null)
-const loading      = ref(false)
-const loadErr      = ref('')
+const fileErr       = ref('')
 
-async function loadFromUrl() {
-  const url = pdfUrl.value.trim()
-  if (!url) return
-  loading.value   = true
-  loadErr.value   = ''
-  pdfBytes.value  = null
+async function onFileChange(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  fileErr.value     = ''
   downloadUrl.value = ''
-  processErr.value  = ''
-  pageCount.value   = 0
-  srcPageSizeMm.value = null
 
   try {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const buf = await res.arrayBuffer()
-    const doc = await PDFDocument.load(buf)
-    const page = doc.getPage(0)
+    const bytes = await file.arrayBuffer()
+    const doc   = await PDFDocument.load(bytes)
+    const page  = doc.getPage(0)
     const { width, height } = page.getSize()
     srcPageSizeMm.value = {
       w: (width  / PTS_PER_MM).toFixed(1),
       h: (height / PTS_PER_MM).toFixed(1),
     }
-    pageCount.value  = doc.getPageCount()
-    pdfBytes.value   = buf
-  } catch (e) {
-    if (e?.message?.includes('Failed to fetch') || e?.name === 'TypeError') {
-      loadErr.value = 'CORS 限制：無法從瀏覽器直接存取此網址。請改用下載後上傳的方式，或確認 PDF 來自允許跨域存取的網址。'
-    } else {
-      loadErr.value = `載入失敗：${e?.message || String(e)}`
-    }
-    pdfBytes.value = null
-  } finally {
-    loading.value = false
+    pageCount.value = doc.getPageCount()
+    pdfFile.value   = file
+  } catch {
+    fileErr.value = '無法讀取 PDF，請確認檔案格式正確'
+    pdfFile.value = null
+    pageCount.value = 0
+    srcPageSizeMm.value = null
   }
 }
 
@@ -58,13 +46,12 @@ const downloadUrl = ref('')
 const processErr  = ref('')
 
 const outputFileName = computed(() => {
-  const raw = pdfUrl.value.trim().split('/').pop()?.split('?')[0] || 'output'
-  const base = raw.replace(/\.pdf$/i, '') || 'output'
-  return `${base}_${widthMm.value}x${heightMm.value}mm.pdf`
+  if (!pdfFile.value) return ''
+  return pdfFile.value.name.replace(/\.pdf$/i, '') + `_${widthMm.value}x${heightMm.value}mm.pdf`
 })
 
 async function process() {
-  if (!pdfBytes.value) return
+  if (!pdfFile.value) return
   processing.value  = true
   processErr.value  = ''
   downloadUrl.value = ''
@@ -73,7 +60,8 @@ async function process() {
     const cropW = widthMm.value  * PTS_PER_MM
     const cropH = heightMm.value * PTS_PER_MM
 
-    const srcDoc = await PDFDocument.load(pdfBytes.value)
+    const bytes  = await pdfFile.value.arrayBuffer()
+    const srcDoc = await PDFDocument.load(bytes)
     const newDoc = await PDFDocument.create()
 
     for (let i = 0; i < srcDoc.getPageCount(); i++) {
@@ -83,7 +71,8 @@ async function process() {
       const [embedded] = await newDoc.embedPages([srcPage])
       const newPage = newDoc.addPage([cropW, cropH])
 
-      // 將來源頁面往下移，使視覺頂端對齊新頁頂端（PDF 座標原點在左下角）
+      // 將來源頁面往下移，使來源的視覺頂端對齊新頁頂端
+      // PDF 座標原點在左下角，所以 y = cropH - srcH 可讓頂端對齊
       newPage.drawPage(embedded, {
         x: 0,
         y: cropH - srcH,
@@ -92,8 +81,8 @@ async function process() {
       })
     }
 
-    const outBytes = await newDoc.save()
-    const blob = new Blob([outBytes], { type: 'application/pdf' })
+    const pdfBytes = await newDoc.save()
+    const blob = new Blob([pdfBytes], { type: 'application/pdf' })
     if (downloadUrl.value) URL.revokeObjectURL(downloadUrl.value)
     downloadUrl.value = URL.createObjectURL(blob)
   } catch (e) {
@@ -104,13 +93,13 @@ async function process() {
 }
 
 function reset() {
-  pdfUrl.value        = ''
-  pdfBytes.value      = null
+  pdfFile.value       = null
   pageCount.value     = 0
   srcPageSizeMm.value = null
   downloadUrl.value   = ''
   processErr.value    = ''
-  loadErr.value       = ''
+  fileErr.value       = ''
+  if (fileInput.value) fileInput.value.value = ''
 }
 </script>
 
@@ -159,32 +148,22 @@ function reset() {
       </div>
     </div>
 
-    <!-- 步驟 2：貼網址 -->
+    <!-- 步驟 2：上傳 -->
     <div class="card border-0 shadow-sm mb-3">
       <div class="card-body">
-        <h6 class="fw-semibold mb-3">② 貼上 PDF 網址</h6>
-        <div class="d-flex gap-2">
-          <input
-            v-model="pdfUrl"
-            type="url"
-            class="form-control form-control-sm"
-            placeholder="https://example.com/shipping-label.pdf"
-            @keydown.enter="loadFromUrl"
-          />
-          <button
-            class="btn btn-outline-primary btn-sm text-nowrap"
-            :disabled="!pdfUrl.trim() || loading"
-            @click="loadFromUrl"
-          >
-            <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
-            {{ loading ? '載入中…' : '載入' }}
-          </button>
-        </div>
+        <h6 class="fw-semibold mb-3">② 上傳 PDF</h6>
+        <input
+          ref="fileInput"
+          type="file"
+          accept="application/pdf"
+          class="form-control form-control-sm"
+          @change="onFileChange"
+        />
+        <div v-if="fileErr" class="text-danger small mt-2">{{ fileErr }}</div>
 
-        <div v-if="loadErr" class="alert alert-danger py-2 small mt-2 mb-0">{{ loadErr }}</div>
-
-        <!-- PDF 資訊 -->
-        <div v-if="pdfBytes && srcPageSizeMm" class="mt-3 p-3 rounded bg-light small">
+        <!-- 檔案資訊 -->
+        <div v-if="pdfFile && srcPageSizeMm" class="mt-3 p-3 rounded bg-light small">
+          <div><strong>檔案：</strong>{{ pdfFile.name }}</div>
           <div><strong>頁數：</strong>{{ pageCount }} 頁</div>
           <div><strong>原始頁面大小：</strong>{{ srcPageSizeMm.w }} × {{ srcPageSizeMm.h }} mm</div>
           <div class="mt-1 text-primary">
@@ -204,7 +183,7 @@ function reset() {
         <div class="d-flex gap-2">
           <button
             class="btn btn-primary btn-sm"
-            :disabled="!pdfBytes || processing"
+            :disabled="!pdfFile || processing"
             @click="process"
           >
             <span v-if="processing" class="spinner-border spinner-border-sm me-1"></span>
@@ -220,7 +199,6 @@ function reset() {
             :href="downloadUrl"
             :download="outputFileName"
             class="btn btn-success btn-sm"
-            rel="noopener noreferrer"
           >
             下載 {{ outputFileName }}
           </a>
@@ -235,7 +213,7 @@ function reset() {
     <div class="text-muted small">
       <strong>使用說明：</strong>
       裁切範圍為每頁的<strong>左上角</strong>，適用於藍新等金流平台的 A4 出貨單（標籤印在左上角）。
-      調整寬高後可重新點「開始裁切」，無需重新載入網址。
+      調整寬高後可重新點「開始裁切」，無需重新上傳檔案。
     </div>
   </div>
 </template>
