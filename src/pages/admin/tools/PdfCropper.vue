@@ -195,15 +195,28 @@ function reset() {
         <!-- 下載 -->
         <div v-if="downloadUrl" class="mt-3 p-3 rounded border border-success bg-success bg-opacity-10">
           <div class="text-success fw-semibold mb-2">✓ 裁切完成！</div>
-          <a
-            :href="downloadUrl"
-            :download="outputFileName"
-            class="btn btn-success btn-sm"
-          >
-            下載 {{ outputFileName }}
-          </a>
+          <div class="d-flex gap-2 flex-wrap">
+            <a
+              :href="downloadUrl"
+              :download="outputFileName"
+              class="btn btn-success btn-sm"
+            >
+              下載 PDF
+            </a>
+            <a
+              :href="downloadUrl"
+              target="_blank"
+              rel="noopener"
+              class="btn btn-outline-success btn-sm"
+            >
+              在瀏覽器開啟列印
+            </a>
+          </div>
           <div class="text-muted small mt-2">
             共 {{ pageCount }} 頁，每頁 {{ widthMm }}×{{ heightMm }} mm
+          </div>
+          <div class="alert alert-warning py-2 small mt-2 mb-0">
+            ⚠️ 列印時請在瀏覽器的列印對話框中<strong>取消勾選「頁首和頁尾」</strong>，否則會出現日期時間等多餘文字。
           </div>
         </div>
       </div>
