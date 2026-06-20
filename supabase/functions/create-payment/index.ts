@@ -243,15 +243,14 @@ Deno.serve(async (req) => {
       })
     }
 
-    // 快照各規格的加權平均成本（CostPrice），寫入 UnitCost
-    const variantIds = (items as Array<{ variantId: number }>).map(i => i.variantId)
-    const { data: variantCosts } = await supabaseAdmin
-      .schema(dbSchema)
-      .from('C_PRD_ProductVariantList')
-      .select('ID, "CostPrice"')
-      .in('ID', variantIds)
+    // FIFO 扣批次並取得成本快照，寫入 UnitCost
     const costMap: Record<number, number> = {}
-    for (const v of variantCosts ?? []) costMap[v.ID] = Number(v.CostPrice) || 0
+    for (const item of items as Array<{ variantId: number; qty: number }>) {
+      const { data: fifoCost } = await supabaseAdmin
+        .schema(dbSchema)
+        .rpc('fifo_deduct_batch', { p_variant_id: item.variantId, p_qty: item.qty })
+      costMap[item.variantId] = Number(fifoCost) || 0
+    }
 
     const orderItems = (items as Array<{
       productId: number; productName: string; variantId: number

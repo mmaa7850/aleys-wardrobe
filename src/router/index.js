@@ -38,6 +38,7 @@ const router = createRouter({
         { path: "brand-story", name: "brand-story", component: () => import("@/views/frontend/info/BrandStoryView.vue") },
         { path: "contact", name: "contact", component: () => import("@/views/frontend/info/ContactView.vue") },
         { path: "privacy-policy", name: "privacy-policy", component: () => import("@/views/frontend/info/PrivacyPolicyView.vue") },
+        { path: "live", name: "live", component: () => import("@/views/frontend/LiveView.vue") },
       ],
     },
 

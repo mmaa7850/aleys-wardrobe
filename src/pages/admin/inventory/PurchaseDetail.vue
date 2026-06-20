@@ -412,7 +412,7 @@ const confirming = ref(false)
 async function confirmPurchase() {
   if (!isDraft.value) return
   if (!items.value.length) { errMsg.value = '請至少新增一筆進貨明細'; return }
-  if (!confirm('確認後將更新各規格的加權平均成本，並增加庫存。確定要確認此進貨單？')) return
+  if (!confirm('確認後將新增 FIFO 進貨批次並增加庫存。確定要確認此進貨單？')) return
 
   confirming.value = true
   errMsg.value     = ''
@@ -423,17 +423,17 @@ async function confirmPurchase() {
     const totalQty = items.value.reduce((s, i) => s + i.Qty, 0) || 1
     const extraPerUnit = costsTotal.value / totalQty
 
-    // 2. 取得現有 CostPrice & StockQty
+    // 2. 取得現有 StockQty（不再需要 CostPrice，改用 FIFO 批次）
     const variantIds = [...new Set(items.value.map(i => i.VariantID))]
     const { data: variants, error: vErr } = await db
       .from('C_PRD_ProductVariantList')
-      .select('ID, "CostPrice", "StockQty"')
+      .select('ID, "StockQty"')
       .in('ID', variantIds)
     if (vErr) throw vErr
 
     const variantCurrent = Object.fromEntries((variants ?? []).map(v => [v.ID, v]))
 
-    // 3. 按 VariantID 合計本次進貨
+    // 3. 按 VariantID 合計本次進貨（含附加成本分攤）
     const byVariant = {}
     for (const item of items.value) {
       const vid = item.VariantID
@@ -442,27 +442,37 @@ async function confirmPurchase() {
       byVariant[vid].cost += item.Qty * (Number(item.UnitCost) + extraPerUnit)
     }
 
-    // 4. 計算新加權平均成本，並批次 update
-    const updates = []
+    // 4. FIFO：新增進貨批次 + 更新庫存數量
+    const purchaseDate = order.value?.PurchaseDate ?? new Date().toISOString().slice(0, 10)
+    const batchInserts = []
+    const stockUpdates = []
+
     for (const [vidStr, incoming] of Object.entries(byVariant)) {
-      const vid     = Number(vidStr)
-      const cur     = variantCurrent[vid]
+      const vid    = Number(vidStr)
+      const cur    = variantCurrent[vid]
       if (!cur) continue
-      const oldQty  = Number(cur.StockQty)  || 0
-      const oldCost = Number(cur.CostPrice) || 0
-      const newQty  = oldQty + incoming.qty
-      const newCost = newQty > 0
-        ? (oldQty * oldCost + incoming.cost) / newQty
-        : 0
-      updates.push(
-        db.from('C_PRD_ProductVariantList').update({
-          CostPrice: parseFloat(newCost.toFixed(4)),
-          StockQty:  newQty,
-        }).eq('ID', vid)
+      const newQty       = (Number(cur.StockQty) || 0) + incoming.qty
+      const fifoUnitCost = parseFloat((incoming.cost / incoming.qty).toFixed(4))
+
+      batchInserts.push(
+        db.from('C_INV_VariantBatchList').insert({
+          VariantID:       vid,
+          PurchaseOrderID: Number(props.id),
+          PurchaseDate:    purchaseDate,
+          UnitCost:        fifoUnitCost,
+          OriginalQty:     incoming.qty,
+          RemainingQty:    incoming.qty,
+        })
+      )
+      stockUpdates.push(
+        db.from('C_PRD_ProductVariantList').update({ StockQty: newQty }).eq('ID', vid)
       )
     }
-    const results = await Promise.all(updates)
-    for (const r of results) { if (r.error) throw r.error }
+
+    const batchResults = await Promise.all(batchInserts)
+    for (const r of batchResults) { if (r.error) throw r.error }
+    const stockResults = await Promise.all(stockUpdates)
+    for (const r of stockResults) { if (r.error) throw r.error }
 
     // 5. 更新進貨單 Status + TotalCost
     const { error: updErr } = await db.from('C_INV_PurchaseOrderList').update({
@@ -472,7 +482,7 @@ async function confirmPurchase() {
     }).eq('ID', props.id)
     if (updErr) throw updErr
 
-    successMsg.value = '進貨已確認！庫存與加權平均成本已更新。'
+    successMsg.value = '進貨已確認！FIFO 批次已建立，庫存已更新。'
     await load()
   } catch (e) {
     errMsg.value = '確認失敗：' + (e?.message ?? String(e))

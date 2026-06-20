@@ -80,6 +80,7 @@ onUnmounted(() => {
           <li><RouterLink to="/products?category=tops">上衣</RouterLink></li>
           <li><RouterLink to="/products?category=bottoms">下著</RouterLink></li>
           <li><RouterLink to="/products?category=dress">洋裝</RouterLink></li>
+          <li><RouterLink to="/live">直播</RouterLink></li>
         </ul>
 
         <!-- Brand (centered) -->
@@ -123,6 +124,7 @@ onUnmounted(() => {
         <RouterLink to="/products?category=tops" @click="mobileMenuOpen = false">上衣</RouterLink>
         <RouterLink to="/products?category=bottoms" @click="mobileMenuOpen = false">下著</RouterLink>
         <RouterLink to="/products?category=dress" @click="mobileMenuOpen = false">洋裝</RouterLink>
+        <RouterLink to="/live" @click="mobileMenuOpen = false">直播</RouterLink>
         <template v-if="auth.isLoggedIn">
           <RouterLink to="/account" @click="mobileMenuOpen = false">我的帳號</RouterLink>
           <RouterLink v-if="!auth.canEnterAdmin" to="/coupons" @click="mobileMenuOpen = false">優惠券專區</RouterLink>

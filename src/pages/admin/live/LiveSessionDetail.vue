@@ -316,10 +316,11 @@ async function saveInfo() {
   const { error } = await db
     .from('C_LIV_SessionList')
     .update({
-      Title:    editForm.value.Title,
-      LiveDate: editForm.value.LiveDate || null,
-      Status:   editForm.value.Status,
-      Notes:    editForm.value.Notes || null,
+      Title:     editForm.value.Title,
+      LiveDate:  editForm.value.LiveDate || null,
+      Status:    editForm.value.Status,
+      Notes:     editForm.value.Notes || null,
+      YtVideoId: editForm.value.YtVideoId?.trim() || null,
     })
     .eq('ID', sessionId)
   savingInfo.value = false
@@ -801,6 +802,10 @@ onUnmounted(() => {
                   {{ STATUS_LABEL[session.Status] || session.Status }}
                 </span>
               </div>
+              <div v-if="session.YtVideoId" class="col-sm-6">
+                <span style="color:#a08060;">YouTube 影片 ID：</span>
+                <span class="font-monospace" style="font-size:12px;">{{ session.YtVideoId }}</span>
+              </div>
               <div v-if="session.Notes" class="col-12" style="color:#6b5040;">
                 {{ session.Notes }}
               </div>
@@ -824,6 +829,10 @@ onUnmounted(() => {
                   <option value="active">直播中</option>
                   <option value="closed">已結束</option>
                 </select>
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label">YouTube 影片 ID <span class="text-muted" style="font-size:11px;">（選填，如 dQw4w9WgXcQ）</span></label>
+                <input v-model="editForm.YtVideoId" class="form-control font-monospace" placeholder="留空代表不嵌入直播" />
               </div>
               <div class="col-12">
                 <label class="form-label">備注</label>

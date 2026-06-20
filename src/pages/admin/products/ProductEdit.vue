@@ -368,7 +368,7 @@ const loadVariants = async (productId) => {
         // 依你的表欄位調整 select
         const { data, error } = await db
             .from("C_PRD_ProductVariantList")
-            .select('ProductID, "ColorID", "SizeID", "StockQty", "IsActive"')
+            .select('ProductID, "ColorID", "SizeID", "StockQty", "ShopeeStockQty", "IsActive"')
             .eq("ProductID", productId);
 
         if (error) throw error;
@@ -380,7 +380,8 @@ const loadVariants = async (productId) => {
         for (const r of list) {
             map.set(vKey(r.ColorID, r.SizeID), {
                 ...r,
-                StockQty: r.StockQty ?? 0,
+                StockQty:       r.StockQty       ?? 0,
+                ShopeeStockQty: r.ShopeeStockQty ?? 0,
                 IsActive: r.IsActive ?? true
             });
         }
@@ -431,7 +432,8 @@ const saveVariants = async (productId) => {
             const { error: updateErr } = await db
                 .from("C_PRD_ProductVariantList")
                 .update({
-                    StockQty: r.StockQty ?? 0,
+                    StockQty:       r.StockQty       ?? 0,
+                    ShopeeStockQty: r.ShopeeStockQty ?? 0,
                     IsActive: r.IsActive ?? false,
                     SKU: sku,
                     UpdatedDate: new Date().toISOString()
@@ -448,7 +450,8 @@ const saveVariants = async (productId) => {
                     ColorID: r.ColorID,
                     SizeID: r.SizeID,
                     SKU: sku,
-                    StockQty: r.StockQty ?? 0,
+                    StockQty:       r.StockQty       ?? 0,
+                    ShopeeStockQty: r.ShopeeStockQty ?? 0,
                     IsActive: r.IsActive ?? false,
                     CreatedDate: new Date().toISOString(),
                     UpdatedDate: new Date().toISOString()
@@ -533,7 +536,8 @@ const generateVariants = () => {
     for (const v of variantRows.value) {
         variantsCache.value.set(vKey(v.ColorID, v.SizeID), {
             ...v,
-            StockQty: v.StockQty ?? 0,
+            StockQty:       v.StockQty       ?? 0,
+            ShopeeStockQty: v.ShopeeStockQty ?? 0,
             IsActive: v.IsActive ?? true
         });
     }
@@ -580,7 +584,8 @@ const generateVariants = () => {
                 ColorName: color.Description,
                 SizeID: sizeId,
                 SizeName: size.Description,
-                StockQty: cached?.StockQty ?? 0,
+                StockQty:       cached?.StockQty       ?? 0,
+                ShopeeStockQty: cached?.ShopeeStockQty ?? 0,
                 IsActive: cached?.IsActive ?? true
             });
         }
@@ -602,7 +607,8 @@ const setAllStockQty = (qty) => {
     for (const v of variantRows.value) {
         variantsCache.value.set(vKey(v.ColorID, v.SizeID), {
             ...v,
-            StockQty: v.StockQty ?? 0,
+            StockQty:       v.StockQty       ?? 0,
+            ShopeeStockQty: v.ShopeeStockQty ?? 0,
             IsActive: v.IsActive ?? true
         });
     }
@@ -617,7 +623,8 @@ const setAllSellable = (isActive) => {
     for (const v of variantRows.value) {
         variantsCache.value.set(vKey(v.ColorID, v.SizeID), {
             ...v,
-            StockQty: v.StockQty ?? 0,
+            StockQty:       v.StockQty       ?? 0,
+            ShopeeStockQty: v.ShopeeStockQty ?? 0,
             IsActive: v.IsActive ?? true
         });
     }
@@ -1365,7 +1372,8 @@ onMounted(async () => {
                                     <tr>
                                         <th>{{ t("product.variants.colColor") }}</th>
                                         <th>{{ t("product.variants.colSize") }}</th>
-                                        <th style="width: 160px">{{ t("product.variants.colStock") }}</th>
+                                        <th style="width: 130px">{{ t("product.variants.colStock") }}</th>
+                                        <th style="width: 130px">蝦皮庫存</th>
                                         <th style="width: 120px">{{ t("product.variants.colSellable") }}</th>
                                     </tr>
                                 </thead>
@@ -1377,6 +1385,10 @@ onMounted(async () => {
                                         <td>
                                             <input type="number" class="form-control" min="0"
                                                 v-model.number="v.StockQty" />
+                                        </td>
+                                        <td>
+                                            <input type="number" class="form-control" min="0"
+                                                v-model.number="v.ShopeeStockQty" />
                                         </td>
                                         <td class="text-center">
                                             <input type="checkbox" class="form-check-input" v-model="v.IsActive" />

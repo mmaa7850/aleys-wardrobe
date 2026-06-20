@@ -16,7 +16,7 @@ async function load() {
 
   const [{ data: products }, { data: colors }, { data: sizes }] = await Promise.all([
     db.from('C_PRD_ProductList')
-      .select('ID, ProductName, C_PRD_ProductVariantList(ID, ColorID, SizeID, StockQty, IsActive)')
+      .select('ID, ProductName, C_PRD_ProductVariantList(ID, ColorID, SizeID, StockQty, ShopeeStockQty, IsActive)')
       .eq('IsActive', true)
       .order('ID', { ascending: false }),
     db.from('S_PRD_ColorList').select('ID, Name'),
@@ -36,7 +36,8 @@ async function load() {
         variantId:   v.ID,
         color:       colorMap[v.ColorID] ?? '—',
         size:        sizeMap[v.SizeID]   ?? '—',
-        stock:       Number(v.StockQty)  || 0,
+        stock:       Number(v.StockQty)       || 0,
+        shopeeStock: Number(v.ShopeeStockQty) || 0,
       })
     }
   }
@@ -105,13 +106,14 @@ function goEdit(productId) {
               <th>商品名稱</th>
               <th>顏色</th>
               <th>尺寸</th>
-              <th>庫存數量</th>
+              <th>官網庫存</th>
+              <th>蝦皮庫存</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!filtered.length">
-              <td colspan="5" class="text-center text-muted py-4">無符合條件的資料</td>
+              <td colspan="6" class="text-center text-muted py-4">無符合條件的資料</td>
             </tr>
             <tr v-for="v in filtered" :key="v.variantId">
               <td class="fw-medium">{{ v.productName }}</td>
@@ -119,6 +121,9 @@ function goEdit(productId) {
               <td>{{ v.size }}</td>
               <td>
                 <span :class="stockClass(v.stock)">{{ v.stock }} 件</span>
+              </td>
+              <td>
+                <span class="badge bg-secondary">{{ v.shopeeStock }} 件</span>
               </td>
               <td>
                 <button class="btn btn-sm btn-outline-secondary" @click="goEdit(v.productId)">
