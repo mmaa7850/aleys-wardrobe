@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-06-08
+> 更新時間：2026-06-20
 
 ---
 
@@ -53,6 +53,10 @@
 - **毛利率 → 淨利率**：毛利報表（`ProfitReport.vue`）與賣場淨利報表（`StoreProfitReport.vue`）中「毛利率」欄位更名為「淨利率」
 - **成本記錄收據/憑證附件上傳**：月度費用（Modal 底部加圖片上傳）、商品進貨單詳情（基本資訊卡片）、耗材進貨單詳情（獨立收據卡片）均支援選填 JPG/PNG/WebP/PDF 附件；上傳至 `receipts` Storage Bucket；表格顯示 🖼️/📄 圖示；刪除記錄時一併清除 Storage 檔案；migration `add_receipt_storage.sql`（三張資料表新增 `ReceiptStoragePath`）
 - **費用記錄日期精度（原月度費用）**：頁面名稱改為「費用記錄」；`C_FIN_MonthlyExpenseList` 的 `Year` + `Month` 兩欄合併為 `ExpenseDate DATE`（舊資料 backfill 為當月 1 日）；表單改為日期選擇器、列表新增日期欄、查詢改為日期範圍篩選；`StoreProfitReport.vue` 費用查詢同步更新；migration `add_expense_date.sql`
+- **消費者縣市統計 + 退款排行報表**：新增「縣市訂單統計」（`/admin/reports/city-stats`）—— 以 regex 從 `ShippingAddress` 擷取縣市名稱，水平長條圖 + 表格（排名/縣市/訂單數/佔比/金額/客單價）；新增「退款排行」（`/admin/reports/refund-ranking`）—— 依 `CustomerEmail` 統計退款次數與金額，紅色 badge 標示退款 ≥3 次的高風險會員，支援依金額/次數排序
+- **FIFO 先進先出成本計算**：商品成本計算改為先進先出；新增 `C_INV_VariantBatchList`（進貨批次表，記錄每次進貨的單價與剩餘數量）；`fifo_deduct_batch(p_variant_id, p_qty)` SECURITY DEFINER 函式從最舊批次依序扣除並回傳加權平均 FIFO 單價；現貨訂單付款時（`create-payment`）呼叫 FIFO 寫入 `UnitCost`；預購訂單後台標記出貨時呼叫 FIFO 寫入 `UnitCost` 並同步扣 `StockQty`；進貨確認時（`PurchaseDetail.vue`）改為 INSERT 批次記錄而非更新 `CostPrice`；migration `add_fifo_batches.sql`（public/staging 分區，已初始化現有庫存為第一批）
+- **YouTube 直播導入官網 + 自建聊天室**：前台新增獨立直播頁 `/live`（`LiveView.vue`）；無 active 場次時顯示「目前沒有直播」；後台場次詳情新增 `YtVideoId` 欄位輸入，前台 embed YouTube iframe（`https://www.youtube.com/embed/{YtVideoId}?autoplay=1&rel=0`）；自建聊天室（`C_LIV_ChatMessageList`）需登入才能留言，訊息 ≤200 字，以 Supabase Realtime（postgres_changes INSERT 事件）即時推播；前台導覽列（桌面版 + 手機版）新增「直播」入口；FB 登入按鈕隱藏（程式碼保留，`v-show="false"`）；migration `add_youtube_live.sql`
+- **蝦皮庫存分開（ShopeeStockQty）**：`C_PRD_ProductVariantList` 新增 `ShopeeStockQty BIGINT NOT NULL DEFAULT 0`；官網訂單流程（`decrement_stock` / `restore_stock`）僅動 `StockQty`，不動蝦皮庫存；後台庫存總覽新增「蝦皮庫存」欄位顯示；商品編輯頁 variant 矩陣新增蝦皮庫存數量輸入；migration `add_shopee_stock.sql`
 
 ---
 
@@ -158,100 +162,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ---
 
-### 2. 批次進貨 / 成本追蹤 / 毛利報表
-
-> **狀態：✅ 已開發完成，待執行 DB migration + 系統設定。**
-> 規格圖：`D:\Users\MondyHuang\Downloads\purchase-system-overview.pptx`
-
-**⚠️ 上線前必做：**
-1. 在 Supabase 執行 `supabase/migrations/add_purchase_system.sql`（兩個 schema 均已包含）
-2. 在後台「系統設定」(`S_SYS_Config`) 新增兩個 Key：
-   - `shipping_cost_cvscom`：超商每箱運費成本（例：`70`）
-   - `shipping_cost_home`：宅配每箱運費成本（例：`120`）
-
-#### DB 異動
-
-**新增 6 張表：**
-
-| 表格 | 用途 |
-|------|------|
-| `S_INV_SupplierList` | 供應商主檔（名稱/聯絡人/電話/Email/IsActive）|
-| `S_INV_CostTypeList` | 附加成本項目設定（大陸段運費/過境運費/關稅等，可自行新增）|
-| `C_INV_PurchaseOrderList` | 進貨單主表（PurchaseNo/SupplierID/日期/狀態 draft→confirmed/總成本）|
-| `C_INV_PurchaseOrderItemList` | 進貨明細（ProductID/VariantID/Qty/UnitCost/SubTotal）|
-| `C_INV_PurchaseOrderCostList` | 進貨附加成本（對應 CostTypeID，可多筆）|
-| `C_ORD_OrderExtraCostList` | 訂單額外成本（退換貨運費等；EventType: return/exchange；CostType: shipping_back/shipping_out/other）|
-
-**修改 3 張現有表：**
-
-| 表格 | 新增欄位 | 說明 |
-|------|------|------|
-| `C_PRD_ProductVariantList` | `CostPrice numeric(10,4)` | 加權平均成本，進貨 confirm 時自動更新 |
-| `C_ORD_OrderItemList` | `UnitCost numeric(10,4)` | 建單當下快照成本，不隨後續進貨變動 |
-| `C_ORD_OrderList` | `ActualShippingCost integer` | 實際出貨運費，出貨時自動帶入設定值×箱數 |
-
-**系統設定（`S_SYS_Config`）新增 2 個 Key：**
-- `shipping_cost_cvscom`：超商每箱成本（例：70）
-- `shipping_cost_home`：宅配每箱成本（例：120）
-
-#### 後台新增頁面
-
-| 頁面 | 路由 |
-|------|------|
-| 供應商設定 | `/admin/inventory/suppliers` |
-| 附加成本項目設定 | `/admin/inventory/setcosttypes` |
-| 進貨單列表 | `/admin/inventory/purchases` |
-| 進貨單詳情 / 建立 | `/admin/inventory/purchases/:id` |
-| 毛利報表 | `/admin/reports/profit` |
-
-#### 現有頁面修改
-
-- **出貨 Modal**：新增「箱數」欄位（預設 1）；系統依 `ShippingMethod` 自動帶對應設定值；計算 `ActualShippingCost = 設定值 × 箱數`，可手動覆蓋
-- **訂單詳情**：新增「額外成本」區塊，可新增多筆退換貨費用
-- **`create-payment`**：建單時把 variant 當下的 `CostPrice` 快照寫入 `OrderItemList.UnitCost`
-
-#### 進貨 Confirm 自動執行
-
-1. `StockQty` + 進貨數量
-2. 附加成本依數量比例分攤 → 重算加權平均 `CostPrice`
-3. 寫入 `C_INV_StockLog` 庫存異動紀錄
-
-#### 毛利計算公式
-
-```
-訂單毛利 = FinalAmount
-         - Σ(UnitCost × Qty)            商品成本（建單快照）
-         - PaymentFee                   金流手續費
-         - ActualShippingCost           實際出貨運費
-         - Σ(OrderConsumableList.Amount) 耗材成本（包材/贈品）
-         - Σ(OrderExtraCostList.Amount)  退換貨等額外成本
-
-毛利率 = 訂單毛利 ÷ FinalAmount × 100%
-
-賣場月度淨利 = 當月訂單毛利合計 - 月度固定費用（C_FIN_MonthlyExpenseList）
-```
-
-#### 毛利報表內容
-
-- **Stat Cards**：總營收 / 總毛利 / 整體毛利率 / 平均訂單毛利
-- **每日毛利折線圖**：今日/本週/本月/自訂區間
-- **商品毛利率排行**：依毛利率或金額排序
-- **成本結構拆解**：商品成本/手續費/出貨運費/退換貨費用各佔比
-- **缺少成本資料提醒**：`UnitCost=0` 的訂單另外標示
-
-#### 開發順序
-
-1. ✅ DB migration（6張新表 + 3個欄位 + 2個 Config key）— `supabase/migrations/add_purchase_system.sql`
-2. ✅ 供應商設定 + 成本項目設定頁面（`Suppliers.vue` / `SetCostTypes.vue`）
-3. ✅ 進貨單建立 / confirm 邏輯（`Purchases.vue` / `PurchaseDetail.vue`）— 加權平均成本計算 + 庫存更新
-4. ✅ `create-payment` 補快照 `UnitCost`
-5. ✅ 出貨 Modal 補箱數 + 自動計算 `ActualShippingCost`
-6. ✅ 訂單詳情補「額外成本」區塊（`C_ORD_OrderExtraCostList`）
-7. ✅ 毛利報表（`ProfitReport.vue`）— 日期篩選、訂單明細、成本拆解彙總
-
----
-
-### 3. Google Analytics 整合
+### 2. Google Analytics 整合
 
 > **狀態：程式完成 ✅，Vercel 正式專案環境變數待設定 ⚠️**
 
@@ -285,26 +196,7 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 ---
 
-### 5. 預購成本鎖定 + 出貨時扣庫存
-
-**問題背景：**
-- 現貨訂單在 `create-payment` 建單時快照 `UnitCost`，但預購訂單下單時進貨單尚未確認，`CostPrice` 為 0 或舊值，快照會是錯的
-- 預購商品加入購物車不扣庫存（庫存為 0），付款後也未扣；進貨單確認後庫存加入，但沒有機制將這批庫存「配給」已成立的預購訂單
-- 若報表直接 join `C_PRD_ProductVariantList.CostPrice` 而非用快照，後續進貨單確認會改寫所有歷史報表數字
-
-**已確認的設計方向：**
-- 預購成本採**加權平均**（與現貨一致）
-- 預購訂單的 `UnitCost` 改在**後台標記出貨時**才寫入（此時進貨單已確認、加權平均成本已正確）
-- 後台標記出貨時同步**扣除庫存**（`StockQty − Qty`），並寫 `C_INV_StockLog`
-- 退款在出貨前：庫存從未扣過，不需補回；退款在出貨後：同現貨，手動處理
-
-**待開發：**
-- [ ] 後台出貨動作（填物流單號）：若 `OrderType='preorder'`，寫入 `UnitCost` + 扣庫存 + 寫 StockLog
-- [ ] 確認毛利報表使用 `OrderItemList.UnitCost`（非 join variant），確保歷史報表不受後續進貨影響
-
----
-
-### 6. 大戶會員標記（暫緩決策）
+### 5. 大戶會員標記（暫緩決策）
 
 **決策方向（已討論）：**
 - 優先選擇**方案 A（自動計算）**：不動 DB schema；在會員列表和訂單詳情頁根據累積消費金額顯示「大戶」badge；門檻值存 `S_SYS_Config`（key: `vip_threshold`）

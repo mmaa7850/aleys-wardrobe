@@ -2,8 +2,8 @@
 -- 取代加權平均 CostPrice，記錄每次進貨的批次與剩餘數量
 CREATE TABLE IF NOT EXISTS staging."C_INV_VariantBatchList" (
   "ID"               BIGSERIAL      PRIMARY KEY,
-  "VariantID"        BIGINT         NOT NULL REFERENCES staging."C_PRD_ProductVariantList"("ID") ON DELETE CASCADE,
-  "PurchaseOrderID"  BIGINT         REFERENCES staging."C_INV_PurchaseOrderList"("ID") ON DELETE SET NULL,
+  "VariantID"        BIGINT         NOT NULL,
+  "PurchaseOrderID"  BIGINT,
   "PurchaseDate"     DATE           NOT NULL DEFAULT CURRENT_DATE,
   "UnitCost"         NUMERIC(10,4)  NOT NULL DEFAULT 0 CHECK ("UnitCost" >= 0),
   "OriginalQty"      INTEGER        NOT NULL CHECK ("OriginalQty" > 0),
@@ -74,8 +74,8 @@ $$;
 -- ── FIFO 進貨批次表（public）────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public."C_INV_VariantBatchList" (
   "ID"               BIGSERIAL      PRIMARY KEY,
-  "VariantID"        BIGINT         NOT NULL REFERENCES public."C_PRD_ProductVariantList"("ID") ON DELETE CASCADE,
-  "PurchaseOrderID"  BIGINT         REFERENCES public."C_INV_PurchaseOrderList"("ID") ON DELETE SET NULL,
+  "VariantID"        BIGINT         NOT NULL,
+  "PurchaseOrderID"  BIGINT,
   "PurchaseDate"     DATE           NOT NULL DEFAULT CURRENT_DATE,
   "UnitCost"         NUMERIC(10,4)  NOT NULL DEFAULT 0 CHECK ("UnitCost" >= 0),
   "OriginalQty"      INTEGER        NOT NULL CHECK ("OriginalQty" > 0),

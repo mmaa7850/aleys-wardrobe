@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-06-09
+> 更新時間：2026-06-20
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -24,6 +24,9 @@
 | `add_analytics_tracking.sql` | 新增 `C_ANL_ProductClickLog`（商品點擊追蹤）；RLS：anon/authenticated 可 INSERT，僅 staff 可 SELECT | ✅ 已執行 |
 | `add_receipt_storage.sql` | `C_FIN_MonthlyExpenseList` / `C_INV_PurchaseOrderList` / `C_INV_ConsumablePurchaseList` 各新增 `ReceiptStoragePath VARCHAR(500)` | ✅ 已執行 |
 | `add_expense_date.sql` | `C_FIN_MonthlyExpenseList` 的 `Year` + `Month` 兩欄改為 `ExpenseDate DATE`（舊資料 backfill 為當月 1 日）；頁面名稱改為「費用記錄」 | ✅ 已執行 |
+| `add_shopee_stock.sql` | `C_PRD_ProductVariantList` 新增 `ShopeeStockQty BIGINT NOT NULL DEFAULT 0`（蝦皮庫存，與官網 StockQty 分開管理）| ✅ 已執行 |
+| `add_youtube_live.sql` | `C_LIV_SessionList` 新增 `YtVideoId VARCHAR(30)`；新增 `C_LIV_ChatMessageList`（前台自建聊天室）；Realtime publication 已啟用 | ✅ 已執行 |
+| `add_fifo_batches.sql` | 新增 `C_INV_VariantBatchList`（FIFO 進貨批次表）；新增 `staging.fifo_deduct_batch()` / `public.fifo_deduct_batch()` SECURITY DEFINER 函式；初始化現有有庫存規格為第一批 | ✅ 已執行 |
 
 > ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
 > - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）
@@ -130,8 +133,23 @@ WITH CHECK (
 | Notes | text | YES | — | 備注 |
 | FbPageId | varchar | YES | — | FB 粉專 Page ID（即時監控用）|
 | FbLiveVideoId | varchar | YES | — | FB 直播影片 ID |
+| YtVideoId | varchar(30) | YES | — | YouTube 直播影片 ID（前台 `/live` embed 用，如 `dQw4w9WgXcQ`）|
 | CreatedDate | timestamptz | YES | now() | |
 | UpdatedDate | timestamptz | YES | now() | |
+
+### C_LIV_ChatMessageList
+> 前台自建直播聊天室留言；Supabase Realtime 已啟用（postgres_changes INSERT 事件）
+
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| SessionID | bigint | NO | — | FK → C_LIV_SessionList.ID |
+| UserID | uuid | NO | — | FK → auth.users.id（RLS 保護：只能插入自己的 UserID）|
+| SenderName | text | NO | — | 快取顯示名稱（從 C_MBR_MemberList.Name 帶入，fallback 為 email 前綴）|
+| Message | text | NO | — | 留言內容，CHECK(char_length ≤ 200) |
+| CreatedDate | timestamptz | NO | now() | |
+
+> Index：`(SessionID, CreatedDate ASC)` 加速聊天室載入
 
 ### C_LIV_ProductList
 > 直播場次商品對照表（代碼 ↔ 商品 Variant ↔ 直播價）
@@ -480,6 +498,22 @@ WITH CHECK (
 > 來源偵測：`document.referrer` hostname 非本站 → 廣告來源；`?src=line` → 廣告來源；referrer 含 `/cart` → 購物車；含 `/wishlist` → 願望清單；其他 → 直接
 > 去重機制：LocalStorage key `ck_YYYY-MM-DD_{productId}`，同商品同天只記錄一次
 
+### C_INV_VariantBatchList
+FIFO 進貨批次記錄；每次確認進貨單時 INSERT 一筆；付款 / 出貨時由 `fifo_deduct_batch()` 依序扣 `RemainingQty`；RLS `is_staff()` ALL
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigserial | NO | — | |
+| VariantID | bigint | NO | — | 對應 C_PRD_ProductVariantList.ID |
+| PurchaseOrderID | bigint | YES | — | 對應 C_INV_PurchaseOrderList.ID（NULL=初始化批次）|
+| PurchaseDate | date | NO | CURRENT_DATE | 進貨日期（FIFO 排序依據）|
+| UnitCost | numeric(10,4) | NO | 0 | 本批次每件成本（CHECK >= 0）|
+| OriginalQty | integer | NO | — | 本批次原始進貨數量（CHECK > 0）|
+| RemainingQty | integer | NO | 0 | 剩餘未扣數量（CHECK >= 0）；由 `fifo_deduct_batch()` 更新 |
+| CreatedDate | timestamptz | NO | now() | |
+
+> Index：`(VariantID, PurchaseDate ASC, ID ASC)` 確保 FIFO 順序
+> 注意：此表只管批次成本，**不管 StockQty**（StockQty 由 `decrement_stock` / `restore_stock` 單獨管理）
+
 ### C_INV_PurchaseOrderList
 進貨單主表；RLS `is_staff()` ALL
 | 欄位 | 型別 | Nullable | Default | 說明 |
@@ -607,18 +641,19 @@ WITH CHECK (
 | UpdatedDate | timestamptz | YES | — |
 
 ### C_PRD_ProductVariantList
-| 欄位 | 型別 | Nullable | Default |
-|------|------|----------|---------|
-| ID | bigint | NO | — |
-| ProductID | bigint | NO | — |
-| ColorID | bigint | NO | — |
-| SizeID | bigint | NO | — |
-| StockQty | bigint | NO | 0 |
-| SKU | varchar | YES | — |
-| IsActive | boolean | NO | false |
-| CostPrice | numeric(10,4) | NO | 0 | 加權平均進貨成本（每次確認進貨單時自動更新）|
-| CreatedDate | timestamptz | YES | now() |
-| UpdatedDate | timestamptz | YES | — |
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| ProductID | bigint | NO | — | |
+| ColorID | bigint | NO | — | |
+| SizeID | bigint | NO | — | |
+| StockQty | bigint | NO | 0 | 官網庫存（`decrement_stock` / `restore_stock` 管理）|
+| ShopeeStockQty | bigint | NO | 0 | 蝦皮庫存（獨立欄位，官網訂單流程不動此值）|
+| SKU | varchar | YES | — | |
+| IsActive | boolean | NO | false | |
+| CostPrice | numeric(10,4) | NO | 0 | 加權平均進貨成本（FIFO 實施後僅供參考，實際成本從 `C_INV_VariantBatchList` 計算）|
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | — | |
 
 ### C_PRD_ReviewList
 | 欄位 | 型別 | Nullable | Default |
@@ -873,6 +908,18 @@ WITH CHECK (
 ### C_LIV_ActiveBidList / C_LIV_ProcessedCommentList
 > 無 RLS policy；由 `live-bid-poll` / `live-import` Edge Functions 以 service_role 存取。
 
+### C_LIV_ChatMessageList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| chat_select | public | SELECT | true（所有人可讀，含未登入）|
+| chat_insert | authenticated | INSERT | `UserID = auth.uid()`（只能插入自己的留言）|
+| chat_admin_delete | authenticated | DELETE | `is_admin()`（管理員可刪訊息）|
+
+### C_INV_VariantBatchList
+| Policy | Role | CMD | 條件 |
+|--------|------|-----|------|
+| batch_staff_all | authenticated | ALL | `is_staff()` |
+
 ### C_CART_CartItemList
 | Policy | Role | CMD | 條件 |
 |--------|------|-----|------|
@@ -1029,5 +1076,6 @@ WITH CHECK (
 | `staging.user_owns_order(OrderID)` | 檢查訂單是否屬於目前使用者 |
 | `decrement_stock(p_variant_id bigint, p_qty int)` | 原子性扣庫存（`FOR UPDATE` 鎖）；庫存不足回傳 `false`；加入購物車時呼叫 |
 | `restore_stock(p_variant_id bigint, p_qty int)` | 原子性還庫存；移除購物車 / 取消訂單時呼叫 |
+| `fifo_deduct_batch(p_variant_id bigint, p_qty int)` | FIFO 成本扣除；從 `C_INV_VariantBatchList` 依 `PurchaseDate ASC, ID ASC` 順序扣除 `RemainingQty`；回傳加權平均 FIFO 單價 `NUMERIC(10,4)`；`FOR UPDATE` 鎖防止並發；批次不足時扣完現有剩餘（回傳 0 若無任何批次）；**只動 RemainingQty，不動 StockQty** |
 
-> 上述 `decrement_stock` / `restore_stock` 在 `public` 和 `staging` 兩個 schema 各有一份，`SECURITY DEFINER` 確保任何 role 都可呼叫。
+> 上述所有 Functions 在 `public` 和 `staging` 兩個 schema 各有一份，`SECURITY DEFINER` 確保任何 role 都可呼叫。

@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-06-08
+> 更新時間：2026-06-20
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -29,7 +29,8 @@
 | 常見問題 | `/faq` | Accordion Q&A（靜態） |
 | 品牌故事 | `/brand-story` | 三段式品牌敘事（靜態） |
 | 聯絡我們 | `/contact` | 聯絡資訊 + 表單（靜態） |
-| 登入/註冊 | `/login` | Email 登入/註冊、LINE OAuth、忘記密碼 |
+| 直播 | `/live` | 前台直播頁；查詢 `C_LIV_SessionList` 最近 active 場次；有 `YtVideoId` 時嵌入 YouTube iframe（16:9 自適應）；右側自建聊天室（`C_LIV_ChatMessageList`）；需登入才能留言，訊息上限 200 字；以 Supabase Realtime（postgres_changes）即時推播新訊息；無 active 場次時顯示「目前沒有直播」；RWD：手機版上下排列 |
+| 登入/註冊 | `/login` | Email 登入/註冊、LINE OAuth、忘記密碼；**FB 登入按鈕已隱藏**（`v-show="false"`，程式碼保留）|
 | 重設密碼 | `/reset-password` | 密碼重設表單 |
 | OAuth 回調 | `/auth/callback` | LINE 登入回調處理 |
 | LINE 帳號綁定 | `/bind-line` | 從 LINE OA 收到綁定連結後跳入；帶 `token` 參數；登入狀態下呼叫 `line-bind` Edge Function 完成綁定，寫入 `C_MBR_MemberList.LineUserID` |
@@ -46,12 +47,12 @@
 |------|------|------|------|
 | 儀表板 | `/admin` | 全部 | 後台首頁 |
 | 商品列表 | `/admin/products` | CanManageProducts | 搜尋/狀態/分類篩選、商品縮圖、進編輯頁 |
-| 商品編輯 | `/product/products/:id` | CanManageProducts | 基本資料（名稱/分類/售價/原價/描述）；**上架開關**（`IsActive`）；**預購設定**（`IsPreOrder` + 預計出貨日 + 預購說明）；圖片/影片上傳至 Storage（`product-pictures`）、設主圖/排序/刪除；顏色 × 尺寸 variant 矩陣（庫存數量）；尺寸規格表 |
+| 商品編輯 | `/product/products/:id` | CanManageProducts | 基本資料（名稱/分類/售價/原價/描述）；**上架開關**（`IsActive`）；**預購設定**（`IsPreOrder` + 預計出貨日 + 預購說明）；圖片/影片上傳至 Storage（`product-pictures`）、設主圖/排序/刪除；顏色 × 尺寸 variant 矩陣（庫存數量 + **蝦皮庫存數量**）；尺寸規格表 |
 | 顏色設定 | `/admin/products/setcolors` | CanManageProducts | 管理顏色選項（`S_PRD_ColorList`） |
 | 尺寸設定 | `/admin/products/setsizes` | CanManageProducts | 管理尺寸選項（`S_PRD_SizeList`） |
 | 分類設定 | `/admin/products/setcategories` | CanManageProducts | 管理商品分類（`S_PRD_CategoryList`） |
 | 標籤設定 | `/admin/products/settags` | CanManageProducts | 管理商品標籤（`S_PRD_TagList`） |
-| 庫存總覽 | `/admin/inventory/overview` | CanManageProducts | 所有上架商品各 variant 庫存、低庫存（≤5）/售完警示、可直接修改數量並建立異動紀錄 |
+| 庫存總覽 | `/admin/inventory/overview` | CanManageProducts | 所有上架商品各 variant 庫存、低庫存（≤5）/售完警示、可直接修改數量並建立異動紀錄；顯示**蝦皮庫存**（`ShopeeStockQty`）欄位 |
 | 庫存紀錄 | `/admin/inventory/logs` | CanManageProducts | 庫存異動歷史（異動量、前後庫存、原因、時間） |
 | 耗材品項 | `/admin/inventory/consumables` | CanManageProducts | 包材/贈品/其他耗材 CRUD；單位成本與庫存由進貨單自動維護（加權平均）；可啟用/停用 |
 | 耗材進貨 | `/admin/inventory/consumable-purchases` | CanManageProducts | 耗材採購單列表（PurchaseNo 自動產生）；點入詳情頁操作品項與確認進貨 |
@@ -65,7 +66,7 @@
 | 供應商設定 | `/admin/inventory/suppliers` | CanManageProducts | 供應商 CRUD（名稱/聯絡人/電話/Email/備注）；可啟用/停用 |
 | 附加成本類型 | `/admin/inventory/setcosttypes` | CanManageProducts | 進貨附加成本項目設定（大陸段物流費/過境運費/關稅/報關費等，可自訂）；排序/啟用停用 |
 | 進貨單列表 | `/admin/inventory/purchases` | CanManageProducts | 進貨單建立與管理；狀態篩選（草稿/已確認）；點入詳情頁 |
-| 進貨單詳情 | `/admin/inventory/purchases/:id` | CanManageProducts | 進貨單基本資訊（供應商/日期/備注）；進貨明細（商品 card 選擇 + 規格批次填入）；附加成本（運費/關稅等多筆）；confirm 後加權平均成本計算 + 庫存更新；**收據/憑證附件上傳**（即時儲存至 `receipts` bucket，支援圖片預覽與 PDF 連結）|
+| 進貨單詳情 | `/admin/inventory/purchases/:id` | CanManageProducts | 進貨單基本資訊（供應商/日期/備注）；進貨明細（商品 card 選擇 + 規格批次填入）；附加成本（運費/關稅等多筆）；confirm 後 **INSERT `C_INV_VariantBatchList` 批次記錄**（FIFO 進貨批次）+ 庫存更新（StockQty only，不再更新 CostPrice）；**收據/憑證附件上傳**（即時儲存至 `receipts` bucket，支援圖片預覽與 PDF 連結）|
 | 費用分類設定 | `/admin/finance/expense-categories` | CanManageSettings | 管理費用記錄分類（租金/水電費/設備/文具耗材/人事費用/其他）；排序/啟用停用 |
 | 費用記錄 | `/admin/finance/monthly-expenses` | CanManageSettings | 記錄固定與非固定營運費用；每筆記錄到**日期**（`ExpenseDate`）；以年/月篩選顯示；日期欄於列表中顯示；月合計即時顯示；**支援選填收據/憑證上傳**（JPG/PNG/PDF）；表格顯示 🖼️/📄 圖示，可點擊查看原檔 |
 | 付款方式設定 | `/admin/settings/setpaymethods` | CanManageSettings | 管理付款方式（`S_PAY_PayMethodList`） |
@@ -75,7 +76,7 @@
 | 管理者帳號 | `/admin/settings/admin-users` | IsAdmin（超管）| 管理後台帳號與細項權限（`S_SYS_AdminUserList`）；僅超管可進入；**Email → UserId 查詢工具**：輸入 Email 可自動查出對應 `auth.users.id`（UUID），方便新增管理員時填入 |
 | 待結清單 | `/admin/orders/pending` | CanManageOrders | **Tab1 購物車待結帳**：列出有購物車品項的會員，可發 LINE 通知付款連結；**Tab2 本週被封鎖名單**：顯示本週銷單後被封鎖的會員（`IsBlocked=true`），列出被取消的購物車品項明細（呼叫 `get-blocked-members`）；**測試按鈕**：手動觸發 `cancel-orders` 銷單（預計正式上線後移除）|
 | 直播場次列表 | `/admin/live` | CanManageOrders | 直播場次 CRUD（建立/管理）；顯示場次標題、日期、狀態 |
-| 直播場次詳情 | `/admin/live/:id` | CanManageOrders | 三個 Tab：**商品對照表**（代碼↔商品↔直播價，可新增/編輯/刪除）/ **留言解析建單**（貼入 FB 留言文字 → 解析 → 批次建單 → LINE 通知）/ **FB 直播監控**（連接 FB 直播 → 即時輪詢留言 → 自動搶標/截標；起標按鈕顯示開標中 badge，截標按鈕截止）|
+| 直播場次詳情 | `/admin/live/:id` | CanManageOrders | 三個 Tab：**商品對照表**（代碼↔商品↔直播價，可新增/編輯/刪除）/ **留言解析建單**（貼入 FB 留言文字 → 解析 → 批次建單 → LINE 通知）/ **FB 直播監控**（連接 FB 直播 → 即時輪詢留言 → 自動搶標/截標；起標按鈕顯示開標中 badge，截標按鈕截止）；場次基本資訊新增 **`YtVideoId`** 輸入欄位（YouTube 影片 ID，前台 `/live` 頁用於 embed iframe）|
 | **報表 — 銷售總覽** | `/admin/reports/sales` | 全部 | 今日/本週/本月/自訂區間切換；stat card：已付款營收/訂單數/客單價/退款金額/**商品點擊數**/**訂單轉換率**/**買家數**；低庫存警示卡片；每日已付款營收折線圖（Chart.js） |
 | **報表 — 商品排行** | `/admin/reports/products` | 全部 | 已付款訂單統計；本週/本月/近3月/自訂；依銷售額/數量/點擊數/訂單數排序；欄位：排名/商品名稱/**銷售佔比（進度條）**/銷售額/**商品點擊數**/**訂單數**/件數/**訂單轉換率**/**平均客單價**/**買家數** |
 | **報表 — 優惠券效益** | `/admin/reports/coupons` | 全部 | 各券：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃；手動碼 vs 自動折抵分類顯示 |
@@ -84,6 +85,8 @@
 | **報表 — 毛利報表** | `/admin/reports/profit` | 全部 | 日期區間篩選；訂單級毛利明細（含耗材成本欄）；成本拆解彙總（進貨成本/手續費/運費/耗材/退換費用）；**淨利率**欄位（原毛利率）|
 | **報表 — 賣場淨利報表** | `/admin/reports/store-profit` | 全部 | 月份選擇；第一層訂單毛利彙總 + 第二層月度固定費用 = 本月淨利；**淨利率**（原毛利率）；訂單明細含耗材欄 |
 | **報表 — 流量來源分析** | `/admin/reports/traffic` | 全部 | 查詢期間內各來源點擊分布；Chart.js 長條圖；表格顯示來源/點擊數/點擊佔比（進度條）；來源分類：廣告來源/購物車/願望清單/直接；說明來源偵測邏輯 |
+| **報表 — 縣市訂單統計** | `/admin/reports/city-stats` | 全部 | 以 regex 從 `ShippingAddress` 擷取縣市（22個縣市 + 離島）；Chart.js 水平長條圖（`indexAxis:'y'`）；表格：排名/縣市/訂單數/佔比（%）/訂單金額/平均客單價；篩選已付款訂單（`PaymentStatus='paid'`）|
+| **報表 — 退款排行** | `/admin/reports/refund-ranking` | 全部 | 依 `CustomerEmail` 統計退款訂單；顯示：姓名/Email/電話/退款次數（≥3 次標紅色 badge）/退款總額/平均退款額/金額進度條；支援依「金額」或「次數」切換排序 |
 
 ---
 
@@ -91,7 +94,7 @@
 
 | Function | JWT 驗證 | 說明 |
 |----------|----------|------|
-| `create-payment` | ✅ 需要 | 後端驗證手動優惠券；後端自動偵測滿額折抵；計算 `FinalAmount`；錢包折抵（`WalletDeductAmt`）；全額錢包付款不送藍新（`walletOnly:true`）；建立訂單並於建立時設 `StatusID`=第一個狀態；全額錢包時補寫 `PaidAt`/`PaymentMethod='wallet'`/`StatusID`=第二個狀態；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；AES 加密藍新參數 |
+| `create-payment` | ✅ 需要 | 後端驗證手動優惠券；後端自動偵測滿額折抵；計算 `FinalAmount`；錢包折抵（`WalletDeductAmt`）；全額錢包付款不送藍新（`walletOnly:true`）；建立訂單並於建立時設 `StatusID`=第一個狀態；全額錢包時補寫 `PaidAt`/`PaymentMethod='wallet'`/`StatusID`=第二個狀態；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；**現貨訂單付款時呼叫 `fifo_deduct_batch()` 取得 FIFO 成本並寫入 `OrderItemList.UnitCost`**（取代原本快照 `CostPrice`）；AES 加密藍新參數 |
 | `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新 `PaymentStatus=paid`/`PaidAt`/`PaymentMethod`/`TradeNo`；計算並存入 `PaymentFee`（信用卡2.8%、ATM1% 上限NT$20、LINE Pay 2.31%）；自動設 `StatusID`=第二個狀態（已付款）；扣庫存；儲存 CVSCOM 門市資訊；呼叫 ezPay 自動開立電子發票（依 InvoiceCarrierType 帶入對應載具參數） |
 | `payment-return` | ❌ 關閉 | 藍新前台導回：儲存付款方式、ATM 帳號、CVSCOM 門市資訊，導向 `/order-success/:orderNo` |
 | `retry-payment` | ✅ 需要 | 對同一訂單重新產生藍新付款參數（訂單號加 `_R0~R9` 後綴避免重複，不重建訂單）；開放信用卡 + ATM 轉帳 + LINE Pay（CREDIT=1、VACC=1、LINEPAY=1、ExpireDate 3天）；超商取貨訂單附加 CVSCOM/LgsType 參數；使用 `NewebpayAmt`（扣除錢包後的實際付款金額）|
@@ -150,10 +153,11 @@
 - `C_ORD_OrderLogList` — 訂單狀態異動紀錄
 
 ### 直播
-- `C_LIV_SessionList` — 直播場次（`FbPageId`/`FbLiveVideoId`/`Status`）
+- `C_LIV_SessionList` — 直播場次（`FbPageId`/`FbLiveVideoId`/`YtVideoId`/`Status`）
 - `C_LIV_ProductList` — 場次商品對照表（代碼↔Variant↔直播價）
 - `C_LIV_ActiveBidList` — 目前開標中的商品（同場次同代碼最多一個 open）
 - `C_LIV_ProcessedCommentList` — 已處理 FB 留言 ID（跨輪詢去重）
+- `C_LIV_ChatMessageList` — 自建聊天室留言（SessionID/UserID/SenderName/Message≤200字/CreatedDate）；RLS：全員可讀、登入者可 INSERT 自己的訊息、admin 可刪；Supabase Realtime 已啟用
 
 ### 行銷
 - `S_PRM_CouponList` — 優惠券（`Name`/`DiscountValue`/`MinOrderAmount`/`IsAutoApply`/`UsageCount`/有效期）
@@ -161,6 +165,7 @@
 
 ### 庫存
 - `C_INV_StockLog` — 庫存異動紀錄
+- `C_INV_VariantBatchList` — FIFO 進貨批次記錄（VariantID/PurchaseOrderID/PurchaseDate/UnitCost/OriginalQty/RemainingQty）；每次確認進貨單時 INSERT 一批；付款 / 出貨時由 `fifo_deduct_batch()` 依序扣除 RemainingQty
 
 ### 耗材
 - `C_INV_ConsumableList` — 耗材品項主檔（Name/Category:包材|贈品|其他/Unit/CostPrice 加權平均/StockQty/IsActive）
