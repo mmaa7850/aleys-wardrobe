@@ -31,7 +31,7 @@ async function load() {
       .from('C_ORD_OrderList')
       .select(`
         ID, "OrderNo", "CreatedDate", "FinalAmount", "ActualShippingCost", "PaymentMethod", "PaymentFee",
-        C_ORD_OrderItemList ( "Qty", "UnitCost" )
+        C_ORD_OrderItemList ( "Qty", "UnitCost", "LineCost" )
       `)
       .in('PaymentStatus', ['paid'])
       .gte('CreatedDate', dateFrom.value + 'T00:00:00')
@@ -90,7 +90,9 @@ const FEE_RATE = 0.015
 function computeProfit(o, extraCostsTotal = 0, consumableCostTotal = 0) {
   const revenue   = Number(o.FinalAmount) || 0
   const itemsCost = (o.C_ORD_OrderItemList ?? []).reduce(
-    (s, i) => s + (Number(i.UnitCost) || 0) * (Number(i.Qty) || 0), 0
+    (s, i) => s + (i.LineCost != null
+      ? Number(i.LineCost)
+      : (Number(i.UnitCost) || 0) * (Number(i.Qty) || 0)), 0
   )
   // 優先用 DB 儲存的實際手續費，否則用預設費率估算
   const payFee        = o.PaymentFee != null ? Number(o.PaymentFee) : Math.round(revenue * FEE_RATE)

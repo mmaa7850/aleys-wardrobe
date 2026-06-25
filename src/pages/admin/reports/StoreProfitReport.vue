@@ -32,7 +32,7 @@ async function load() {
       .from('C_ORD_OrderList')
       .select(`
         ID, "OrderNo", "FinalAmount", "ActualShippingCost", "PaymentFee",
-        C_ORD_OrderItemList ( "Qty", "UnitCost" )
+        C_ORD_OrderItemList ( "Qty", "UnitCost", "LineCost" )
       `)
       .eq('PaymentStatus', 'paid')
       .gte('CreatedDate', dFrom)
@@ -92,7 +92,9 @@ const FEE_RATE = 0.015
 function computeOrderProfit(o, extraCost, consumableCost) {
   const revenue        = Number(o.FinalAmount) || 0
   const itemsCost      = (o.C_ORD_OrderItemList ?? []).reduce(
-    (s, i) => s + (Number(i.UnitCost) || 0) * (Number(i.Qty) || 0), 0
+    (s, i) => s + (i.LineCost != null
+      ? Number(i.LineCost)
+      : (Number(i.UnitCost) || 0) * (Number(i.Qty) || 0)), 0
   )
   const payFee         = o.PaymentFee != null ? Number(o.PaymentFee) : Math.round(revenue * FEE_RATE)
   const shipCost       = Number(o.ActualShippingCost) || 0

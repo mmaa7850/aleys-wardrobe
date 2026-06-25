@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
       UnitPrice: item.unitPrice,
       Qty: item.qty,
       SubTotal: item.unitPrice * item.qty,
-      UnitCost: costMap[item.variantId] ?? 0,
+      LineCost: costMap[item.variantId] ?? 0,
     }))
 
     const { error: itemsErr } = await supabaseAdmin

@@ -223,7 +223,7 @@ const markShipped = async () => {
       .eq('ID', detailOrder.value.ID);
     if (error) throw error;
 
-    // 預購訂單出貨時：FIFO 扣批次 + 記錄 UnitCost + 扣庫存
+    // 預購訂單出貨時：FIFO 扣批次 + 記錄 LineCost（總成本）+ 扣庫存
     if (detailOrder.value.OrderType === 'preorder' && detailItems.value.length) {
       for (const item of detailItems.value) {
         const { data: fifoCost } = await db.rpc('fifo_deduct_batch', {
@@ -231,7 +231,7 @@ const markShipped = async () => {
           p_qty:        item.Qty,
         })
         await db.from('C_ORD_OrderItemList')
-          .update({ UnitCost: Number(fifoCost) || 0 })
+          .update({ LineCost: Number(fifoCost) || 0 })
           .eq('ID', item.ID)
         await db.rpc('decrement_stock', { p_id: item.VariantID, p_qty: item.Qty })
       }
