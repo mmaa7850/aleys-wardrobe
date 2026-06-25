@@ -27,6 +27,7 @@
 | `add_shopee_stock.sql` | `C_PRD_ProductVariantList` 新增 `ShopeeStockQty BIGINT NOT NULL DEFAULT 0`（蝦皮庫存，與官網 StockQty 分開管理）| ✅ 已執行 |
 | `add_youtube_live.sql` | `C_LIV_SessionList` 新增 `YtVideoId VARCHAR(30)`；新增 `C_LIV_ChatMessageList`（前台自建聊天室）；Realtime publication 已啟用 | ✅ 已執行 |
 | `add_fifo_batches.sql` | 新增 `C_INV_VariantBatchList`（FIFO 進貨批次表）；新增 `staging.fifo_deduct_batch()` / `public.fifo_deduct_batch()` SECURITY DEFINER 函式；初始化現有有庫存規格為第一批 | ✅ 已執行 |
+| `add_line_cost.sql` | `C_ORD_OrderItemList` 新增 `LineCost NUMERIC(14,4)`（FIFO 總成本，取代 UnitCost × Qty 的除後再乘誤差）；`fifo_deduct_batch()` 改回傳總成本而非單價平均 | ✅ 已執行 |
 
 > ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
 > - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）
