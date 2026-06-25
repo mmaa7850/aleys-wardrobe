@@ -96,10 +96,12 @@ function computeOrderProfit(o, extraCost, consumableCost) {
   )
   const payFee         = o.PaymentFee != null ? Number(o.PaymentFee) : Math.round(revenue * FEE_RATE)
   const shipCost       = Number(o.ActualShippingCost) || 0
-  const totalVarCost   = itemsCost + payFee + shipCost + extraCost + consumableCost
+  // 營業稅：含稅售價反推 5% 稅額（5/105）
+  const taxAmt         = Math.round(revenue * 5 / 105)
+  const totalVarCost   = itemsCost + payFee + shipCost + extraCost + consumableCost + taxAmt
   const grossProfit    = revenue - totalVarCost
   const grossMargin    = revenue > 0 ? (grossProfit / revenue * 100) : 0
-  return { ...o, _revenue: revenue, _itemsCost: itemsCost, _payFee: payFee, _shipCost: shipCost, _extraCost: extraCost, _consumableCost: consumableCost, _grossProfit: grossProfit, _grossMargin: grossMargin }
+  return { ...o, _revenue: revenue, _itemsCost: itemsCost, _payFee: payFee, _shipCost: shipCost, _extraCost: extraCost, _consumableCost: consumableCost, _taxAmt: taxAmt, _grossProfit: grossProfit, _grossMargin: grossMargin }
 }
 
 // ── 彙總計算 ──────────────────────────────────────────
@@ -111,9 +113,10 @@ const grossSummary = computed(() => {
   const shipCost         = list.reduce((s, o) => s + o._shipCost, 0)
   const extraCost        = list.reduce((s, o) => s + o._extraCost, 0)
   const consumableCost   = list.reduce((s, o) => s + o._consumableCost, 0)
+  const taxAmt           = list.reduce((s, o) => s + o._taxAmt, 0)
   const grossProfit      = list.reduce((s, o) => s + o._grossProfit, 0)
   const grossMargin      = revenue > 0 ? (grossProfit / revenue * 100) : 0
-  return { count: list.length, revenue, itemsCost, payFee, shipCost, extraCost, consumableCost, grossProfit, grossMargin }
+  return { count: list.length, revenue, itemsCost, payFee, shipCost, extraCost, consumableCost, taxAmt, grossProfit, grossMargin }
 })
 
 const totalMonthlyExp = computed(() =>
@@ -233,6 +236,10 @@ const clr = (n) => n >= 0 ? 'text-success' : 'text-danger'
               <div class="text-muted small">退換貨額外費用</div>
               <div class="fw-medium">{{ fmtMoney(grossSummary.extraCost) }}</div>
             </div>
+            <div class="col-6 col-md-2">
+              <div class="text-muted small">營業稅（5%）</div>
+              <div class="fw-medium">{{ fmtMoney(grossSummary.taxAmt) }}</div>
+            </div>
             <div class="col-6 col-md-2 border-start">
               <div class="text-muted small fw-semibold">訂單毛利</div>
               <div class="fw-bold" :class="clr(grossSummary.grossProfit)">{{ fmtMoney(grossSummary.grossProfit) }}</div>
@@ -323,6 +330,7 @@ const clr = (n) => n >= 0 ? 'text-success' : 'text-danger'
                   <th class="text-end">運費</th>
                   <th class="text-end">耗材</th>
                   <th class="text-end">其他</th>
+                  <th class="text-end">營業稅</th>
                   <th class="text-end">毛利</th>
                   <th class="text-end">淨利率</th>
                 </tr>
@@ -336,6 +344,7 @@ const clr = (n) => n >= 0 ? 'text-success' : 'text-danger'
                   <td class="text-end text-muted">{{ fmtMoney(o._shipCost) }}</td>
                   <td class="text-end text-muted">{{ fmtMoney(o._consumableCost) }}</td>
                   <td class="text-end text-muted">{{ fmtMoney(o._extraCost) }}</td>
+                  <td class="text-end text-muted">{{ fmtMoney(o._taxAmt) }}</td>
                   <td class="text-end fw-medium" :class="clr(o._grossProfit)">{{ fmtMoney(o._grossProfit) }}</td>
                   <td class="text-end" :class="clr(o._grossMargin)">{{ fmtPct(o._grossMargin) }}</td>
                 </tr>
@@ -347,7 +356,8 @@ const clr = (n) => n >= 0 ? 'text-success' : 'text-danger'
 
       <div class="text-muted small mt-3">
         ＊ 淨利 ＝ 訂單毛利 − 月度固定費用（租金、水電…）<br>
-        ＊ 訂單毛利 ＝ 營收 − 商品進貨成本 − 金流手續費 − 出貨運費 − 耗材成本（包材/贈品） − 退換貨費用<br>
+        ＊ 訂單毛利 ＝ 營收 − 商品進貨成本 − 金流手續費 − 出貨運費 − 耗材成本 − 退換貨費用 − 營業稅（5%）<br>
+        ＊ 營業稅 ＝ 含稅營收 × 5／105（含稅售價反推，需每兩個月申報繳納）<br>
         ＊ 耗材欄數字來自訂單出貨時紀錄的耗材用量；若訂單未記錄，顯示 NT$ 0
       </div>
     </template>

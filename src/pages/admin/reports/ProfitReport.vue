@@ -97,7 +97,9 @@ function computeProfit(o, extraCostsTotal = 0, consumableCostTotal = 0) {
   const shipCost      = Number(o.ActualShippingCost) || 0
   const extraCosts    = extraCostsTotal
   const consumableCost = consumableCostTotal
-  const totalCost     = itemsCost + payFee + shipCost + extraCosts + consumableCost
+  // 營業稅：含稅售價反推 5% 稅額（5/105）
+  const taxAmt        = Math.round(revenue * 5 / 105)
+  const totalCost     = itemsCost + payFee + shipCost + extraCosts + consumableCost + taxAmt
   const profit        = revenue - totalCost
   const margin        = revenue > 0 ? (profit / revenue * 100) : 0
 
@@ -108,6 +110,7 @@ function computeProfit(o, extraCostsTotal = 0, consumableCostTotal = 0) {
     _shipCost:      shipCost,
     _extraCosts:    extraCosts,
     _consumableCost: consumableCost,
+    _taxAmt:        taxAmt,
     _totalCost:     totalCost,
     _profit:        profit,
     _margin:        margin,
@@ -126,9 +129,10 @@ const summary = computed(() => {
   const shipCost       = list.reduce((s, o) => s + o._shipCost,        0)
   const extraCosts     = list.reduce((s, o) => s + o._extraCosts,      0)
   const consumableCost = list.reduce((s, o) => s + o._consumableCost,  0)
+  const taxAmt         = list.reduce((s, o) => s + o._taxAmt,          0)
   const profit         = list.reduce((s, o) => s + o._profit,          0)
   const margin         = revenue > 0 ? (profit / revenue * 100) : 0
-  return { revenue, itemsCost, payFee, shipCost, extraCosts, consumableCost, profit, margin, count: list.length }
+  return { revenue, itemsCost, payFee, shipCost, extraCosts, consumableCost, taxAmt, profit, margin, count: list.length }
 })
 
 // ─────────────────────────────────────────────────────
@@ -238,6 +242,10 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
             <div class="text-muted small">退換貨額外成本</div>
             <div class="fw-medium">{{ fmtMoney(summary.extraCosts) }}</div>
           </div>
+          <div class="col-6 col-md-3">
+            <div class="text-muted small">營業稅（5%）</div>
+            <div class="fw-medium">{{ fmtMoney(summary.taxAmt) }}</div>
+          </div>
         </div>
       </div>
     </div>
@@ -265,7 +273,8 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
                 <th class="text-end">運費成本</th>
                 <th class="text-end">耗材成本</th>
                 <th class="text-end">退換費用</th>
-                <th class="text-end">毛利</th>
+                <th class="text-end">營業稅</th>
+                <th class="text-end">淨利</th>
                 <th class="text-end">淨利率</th>
               </tr>
             </thead>
@@ -279,6 +288,7 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
                 <td class="text-end text-muted">{{ fmtMoney(o._shipCost) }}</td>
                 <td class="text-end text-muted">{{ fmtMoney(o._consumableCost) }}</td>
                 <td class="text-end text-muted">{{ fmtMoney(o._extraCosts) }}</td>
+                <td class="text-end text-muted">{{ fmtMoney(o._taxAmt) }}</td>
                 <td class="text-end fw-medium" :class="profitClass(o._profit)">{{ fmtMoney(o._profit) }}</td>
                 <td class="text-end" :class="profitClass(o._margin)">{{ fmtPct(o._margin) }}</td>
               </tr>
@@ -290,9 +300,9 @@ const profitClass = (n) => n >= 0 ? 'text-success' : 'text-danger'
 
     <!-- 備註 -->
     <div class="text-muted small mt-3">
-      ＊ 毛利 ＝ 營收 − 商品進貨成本 − 金流手續費（1.5%）− 實際出貨運費 − 耗材成本（包材/贈品）− 退換貨額外費用<br>
+      ＊ 淨利 ＝ 營收 − 商品進貨成本 − 金流手續費 − 實際出貨運費 − 耗材成本 − 退換貨費用 − 營業稅（5%）<br>
+      ＊ 營業稅 ＝ 含稅營收 × 5／105（含稅售價反推，需每兩個月申報繳納）<br>
       ＊ 若訂單尚未填入實際運費（ActualShippingCost），該欄位計為 0<br>
-      ＊ 若商品規格尚未設定成本（CostPrice），該規格成本計為 0<br>
       ＊ 耗材欄數字來自訂單出貨時紀錄的耗材用量，若未記錄顯示 NT$ 0
     </div>
 
