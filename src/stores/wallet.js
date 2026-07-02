@@ -18,7 +18,7 @@ export const useWalletStore = defineStore('wallet', {
       const { data } = await db
         .from('C_MBR_WalletList')
         .select('Balance')
-        .eq('MemberID', user.id)
+        .eq('UserID', user.id)
         .maybeSingle()
 
       this.balance = data?.Balance ?? 0
@@ -32,7 +32,7 @@ export const useWalletStore = defineStore('wallet', {
       const { data } = await db
         .from('C_MBR_WalletTxList')
         .select('*')
-        .eq('MemberID', user.id)
+        .eq('UserID', user.id)
         .order('CreatedDate', { ascending: false })
         .limit(50)
 

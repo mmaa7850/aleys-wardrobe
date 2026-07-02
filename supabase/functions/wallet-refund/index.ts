@@ -76,21 +76,21 @@ Deno.serve(async (req) => {
     // 取得目前錢包餘額（若無錢包則建立）
     const { data: wallet } = await supabaseAdmin
       .schema(dbSchema).from('C_MBR_WalletList')
-      .select('Balance').eq('MemberID', memberId).maybeSingle()
+      .select('Balance').eq('UserID', memberId).maybeSingle()
 
     const balanceBefore = wallet?.Balance ?? 0
     const balanceAfter  = balanceBefore + finalRefundAmt
 
     // Upsert 錢包餘額
     await supabaseAdmin.schema(dbSchema).from('C_MBR_WalletList').upsert({
-      MemberID:    memberId,
+      UserID:      memberId,
       Balance:     balanceAfter,
       UpdatedDate: new Date().toISOString(),
-    }, { onConflict: 'MemberID' })
+    }, { onConflict: 'UserID' })
 
     // 寫入交易流水帳
     await supabaseAdmin.schema(dbSchema).from('C_MBR_WalletTxList').insert({
-      MemberID:       memberId,
+      UserID:         memberId,
       TxType:         'refund',
       Amount:         finalRefundAmt,
       BalanceBefore:  balanceBefore,

@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
     if (walletDeduct > 0) {
       const { data: walletRow } = await supabaseAdmin.schema(dbSchema).from('C_MBR_WalletList')
         .select('Balance')
-        .eq('MemberID', user.id)
+        .eq('UserID', user.id)
         .maybeSingle()
       const currentBalance = walletRow?.Balance ?? 0
       if (currentBalance < walletDeduct) {
@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
       await supabaseAdmin.schema(dbSchema).from('C_MBR_WalletList').update({
         Balance:     walletBalanceAfter,
         UpdatedDate: new Date().toISOString(),
-      }).eq('MemberID', user.id)
+      }).eq('UserID', user.id)
     }
 
     // 查前兩個訂單狀態：建立時用第一個（待付款），付款成功（wallet-only）用第二個（待出貨）
@@ -226,7 +226,7 @@ Deno.serve(async (req) => {
         await supabaseAdmin.schema(dbSchema).from('C_MBR_WalletList').update({
           Balance:     walletBalanceBefore,
           UpdatedDate: new Date().toISOString(),
-        }).eq('MemberID', user.id)
+        }).eq('UserID', user.id)
       }
       throw new Error(`Order insert failed: ${orderErr.message}`)
     }
@@ -234,7 +234,7 @@ Deno.serve(async (req) => {
     // 錢包扣款流水帳
     if (walletDeduct > 0) {
       await supabaseAdmin.schema(dbSchema).from('C_MBR_WalletTxList').insert({
-        MemberID:       user.id,
+        UserID:         user.id,
         TxType:         'order_deduct',
         Amount:         -walletDeduct,
         BalanceBefore:  walletBalanceBefore,
@@ -293,7 +293,9 @@ Deno.serve(async (req) => {
         .eq('ID', autoDiscountCouponId)
     }
 
-    // ── 全額錢包付款：扣庫存後直接回傳成功，不走藍新 ────────────
+    // ── 全額錢包付款：直接回傳成功，不走藍新 ────────────────────
+    // 庫存已於加入購物車時扣過一次（decrement_stock RPC），這裡不再重複扣，
+    // 否則會造成同一件商品庫存被扣兩次。
     if (newebpayAmount === 0) {
       const now = new Date().toISOString()
 
@@ -305,21 +307,6 @@ Deno.serve(async (req) => {
         ...(secondStatus?.ID ? { StatusID: secondStatus.ID } : {}),
       }).eq('OrderNo', orderNo)
 
-      const { data: orderDataFull } = await supabaseAdmin.schema(dbSchema).from('C_ORD_OrderList')
-        .select('ID').eq('OrderNo', orderNo).single()
-      if (orderDataFull) {
-        const { data: orderItemsFull } = await supabaseAdmin.schema(dbSchema).from('C_ORD_OrderItemList')
-          .select('VariantID, Qty').eq('OrderID', orderDataFull.ID)
-        for (const item of orderItemsFull || []) {
-          const { data: v } = await supabaseAdmin.schema(dbSchema).from('C_PRD_ProductVariantList')
-            .select('StockQty').eq('ID', item.VariantID).single()
-          if (v) {
-            await supabaseAdmin.schema(dbSchema).from('C_PRD_ProductVariantList')
-              .update({ StockQty: Math.max(0, v.StockQty - item.Qty) })
-              .eq('ID', item.VariantID)
-          }
-        }
-      }
       return new Response(JSON.stringify({ walletOnly: true, orderNo }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })

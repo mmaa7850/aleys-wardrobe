@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 待開發功能清單
 
-> 更新時間：2026-06-20
+> 更新時間：2026-07-02
 
 ---
 
@@ -57,6 +57,9 @@
 - **FIFO 先進先出成本計算**：商品成本計算改為先進先出；新增 `C_INV_VariantBatchList`（進貨批次表，記錄每次進貨的單價與剩餘數量）；`fifo_deduct_batch(p_variant_id, p_qty)` SECURITY DEFINER 函式從最舊批次依序扣除並回傳加權平均 FIFO 單價；現貨訂單付款時（`create-payment`）呼叫 FIFO 寫入 `UnitCost`；預購訂單後台標記出貨時呼叫 FIFO 寫入 `UnitCost` 並同步扣 `StockQty`；進貨確認時（`PurchaseDetail.vue`）改為 INSERT 批次記錄而非更新 `CostPrice`；migration `add_fifo_batches.sql`（public/staging 分區，已初始化現有庫存為第一批）
 - **YouTube 直播導入官網 + 自建聊天室**：前台新增獨立直播頁 `/live`（`LiveView.vue`）；無 active 場次時顯示「目前沒有直播」；後台場次詳情新增 `YtVideoId` 欄位輸入，前台 embed YouTube iframe（`https://www.youtube.com/embed/{YtVideoId}?autoplay=1&rel=0`）；自建聊天室（`C_LIV_ChatMessageList`）需登入才能留言，訊息 ≤200 字，以 Supabase Realtime（postgres_changes INSERT 事件）即時推播；前台導覽列（桌面版 + 手機版）新增「直播」入口；FB 登入按鈕隱藏（程式碼保留，`v-show="false"`）；migration `add_youtube_live.sql`
 - **蝦皮庫存分開（ShopeeStockQty）**：`C_PRD_ProductVariantList` 新增 `ShopeeStockQty BIGINT NOT NULL DEFAULT 0`；官網訂單流程（`decrement_stock` / `restore_stock`）僅動 `StockQty`，不動蝦皮庫存；後台庫存總覽新增「蝦皮庫存」欄位顯示；商品編輯頁 variant 矩陣新增蝦皮庫存數量輸入；migration `add_shopee_stock.sql`
+- **cancel-orders 對齊週銷單邏輯**：手動銷單 Edge Function 的購物車現貨品判斷邏輯改為與 `weekly_cancel_job()` 完全一致——比對加入購物車當下快照的 `IsPreOrderItem` + 排除 `CancelledAt IS NOT NULL` 的舊 row，取代原本即時查 Product/Variant 判斷，避免重複手動觸發時庫存被重複回補
+- **create-payment 錢包全額付款重複扣庫存 bug 修正**：移除全額錢包付款分支中重複的 `StockQty` 扣減迴圈——庫存已於加入購物車時透過 `decrement_stock` 扣過一次，該分支只需更新付款狀態（`PaidAt`/`PaymentMethod`/`StatusID`）
+- **錢包表 MemberID → UserID 改名**：`C_MBR_WalletList` / `WalletTxList` / `WalletTopupList` 的 `MemberID` 欄位實際存的是 `auth.users.id`（UUID），與 Cart/Wishlist 的 `MemberID`（指 `C_MBR_MemberList.ID`）同名不同義，容易混淆，改名為 `UserID`；migration `rename_wallet_memberid_to_userid.sql`（`public` + `staging` 已套用）；程式碼同步更新：Edge Functions `wallet-adjust` / `wallet-refund` / `wallet-topup` / `wallet-topup-notify` / `create-payment`、Pinia store `src/stores/wallet.js`；Cart/Wishlist 的 `MemberID` 語意正確，未受影響
 
 ---
 
@@ -211,6 +214,8 @@ LINE 訊息列出被取消的商品名稱 + 連結到店鋪首頁或各商品頁
 
 **尚未確認的問題：**
 > ❓ 蝦皮訂單要逐筆手動記錄，還是只要月結摘要（總營收/手續費/運費）？
+
+> ❓ **料號/SKU 對應（2026-07-02 確認：目前完全沒有）**：曾討論過用「異動清單」批次同步蝦皮庫存，但清單要能跟官網商品對應，必須先有共同的 key——光靠商品名稱人工比對容易對不上（打字方式、規格命名不同）。目前 `C_PRD_ProductVariantList` 沒有任何欄位可以對應到蝦皮的商品/規格，這是任何庫存同步方案（不論批次匯出匯入或串接工具）都要先解決的前提。可行方向：新增 `ShopeeSKU` 欄位，存蝦皮上架時本來就會填的自訂貨號，兩邊才有穩定的 key 可以對應。**尚未實作，待使用者確認是否要加此欄位。**
 
 ---
 

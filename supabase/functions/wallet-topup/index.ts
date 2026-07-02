@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
       .from('C_MBR_WalletTopupList')
       .insert({
         TopupNo:            topupNo,
-        MemberID:           user.id,
+        UserID:             user.id,
         Amount:             amt,
         PaymentStatus:      'pending',
         InvoiceStatus:      'none',

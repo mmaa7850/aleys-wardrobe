@@ -49,11 +49,11 @@ Deno.serve(async (req) => {
       const [walletRes, txRes] = await Promise.all([
         supabaseAdmin.schema(dbSchema).from('C_MBR_WalletList')
           .select('Balance, UpdatedDate')
-          .eq('MemberID', memberId)
+          .eq('UserID', memberId)
           .maybeSingle(),
         supabaseAdmin.schema(dbSchema).from('C_MBR_WalletTxList')
           .select('*')
-          .eq('MemberID', memberId)
+          .eq('UserID', memberId)
           .order('CreatedDate', { ascending: false })
           .limit(50),
       ])
@@ -76,7 +76,7 @@ Deno.serve(async (req) => {
       // 取得現有餘額
       const { data: wallet } = await supabaseAdmin.schema(dbSchema).from('C_MBR_WalletList')
         .select('Balance')
-        .eq('MemberID', memberId)
+        .eq('UserID', memberId)
         .maybeSingle()
 
       const balanceBefore = wallet?.Balance ?? 0
@@ -86,14 +86,14 @@ Deno.serve(async (req) => {
 
       // Upsert 錢包
       await supabaseAdmin.schema(dbSchema).from('C_MBR_WalletList').upsert({
-        MemberID:    memberId,
+        UserID:      memberId,
         Balance:     balanceAfter,
         UpdatedDate: new Date().toISOString(),
-      }, { onConflict: 'MemberID' })
+      }, { onConflict: 'UserID' })
 
       // 流水帳
       await supabaseAdmin.schema(dbSchema).from('C_MBR_WalletTxList').insert({
-        MemberID:      memberId,
+        UserID:        memberId,
         TxType:        'adjust',
         Amount:        adjAmt,
         BalanceBefore: balanceBefore,

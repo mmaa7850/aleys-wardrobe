@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-06-20
+> 更新時間：2026-07-02
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -94,7 +94,7 @@
 
 | Function | JWT 驗證 | 說明 |
 |----------|----------|------|
-| `create-payment` | ✅ 需要 | 後端驗證手動優惠券；後端自動偵測滿額折抵；計算 `FinalAmount`；錢包折抵（`WalletDeductAmt`）；全額錢包付款不送藍新（`walletOnly:true`）；建立訂單並於建立時設 `StatusID`=第一個狀態；全額錢包時補寫 `PaidAt`/`PaymentMethod='wallet'`/`StatusID`=第二個狀態；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；**現貨訂單付款時呼叫 `fifo_deduct_batch()` 取得 FIFO 成本並寫入 `OrderItemList.UnitCost`**（取代原本快照 `CostPrice`）；AES 加密藍新參數 |
+| `create-payment` | ✅ 需要 | 後端驗證手動優惠券；後端自動偵測滿額折抵；計算 `FinalAmount`；錢包折抵（`WalletDeductAmt`，查/寫 `C_MBR_WalletList.UserID`）；全額錢包付款不送藍新（`walletOnly:true`），該分支**只更新付款狀態，不重複扣庫存**（庫存已於加入購物車時透過 `decrement_stock` 扣過一次；2026-07 修正原本重複扣庫存的 bug）；建立訂單並於建立時設 `StatusID`=第一個狀態；全額錢包時補寫 `PaidAt`/`PaymentMethod='wallet'`/`StatusID`=第二個狀態；依 `shippingMethodCode` 決定是否加 CVSCOM 參數；**現貨訂單付款時呼叫 `fifo_deduct_batch()` 取得 FIFO 成本並寫入 `OrderItemList.UnitCost`**（取代原本快照 `CostPrice`）；AES 加密藍新參數 |
 | `payment-notify` | ❌ 關閉 | 藍新背景 webhook：驗簽解密、更新 `PaymentStatus=paid`/`PaidAt`/`PaymentMethod`/`TradeNo`；計算並存入 `PaymentFee`（信用卡2.8%、ATM1% 上限NT$20、LINE Pay 2.31%）；自動設 `StatusID`=第二個狀態（已付款）；扣庫存；儲存 CVSCOM 門市資訊；呼叫 ezPay 自動開立電子發票（依 InvoiceCarrierType 帶入對應載具參數） |
 | `payment-return` | ❌ 關閉 | 藍新前台導回：儲存付款方式、ATM 帳號、CVSCOM 門市資訊，導向 `/order-success/:orderNo` |
 | `retry-payment` | ✅ 需要 | 對同一訂單重新產生藍新付款參數（訂單號加 `_R0~R9` 後綴避免重複，不重建訂單）；開放信用卡 + ATM 轉帳 + LINE Pay（CREDIT=1、VACC=1、LINEPAY=1、ExpireDate 3天）；超商取貨訂單附加 CVSCOM/LgsType 參數；使用 `NewebpayAmt`（扣除錢包後的實際付款金額）|
@@ -112,7 +112,7 @@
 | `line-bind` | ✅ 需要 | LINE 帳號綁定完成：驗證 `LineBindToken`（有效期內且未使用）；寫入 `C_MBR_MemberList.LineUserID`；標記 Token 已使用 |
 | `live-import` | ✅ 需要 | 直播代建訂單：解析前端傳入的逐行留言（`FbName + Code + 顏色 + 尺寸 + 數量`）；以 `FbName` 查會員；檢查 `IsBlocked`（封鎖者拒絕）；扣庫存（`decrement_stock`）；建訂單（`OrderSource='live'`）；LINE 推播付款連結 |
 | `live-bid-poll` | ✅ 需要 | FB 直播即時監控：`start_monitor` 開始輪詢 FB Live Comments API；`stop_monitor` 停止；`start_bid` 起標（貼起標公告到 FB + 建 `C_LIV_ActiveBidList` 記錄）；`stop_bid` 截標（結算，呼叫 `live-import` 批次建單）；`poll` 單次輪詢（解析留言、比對開標代碼、去重）|
-| `cancel-orders` | ✅ 需要 | 銷單 Edge Function（也可由 pg_cron 定時呼叫）：取消所有 `pending`/`failed` 訂單；呼叫 `restore_stock` 回補庫存；軟刪除購物車現貨品（設 `CancelledAt`，預購品保留）；同步回補購物車現貨庫存；設相關會員 `IsBlocked=true` |
+| `cancel-orders` | ✅ 需要 | 銷單 Edge Function（也可由 pg_cron 定時呼叫）：取消所有 `pending`/`failed` 訂單；呼叫 `restore_stock` 回補庫存；軟刪除購物車現貨品（設 `CancelledAt`，預購品保留）；同步回補購物車現貨庫存；設相關會員 `IsBlocked=true`；**2026-07 修正**：購物車現貨品判斷邏輯已與 `weekly_cancel_job()` 對齊——改用加入購物車當下快照的 `IsPreOrderItem` + 排除 `CancelledAt IS NOT NULL` 的舊 row，取代原本即時查 Product/Variant 的判斷方式（避免手動重複觸發時庫存被重複回補）|
 | `get-blocked-members` | ✅ 需要 | 取得本週被封鎖會員清單（供 PendingList Tab2 顯示）：查 `IsBlocked=true` 且本週 `UpdatedDate` 的會員；附帶被取消的購物車品項明細（含商品名稱/顏色/尺寸） |
 | `manage-member-cart` | ✅ 需要 | 後台會員購物車管理：`GET` 查詢指定會員購物車品項（Join 商品/顏色/尺寸名稱）；`REMOVE` 移除單一品項並呼叫 `restore_stock` 回補庫存（後台硬刪除，軟刪除保留給 cron 使用）|
 

@@ -98,66 +98,51 @@ Deno.serve(async (req) => {
     }
 
     // ══ Part B：清購物車現貨品（真預購除外）══════════════════════
+    // 邏輯與 weekly_cancel_job()（fix_cron_and_cart_preorder.sql）一致：
+    // 用加入購物車當下快照的 IsPreOrderItem 判斷，而非即時查 Product/Variant，
+    // 並排除已軟刪除（CancelledAt 非 null）的 row，避免重複回補庫存。
 
     const { data: cartItems, error: cartErr } = await admin
       .schema(dbSchema)
       .from('C_CART_CartItemList')
-      .select('ID, CartID, ProductID, VariantID, Qty')
+      .select('ID, CartID, VariantID, Qty')
       .eq('IsReward', false)
+      .eq('IsPreOrderItem', false)
+      .is('CancelledAt', null)
 
     if (cartErr) throw new Error(cartErr.message ?? JSON.stringify(cartErr))
 
     if (cartItems?.length) {
-      const productIds = [...new Set(cartItems.map(i => i.ProductID).filter(Boolean))]
-      const variantIds = [...new Set(cartItems.map(i => i.VariantID).filter(Boolean))]
+      // 回補庫存
+      const cartStockMap: Record<number, number> = {}
+      for (const item of cartItems) {
+        if (!item.VariantID) continue
+        cartStockMap[item.VariantID] = (cartStockMap[item.VariantID] ?? 0) + item.Qty
+      }
+      for (const [vid, qty] of Object.entries(cartStockMap)) {
+        await restoreStock(Number(vid), qty)
+      }
 
-      const [{ data: products }, { data: variants }] = await Promise.all([
-        admin.schema(dbSchema).from('C_PRD_ProductList').select('ID, IsPreOrder').in('ID', productIds),
-        admin.schema(dbSchema).from('C_PRD_ProductVariantList').select('ID, StockQty').in('ID', variantIds),
-      ])
+      // 軟刪除：標記 CancelledAt（保留紀錄供 Tab2 顯示）
+      const deleteIds = cartItems.map(i => i.ID)
+      const { error: delErr } = await admin
+        .schema(dbSchema).from('C_CART_CartItemList')
+        .update({ CancelledAt: new Date().toISOString() })
+        .in('ID', deleteIds)
+      if (delErr) throw new Error(delErr.message ?? JSON.stringify(delErr))
+      cartCleared = deleteIds.length
 
-      const productMap = Object.fromEntries((products ?? []).map(p => [p.ID, p]))
-      const variantMap = Object.fromEntries((variants ?? []).map(v => [v.ID, v]))
-
-      // 略過：IsPreOrder=true 且 StockQty=0（真正無庫存的預購）
-      const toDelete = cartItems.filter(i => {
-        const p = productMap[i.ProductID]
-        const v = variantMap[i.VariantID]
-        return !(p?.IsPreOrder && (v?.StockQty ?? 0) <= 0)
-      })
-
-      if (toDelete.length) {
-        // 回補庫存
-        const cartStockMap: Record<number, number> = {}
-        for (const item of toDelete) {
-          if (!item.VariantID) continue
-          cartStockMap[item.VariantID] = (cartStockMap[item.VariantID] ?? 0) + item.Qty
-        }
-        for (const [vid, qty] of Object.entries(cartStockMap)) {
-          await restoreStock(Number(vid), qty)
-        }
-
-        // 軟刪除：標記 CancelledAt（保留紀錄供 Tab2 顯示）
-        const deleteIds = toDelete.map(i => i.ID)
-        const { error: delErr } = await admin
-          .schema(dbSchema).from('C_CART_CartItemList')
-          .update({ CancelledAt: new Date().toISOString() })
-          .in('ID', deleteIds)
-        if (delErr) throw new Error(delErr.message ?? JSON.stringify(delErr))
-        cartCleared = deleteIds.length
-
-        // 收集被清購物車的會員 email（CartItem → Cart → Member）
-        const cartIds = [...new Set(toDelete.map(i => i.CartID).filter(Boolean))]
-        if (cartIds.length) {
-          const { data: carts } = await admin
-            .schema(dbSchema).from('C_CART_CartList').select('MemberID').in('ID', cartIds)
-          const memberIds = [...new Set((carts ?? []).map(c => c.MemberID).filter(Boolean))]
-          if (memberIds.length) {
-            const { data: cartMembers } = await admin
-              .schema(dbSchema).from('C_MBR_MemberList').select('Email').in('ID', memberIds)
-            for (const m of cartMembers ?? []) {
-              if (m.Email) emailsToBlock.add(m.Email)
-            }
+      // 收集被清購物車的會員 email（CartItem → Cart → Member）
+      const cartIds = [...new Set(cartItems.map(i => i.CartID).filter(Boolean))]
+      if (cartIds.length) {
+        const { data: carts } = await admin
+          .schema(dbSchema).from('C_CART_CartList').select('MemberID').in('ID', cartIds)
+        const memberIds = [...new Set((carts ?? []).map(c => c.MemberID).filter(Boolean))]
+        if (memberIds.length) {
+          const { data: cartMembers } = await admin
+            .schema(dbSchema).from('C_MBR_MemberList').select('Email').in('ID', memberIds)
+          for (const m of cartMembers ?? []) {
+            if (m.Email) emailsToBlock.add(m.Email)
           }
         }
       }

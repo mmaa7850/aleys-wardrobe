@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
 
     // 冪等：已處理就跳過
     const { data: existing } = await supabase.schema(dbSchema).from('C_MBR_WalletTopupList')
-      .select('PaymentStatus, MemberID, Amount, InvoiceStatus, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN')
+      .select('PaymentStatus, UserID, Amount, InvoiceStatus, InvoiceCarrierType, InvoiceCarrierNum, InvoiceLoveCode, InvoiceBuyerUBN')
       .eq('TopupNo', topupNo)
       .single()
 
@@ -110,14 +110,14 @@ Deno.serve(async (req) => {
       return new Response('OK', { status: 200 })
     }
 
-    const memberId = existing.MemberID
+    const memberId = existing.UserID
     const amt      = existing.Amount
 
     // ── 入帳錢包（upsert + 取得變動前後餘額）────────────────────
     // 1. 取得現有餘額
     const { data: wallet } = await supabase.schema(dbSchema).from('C_MBR_WalletList')
       .select('Balance')
-      .eq('MemberID', memberId)
+      .eq('UserID', memberId)
       .maybeSingle()
 
     const balanceBefore = wallet?.Balance ?? 0
@@ -125,14 +125,14 @@ Deno.serve(async (req) => {
 
     // 2. Upsert 錢包
     await supabase.schema(dbSchema).from('C_MBR_WalletList').upsert({
-      MemberID:    memberId,
+      UserID:      memberId,
       Balance:     balanceAfter,
       UpdatedDate: new Date().toISOString(),
-    }, { onConflict: 'MemberID' })
+    }, { onConflict: 'UserID' })
 
     // 3. 寫入交易流水帳
     await supabase.schema(dbSchema).from('C_MBR_WalletTxList').insert({
-      MemberID:       memberId,
+      UserID:         memberId,
       TxType:         'topup',
       Amount:         amt,
       BalanceBefore:  balanceBefore,

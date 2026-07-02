@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-06-20
+> 更新時間：2026-07-02
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -28,6 +28,7 @@
 | `add_youtube_live.sql` | `C_LIV_SessionList` 新增 `YtVideoId VARCHAR(30)`；新增 `C_LIV_ChatMessageList`（前台自建聊天室）；Realtime publication 已啟用 | ✅ 已執行 |
 | `add_fifo_batches.sql` | 新增 `C_INV_VariantBatchList`（FIFO 進貨批次表）；新增 `staging.fifo_deduct_batch()` / `public.fifo_deduct_batch()` SECURITY DEFINER 函式；初始化現有有庫存規格為第一批 | ✅ 已執行 |
 | `add_line_cost.sql` | `C_ORD_OrderItemList` 新增 `LineCost NUMERIC(14,4)`（FIFO 總成本，取代 UnitCost × Qty 的除後再乘誤差）；`fifo_deduct_batch()` 改回傳總成本而非單價平均 | ✅ 已執行 |
+| `rename_wallet_memberid_to_userid.sql` | 錢包三張表（`C_MBR_WalletList` / `WalletTxList` / `WalletTopupList`）的 `MemberID` 欄位改名為 `UserID`——原欄位實際存 `auth.users.id`（UUID），與 Cart/Wishlist 的 `MemberID`（指 `C_MBR_MemberList.ID`）同名不同義，容易混淆；純改名不動資料/FK | ✅ 已執行 |
 
 > ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
 > - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）
@@ -251,20 +252,20 @@ WITH CHECK (
 > RLS：已啟用；僅由 `line-webhook` / `line-bind` Edge Functions 以 service_role 讀寫，無公開 policy。
 
 ### C_MBR_WalletList
-| 欄位 | 型別 | Nullable | Default |
-|------|------|----------|---------|
-| ID | bigint | NO | — |
-| MemberID | bigint | NO | — |
-| Balance | bigint | NO | 0 |
-| CreatedDate | timestamptz | YES | now() |
-| UpdatedDate | timestamptz | YES | — |
+| 欄位 | 型別 | Nullable | Default | 說明 |
+|------|------|----------|---------|------|
+| ID | bigint | NO | — | |
+| UserID | uuid | NO | — | FK → auth.users.id（原欄名 `MemberID`）|
+| Balance | bigint | NO | 0 | |
+| CreatedDate | timestamptz | YES | now() | |
+| UpdatedDate | timestamptz | YES | — | |
 
 ### C_MBR_WalletTopupList
 | 欄位 | 型別 | Nullable | Default | 說明 |
 |------|------|----------|---------|------|
 | ID | bigint | NO | — | |
 | TopupNo | varchar | NO | — | 儲值單號（TU_YYYYMMDD_XXXXX）|
-| MemberID | bigint | NO | — | |
+| UserID | uuid | NO | — | FK → auth.users.id（原欄名 `MemberID`）|
 | Amount | bigint | NO | — | 儲值金額 |
 | PaymentStatus | varchar(20) | NO | 'pending' | `pending` / `paid` / `fail` |
 | PaymentMethod | varchar(20) | YES | — | `credit` / `atm` 等 |
@@ -285,7 +286,7 @@ WITH CHECK (
 | 欄位 | 型別 | Nullable | Default | 說明 |
 |------|------|----------|---------|------|
 | ID | bigint | NO | — | |
-| MemberID | bigint | NO | — | |
+| UserID | uuid | NO | — | FK → auth.users.id（原欄名 `MemberID`）|
 | TxType | varchar(20) | NO | — | `topup` / `order_deduct` / `refund` / `adjust` |
 | Amount | bigint | NO | — | 異動金額（正=入帳，負=支出）|
 | BalanceBefore | bigint | NO | — | |
