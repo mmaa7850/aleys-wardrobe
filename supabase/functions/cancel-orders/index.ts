@@ -62,6 +62,14 @@ Deno.serve(async (req) => {
 
     if (orders?.length) {
       const orderIds = orders.map(o => o.ID)
+      const { data: cancelledStatus } = await admin
+        .schema(dbSchema)
+        .from('S_ORD_StatusList')
+        .select('ID')
+        .eq('Name', 'cancelled')
+        .order('ID', { ascending: true })
+        .limit(1)
+        .maybeSingle()
 
       // 回補訂單庫存
       const { data: orderItems, error: itemErr } = await admin
@@ -85,7 +93,11 @@ Deno.serve(async (req) => {
       const { error: cancelErr } = await admin
         .schema(dbSchema)
         .from('C_ORD_OrderList')
-        .update({ PaymentStatus: 'cancelled', UpdatedDate: new Date().toISOString() })
+        .update({
+          PaymentStatus: 'cancelled',
+          UpdatedDate: new Date().toISOString(),
+          ...(cancelledStatus?.ID ? { StatusID: cancelledStatus.ID } : {}),
+        })
         .in('ID', orderIds)
 
       if (cancelErr) throw new Error(cancelErr.message ?? JSON.stringify(cancelErr))

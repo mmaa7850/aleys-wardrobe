@@ -20,10 +20,10 @@ onMounted(async () => {
   const firstOfMonth = today.slice(0, 7) + "-01";
 
   const [
-    { data: ordersToday },
+    { count: ordersTodayCount },
     { data: ordersMonth },
-    { data: pendingOrders },
-    { data: lowStockVariants },
+    { count: pendingOrderCount },
+    { count: lowStockVariantCount },
     { data: recent },
   ] = await Promise.all([
     db.from("C_ORD_OrderList")
@@ -47,11 +47,11 @@ onMounted(async () => {
 
   const paid = (ordersMonth ?? []).filter((o) => o.PaymentStatus === "paid");
   stats.value = {
-    ordersToday: ordersToday?.length ?? 0,
+    ordersToday: ordersTodayCount ?? 0,
     ordersMonth: ordersMonth?.length ?? 0,
     revenueMonth: paid.reduce((sum, o) => sum + (o.FinalAmount ?? 0), 0),
-    pendingPayment: pendingOrders?.length ?? 0,
-    lowStock: lowStockVariants?.length ?? 0,
+    pendingPayment: pendingOrderCount ?? 0,
+    lowStock: lowStockVariantCount ?? 0,
   };
   recentOrders.value = recent ?? [];
   loading.value = false;
@@ -69,6 +69,7 @@ const paymentBadge = (status) => ({
   paid: { class: "bg-success", label: "已付款" },
   failed: { class: "bg-danger", label: "付款失敗" },
   refunded: { class: "bg-secondary", label: "已退款" },
+  cancelled: { class: "bg-dark", label: "已取消" },
 }[status] ?? { class: "bg-light text-dark", label: status });
 </script>
 

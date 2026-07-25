@@ -31,7 +31,7 @@ async function fetchPendingAtmTopups() {
   const { data, error } = await db
     .from('C_MBR_WalletTopupList')
     .select('TopupNo, Amount, ATMBankCode, ATMAccount, ATMExpireDate, CreatedDate')
-    .eq('MemberID', auth.user.id)
+    .eq('UserID', auth.user.id)
     .eq('PaymentStatus', 'pending')
     .eq('PaymentMethod', 'atm')
     .not('ATMBankCode', 'is', null)

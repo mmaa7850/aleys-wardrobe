@@ -69,7 +69,8 @@ Deno.serve(async (req) => {
     if (order.PaymentStatus === 'refunded') return json({ error: '此訂單已退款' }, 400)
     if (order.PaymentStatus !== 'paid') return json({ error: '此訂單非已付款狀態，無法退款' }, 400)
 
-    const isCreditCard = !order.PaymentMethod || CREDIT_PAYMENT_TYPES.has(order.PaymentMethod)
+    const normalizedPaymentMethod = String(order.PaymentMethod ?? '').trim().toUpperCase()
+    const isCreditCard = !normalizedPaymentMethod || CREDIT_PAYMENT_TYPES.has(normalizedPaymentMethod)
 
     // ATM 或手動模式：直接更新 DB，不呼叫藍新 API
     if (!isCreditCard || manual) {

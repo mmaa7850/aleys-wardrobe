@@ -432,6 +432,7 @@ const saveDetail = async () => {
 
 // ── Refund ────────────────────────────────────────────
 const CREDIT_METHODS = new Set(['CREDIT', 'APPLEPAY', 'GOOGLEPAY', 'SAMSUNGPAY', 'WEBATM', 'UNIONPAY', 'CREDITAE', 'FOREIGN']);
+const normalizePayMethod = (method) => String(method ?? '').trim().toUpperCase();
 
 const PAYMENT_METHOD_LABEL = {
   CREDIT:    '信用卡',
@@ -442,21 +443,28 @@ const PAYMENT_METHOD_LABEL = {
   UNIONPAY:  '銀聯卡',
   VACC:      'ATM 虛擬帳號',
   LINEPAY:   'LINE Pay',
-  wallet:    '購物金（錢包）',
+  WALLET:    '購物金（錢包）',
+  ATM:       'ATM 虛擬帳號',
+  CVS:       '超商代碼',
+  CVSCOM:    '超商取貨付款',
 };
-const fmtPayMethod = (m) => m ? (PAYMENT_METHOD_LABEL[m] ?? m) : '-';
+const fmtPayMethod = (method) => {
+  if (!method) return '-';
+  const normalized = normalizePayMethod(method);
+  return PAYMENT_METHOD_LABEL[normalized] ?? method;
+};
 
 const canRefund = computed(() => detailOrder.value?.PaymentStatus === 'paid');
 const canApiRefund = computed(() => {
-  const m = detailOrder.value?.PaymentMethod;
+  const m = normalizePayMethod(detailOrder.value?.PaymentMethod);
   return canRefund.value && !!m && CREDIT_METHODS.has(m);
 });
 const refundBtnLabel = computed(() => {
-  const m = detailOrder.value?.PaymentMethod;
+  const m = normalizePayMethod(detailOrder.value?.PaymentMethod);
   if (m && CREDIT_METHODS.has(m)) return '信用卡退款（藍新 API）';
-  if (m === 'VACC') return 'ATM 退款（手動匯款）';
+  if (m === 'VACC' || m === 'ATM') return 'ATM 退款（手動匯款）';
   if (m === 'LINEPAY') return 'LINE Pay 退款（手動）';
-  if (m === 'wallet') return '退回錢包（手動）';
+  if (m === 'WALLET') return '退回錢包（手動）';
   return '標記已退款（手動）';
 });
 
@@ -592,6 +600,7 @@ const PAYMENT_BADGE = {
   paid:     "bg-success",
   failed:   "bg-danger",
   refunded: "bg-secondary",
+  cancelled: "bg-dark",
 };
 
 const paymentBadgeClass = (status) => PAYMENT_BADGE[status] ?? "bg-light text-dark";
@@ -654,6 +663,7 @@ onMounted(async () => {
               <option value="paid">{{ t("order.orders.payment_paid") }}</option>
               <option value="failed">{{ t("order.orders.payment_failed") }}</option>
               <option value="refunded">{{ t("order.orders.payment_refunded") }}</option>
+              <option value="cancelled">{{ t("order.orders.payment_cancelled") }}</option>
             </select>
           </div>
         </div>

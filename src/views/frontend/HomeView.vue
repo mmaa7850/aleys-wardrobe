@@ -8,6 +8,7 @@ const auth = useAuthStore()
 
 // ── Products ────────────────────────────────────────────────
 const newArrivals = ref([])
+const homeCategories = ref([])
 const isLoading = ref(true)
 
 function getProductImageUrl(storagePath) {
@@ -114,7 +115,12 @@ onMounted(async () => {
       .or('IsActive.is.null,IsActive.eq.true')
       .order('CreatedDate', { ascending: false })
       .limit(8)
-      .then(({ data }) => { if (data) newArrivals.value = data })
+      .then(({ data }) => { if (data) newArrivals.value = data }),
+    db
+      .from('S_PRD_CategoryList')
+      .select('ID, Name')
+      .order('ID', { ascending: true })
+      .then(({ data }) => { homeCategories.value = data ?? [] }),
   ])
   isLoading.value = false
 })
@@ -320,37 +326,24 @@ onUnmounted(() => {
   <!-- ════════════════════════════════
        CATEGORIES
   ════════════════════════════════ -->
-  <section class="section-categories">
+  <section v-if="homeCategories.length" class="section-categories">
     <div class="section-header">
-      <span class="section-header__eyebrow">Shop By Style</span>
-      <h2 class="section-header__title">探索風格</h2>
+      <span class="section-header__eyebrow">Shop By Category</span>
+      <h2 class="section-header__title">探索分類</h2>
       <div class="section-header__line"></div>
     </div>
 
     <div class="categories-grid">
-      <RouterLink to="/products?style=japanese" class="cat-card cat-card--a">
+      <RouterLink
+        v-for="(category, index) in homeCategories"
+        :key="category.ID"
+        :to="{ path: '/products', query: { category: category.Name } }"
+        :class="['cat-card', `cat-card--${['a', 'b', 'c'][index % 3]}`]"
+      >
         <div class="cat-card__content">
-          <p class="cat-card__tag">Style 01</p>
-          <h3 class="cat-card__title">日系穿搭</h3>
-          <p class="cat-card__desc">簡約俐落，質感生活</p>
-          <span class="cat-card__link">Shop Now →</span>
-        </div>
-      </RouterLink>
-
-      <RouterLink to="/products?style=korean" class="cat-card cat-card--b">
-        <div class="cat-card__content">
-          <p class="cat-card__tag">Style 02</p>
-          <h3 class="cat-card__title">韓系穿搭</h3>
-          <p class="cat-card__desc">時髦有型，引領潮流</p>
-          <span class="cat-card__link">Shop Now →</span>
-        </div>
-      </RouterLink>
-
-      <RouterLink to="/products?category=accessories" class="cat-card cat-card--c">
-        <div class="cat-card__content">
-          <p class="cat-card__tag">Style 03</p>
-          <h3 class="cat-card__title">配件精品</h3>
-          <p class="cat-card__desc">點綴造型，完美收尾</p>
+          <p class="cat-card__tag">Category {{ String(index + 1).padStart(2, '0') }}</p>
+          <h3 class="cat-card__title">{{ category.Name }}</h3>
+          <p class="cat-card__desc">瀏覽 {{ category.Name }} 精選商品</p>
           <span class="cat-card__link">Shop Now →</span>
         </div>
       </RouterLink>
@@ -835,7 +828,8 @@ onUnmounted(() => {
 
 .categories-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(260px, 420px));
+  justify-content: center;
   gap: 20px;
   max-width: 1400px;
   margin: 0 auto;

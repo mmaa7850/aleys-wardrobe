@@ -16,6 +16,7 @@ const PAYMENT_ROWS = [
   { key: 'paid',     label: '已付款',  color: '#10b981' },
   { key: 'failed',   label: '付款失敗', color: '#ef4444' },
   { key: 'refunded', label: '已退款',  color: '#6b7280' },
+  { key: 'cancelled', label: '已取消', color: '#9ca3af' },
 ]
 
 const canvasRef = ref(null)
@@ -56,11 +57,17 @@ async function load() {
   const counts = {}
   PAYMENT_ROWS.forEach(r => { counts[r.key] = 0 })
   ;(orders ?? []).forEach(o => {
-    if (counts[o.PaymentStatus] !== undefined) counts[o.PaymentStatus]++
+    const key = o.PaymentStatus || 'unknown'
+    counts[key] = (counts[key] ?? 0) + 1
   })
 
   total.value = (orders ?? []).length
-  rows.value = PAYMENT_ROWS.map(r => ({ ...r, count: counts[r.key] }))
+  const knownRows = PAYMENT_ROWS.map(r => ({ ...r, count: counts[r.key] }))
+  const knownKeys = new Set(PAYMENT_ROWS.map(r => r.key))
+  const unknownRows = Object.entries(counts)
+    .filter(([key, count]) => !knownKeys.has(key) && count > 0)
+    .map(([key, count]) => ({ key, label: `其他（${key}）`, color: '#cbd5e1', count }))
+  rows.value = [...knownRows, ...unknownRows]
 
   loading.value = false
   await nextTick()

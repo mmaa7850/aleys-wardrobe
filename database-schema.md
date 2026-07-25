@@ -1,6 +1,6 @@
 # Database Schema — staging & public
 
-> 更新時間：2026-07-02
+> 更新時間：2026-07-25
 > Schema：`staging`（開發）、`public`（正式）
 
 ---
@@ -29,6 +29,7 @@
 | `add_fifo_batches.sql` | 新增 `C_INV_VariantBatchList`（FIFO 進貨批次表）；新增 `staging.fifo_deduct_batch()` / `public.fifo_deduct_batch()` SECURITY DEFINER 函式；初始化現有有庫存規格為第一批 | ✅ 已執行 |
 | `add_line_cost.sql` | `C_ORD_OrderItemList` 新增 `LineCost NUMERIC(14,4)`（FIFO 總成本，取代 UnitCost × Qty 的除後再乘誤差）；`fifo_deduct_batch()` 改回傳總成本而非單價平均 | ✅ 已執行 |
 | `rename_wallet_memberid_to_userid.sql` | 錢包三張表（`C_MBR_WalletList` / `WalletTxList` / `WalletTopupList`）的 `MemberID` 欄位改名為 `UserID`——原欄位實際存 `auth.users.id`（UUID），與 Cart/Wishlist 的 `MemberID`（指 `C_MBR_MemberList.ID`）同名不同義，容易混淆；純改名不動資料/FK | ✅ 已執行 |
+| `sync_order_status_and_wallet_balance.sql` | 補齊 `cancelled` 狀態、同步週銷單的 `PaymentStatus` / `StatusID`、修復既有付款狀態落差，並以最新錢包流水校正餘額 | ⬜ 待先於 staging 驗證 |
 
 > ⚠️ **無 migration 檔案的欄位**（直接在 Supabase Dashboard 執行）：
 > - `C_CART_CartItemList.CancelledAt`（週銷單軟刪除時間戳）

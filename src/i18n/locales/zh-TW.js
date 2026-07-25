@@ -250,6 +250,7 @@ export default {
       payment_paid: "已付款",
       payment_failed: "付款失敗",
       payment_refunded: "已退款",
+      payment_cancelled: "已取消",
       detailTitle: "訂單詳情 {no}",
       tabInfo: "訂單資訊",
       tabItems: "商品明細",

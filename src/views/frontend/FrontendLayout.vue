@@ -5,6 +5,7 @@ import { useCartStore } from '@/stores/cart'
 import { useWishlistStore } from '@/stores/wishlist'
 import { useSiteConfigStore } from '@/stores/siteConfig'
 import { useRouter } from 'vue-router'
+import { db } from '@/lib/db'
 
 const auth = useAuthStore()
 const cart = useCartStore()
@@ -17,6 +18,7 @@ const lineOaUrl = computed(() => siteConfig.get('line_oa_url'))
 const mobileMenuOpen = ref(false)
 const memberMenuOpen = ref(false)
 const memberBtnRef = ref(null)
+const navCategories = ref([])
 
 const userInitial = computed(() => {
   const email = auth.user?.email || ''
@@ -42,13 +44,18 @@ async function onSignOut() {
   router.push('/')
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener('scroll', onScroll, { passive: true })
   document.addEventListener('click', onDocClick)
   if (auth.isLoggedIn) {
     cart.fetchCart()
   }
   siteConfig.load()
+  const { data } = await db
+    .from('S_PRD_CategoryList')
+    .select('ID, Name')
+    .order('ID', { ascending: true })
+  navCategories.value = data ?? []
 })
 onUnmounted(() => {
   window.removeEventListener('scroll', onScroll)
@@ -77,9 +84,11 @@ onUnmounted(() => {
         <ul class="fe-nav__links d-none d-lg-flex">
           <li><RouterLink to="/">首頁</RouterLink></li>
           <li><RouterLink to="/products">新品上市</RouterLink></li>
-          <li><RouterLink to="/products?category=tops">上衣</RouterLink></li>
-          <li><RouterLink to="/products?category=bottoms">下著</RouterLink></li>
-          <li><RouterLink to="/products?category=dress">洋裝</RouterLink></li>
+          <li v-for="category in navCategories" :key="category.ID">
+            <RouterLink :to="{ path: '/products', query: { category: category.Name } }">
+              {{ category.Name }}
+            </RouterLink>
+          </li>
           <li><RouterLink to="/live">直播</RouterLink></li>
         </ul>
 
@@ -121,9 +130,12 @@ onUnmounted(() => {
       <div :class="['fe-nav__drawer', { 'fe-nav__drawer--open': mobileMenuOpen }]">
         <RouterLink to="/" @click="mobileMenuOpen = false">首頁</RouterLink>
         <RouterLink to="/products" @click="mobileMenuOpen = false">新品上市</RouterLink>
-        <RouterLink to="/products?category=tops" @click="mobileMenuOpen = false">上衣</RouterLink>
-        <RouterLink to="/products?category=bottoms" @click="mobileMenuOpen = false">下著</RouterLink>
-        <RouterLink to="/products?category=dress" @click="mobileMenuOpen = false">洋裝</RouterLink>
+        <RouterLink
+          v-for="category in navCategories"
+          :key="category.ID"
+          :to="{ path: '/products', query: { category: category.Name } }"
+          @click="mobileMenuOpen = false"
+        >{{ category.Name }}</RouterLink>
         <RouterLink to="/live" @click="mobileMenuOpen = false">直播</RouterLink>
         <template v-if="auth.isLoggedIn">
           <RouterLink to="/account" @click="mobileMenuOpen = false">我的帳號</RouterLink>

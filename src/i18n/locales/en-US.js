@@ -250,6 +250,7 @@ export default {
       payment_paid: "Paid",
       payment_failed: "Failed",
       payment_refunded: "Refunded",
+      payment_cancelled: "Cancelled",
       detailTitle: "Order {no}",
       tabInfo: "Info",
       tabItems: "Items",

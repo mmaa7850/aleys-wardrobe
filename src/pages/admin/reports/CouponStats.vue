@@ -24,30 +24,36 @@ async function load() {
       .select('ID, Name, Description, DiscountValue, MinOrderAmount, IsAutoApply, StartDate, EndDate, IsActive, UsageCount')
       .order('EndDate', { ascending: false }),
     db.from('C_ORD_OrderList')
-      .select('CouponCode, DiscountAmount, FinalAmount, PaymentStatus')
-      .not('CouponCode', 'is', null),
+      .select('CouponID, DiscountAmount, FinalAmount, PaymentStatus')
+      .not('CouponID', 'is', null),
   ])
 
   // Build per-coupon order stats
   const statsMap = {}
   ;(orders ?? []).forEach(o => {
-    const code = o.CouponCode
-    if (!code) return
-    if (!statsMap[code]) statsMap[code] = { usedCount: 0, discountTotal: 0, revenueTotal: 0 }
+    const couponId = o.CouponID
+    if (!couponId) return
+    if (!statsMap[couponId]) statsMap[couponId] = { usedCount: 0, discountTotal: 0, revenueTotal: 0 }
     if (o.PaymentStatus === 'paid') {
-      statsMap[code].usedCount++
-      statsMap[code].discountTotal += o.DiscountAmount ?? 0
-      statsMap[code].revenueTotal  += (o.FinalAmount ?? 0) + (o.DiscountAmount ?? 0)
+      statsMap[couponId].usedCount++
+      statsMap[couponId].discountTotal += o.DiscountAmount ?? 0
+      statsMap[couponId].revenueTotal  += o.FinalAmount ?? 0
     }
   })
 
-  rows.value = (coupons ?? []).map(c => ({
-    ...c,
-    usedCount:     statsMap[c.Name]?.usedCount     ?? 0,
-    discountTotal: statsMap[c.Name]?.discountTotal ?? 0,
-    revenueTotal:  statsMap[c.Name]?.revenueTotal  ?? 0,
-    usageRate:     c.UsageCount ? Math.round((statsMap[c.Name]?.usedCount ?? 0) / c.UsageCount * 100) : null,
-  }))
+  rows.value = (coupons ?? []).map(c => {
+    const usedCount = statsMap[c.ID]?.usedCount ?? 0
+    const remainingCount = c.UsageCount ?? 0
+    const issuedCount = usedCount + remainingCount
+    return {
+      ...c,
+      usedCount,
+      remainingCount,
+      discountTotal: statsMap[c.ID]?.discountTotal ?? 0,
+      revenueTotal:  statsMap[c.ID]?.revenueTotal  ?? 0,
+      usageRate: issuedCount > 0 ? Math.round(usedCount / issuedCount * 100) : null,
+    }
+  })
 
   loading.value = false
 }
@@ -72,7 +78,7 @@ onMounted(load)
               <th>優惠券名稱</th>
               <th>類型</th>
               <th class="text-end">折扣金額</th>
-              <th class="text-end">使用次數（已付款）</th>
+              <th class="text-end">已使用 / 剩餘</th>
               <th class="text-end">使用率</th>
               <th class="text-end">折扣總額</th>
               <th class="text-end">帶動營收</th>
@@ -96,7 +102,7 @@ onMounted(load)
               </td>
               <td class="text-end">NT$ {{ r.DiscountValue?.toLocaleString() }}</td>
               <td class="text-end">
-                {{ r.usedCount }} / {{ r.UsageCount }}
+                {{ r.usedCount }} / {{ r.remainingCount }}
               </td>
               <td class="text-end">
                 <template v-if="r.usageRate !== null">

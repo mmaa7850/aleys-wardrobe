@@ -63,7 +63,7 @@ flowchart LR
 
 | 頁面 | 路徑 | 使用者看到什麼 | 前置／空畫面條件 | 會受哪些後台功能影響 |
 |---|---|---|---|---|
-| 首頁 | `/` | Hero、活動橫幅、最新 8 件商品、分類入口、品牌內容 | 沒 Banner 時顯示預設裝飾；沒商品時新品區為空 | Banner 管理、商品上架、網站參數 `announcement` |
+| 首頁 | `/` | Hero、活動橫幅、最新 8 件商品、資料庫分類入口、品牌內容 | 沒 Banner 時顯示預設裝飾；沒商品時新品區為空；沒分類時隱藏分類區 | Banner 管理、分類管理、商品上架、網站參數 `announcement` |
 | 商品列表 | `/products` | 上架商品、分類篩選、價格／最新排序、載入更多 | 只顯示 `IsActive = true`；沒分類時分類列空白；沒商品時顯示空狀態 | 分類管理、商品管理、圖片與價格 |
 | 商品詳細 | `/products/:id` | 圖片／影片、顏色、尺寸、庫存、預購、尺寸表、收藏與加入購物車 | 商品需有啟用規格才能選；售完且未開預購不能加入；加入購物車需登入及 LINE 綁定 | 商品資料、顏色、尺寸、規格庫存、尺寸表、Storage |
 | 直播 | `/live` | 最新一個「直播中」場次、YouTube 影片、即時聊天室 | 沒 active 場次顯示「目前沒有直播」；沒 `YtVideoId` 時影片顯示準備中；留言需登入 | 直播場次狀態、YouTube ID、聊天室 Realtime |
@@ -259,7 +259,7 @@ flowchart LR
 | 費用記錄 | `/admin/finance/monthly-expenses` | 依月份記錄固定／營運費用，可附收據 | 無費用時當月為 0 | 獨立內部記錄；目前沒有店鋪淨利報表 |
 | 銷售總覽 | `/admin/reports/sales` | 營收、訂單、客單、退款、低庫存、手續費、點擊、轉換、買家、Excel | 沒訂單／點擊時指標為 0 | 訂單、付款手續費、商品點擊、庫存 |
 | 商品排行 | `/admin/reports/products` | 銷售額、數量、訂單數、買家、點擊與轉換率 | 需指定期間有已付款訂單 | 訂單明細、會員 ID、商品點擊 |
-| 優惠券成效 | `/admin/reports/coupons` | 使用次數、折扣額、帶動營收、到期狀態 | 沒優惠券或訂單時為 0 | 優惠券主檔、訂單 `CouponCode` |
+| 優惠券成效 | `/admin/reports/coupons` | 已使用／剩餘次數、折扣額、已付款營收、到期狀態 | 沒優惠券或訂單時為 0 | 優惠券主檔、訂單 `CouponID` |
 | 訂單狀態 | `/admin/reports/orders` | 依付款狀態顯示訂單分布 | 沒訂單時為 0 | 訂單付款狀態 |
 | 會員成長 | `/admin/reports/members` | 12 個月新增會員、本月活躍、回購會員 | 沒會員／已付款訂單時為 0 | 會員、訂單 Email |
 | GA 分析 | `/admin/reports/analytics` | GA4 狀態、事件說明、Looker Studio 嵌入 | 需環境變數 `VITE_GA_MEASUREMENT_ID`；嵌入需設定 `ga_looker_studio_url` | 商品瀏覽、加車、結帳、購買事件 |
@@ -369,7 +369,7 @@ flowchart LR
 2. **「加車後不能取消」尚未完整落實。** 現貨購物車畫面已鎖住數量與移除，但預購品仍可減少數量及直接刪除；而且 LINE 綁定只在商品詳情頁的畫面層檢查，`cart.addItem()` 與後端／資料庫沒有再次驗證，可被繞過。另 `cart.removeItem()` 若被用於現貨會直接刪資料而不回補庫存。
 3. **混合錢包付款的退款流程不完整。** 訂單頁只呼叫 `refund-payment`，未串現有的 `wallet-refund`；信用卡 API 又使用整張訂單 `FinalAmount`，而不是實際藍新收款 `NewebpayAmt`。可能造成藍新退款金額錯誤，且錢包扣款未退回。
 4. **重新付款會再次檢查已被購物車預留後的剩餘庫存。** 現貨在加車時已扣庫存，建單後仍維持扣除；`retry-payment` 再用目前 `StockQty >= 訂購數量` 判斷，最後幾件商品可能被誤判為庫存不足。
-5. **錢包待繳 ATM 查詢仍使用舊欄位 `MemberID`。** Schema 與 migration 已改為 `UserID`，因此 `/wallet` 的 ATM 待繳清單可能載入失敗或永遠為空。
+5. **錢包歷史餘額可能與最新流水不一致。** `/wallet` 的 ATM 待繳查詢已改用 `UserID`；既有餘額需執行 `sync_order_status_and_wallet_balance.sql`，以最新流水的 `BalanceAfter` 校正。
 6. **預購出貨扣庫存 RPC 參數名錯誤。** 後台出貨使用 `p_id`，資料庫函式需要 `p_variant_id`；而 FIFO 已在前一步先扣，可能形成部分成功。
 7. **Facebook 即時直播建立的訂單沒有完整顧客 Email／姓名／配送欄位。** 前台訂單列表與詳情用 `CustomerEmail` 判斷歸屬，因此 LINE 付款連結可能開不到該訂單。
 8. **前台直播聊天室 Realtime schema 寫死為 `staging`。** 正式環境使用 `public` 時，初始留言可讀，但新留言可能不會即時出現。
@@ -386,12 +386,20 @@ flowchart LR
 6. **一般訂單成功頁不驗證付款狀態就送出 GA `purchase`。** ATM 取號等尚未付款的訂單也會計為購買，轉換與營收事件可能偏高。
 7. **管理員功能的前端權限、Edge Function 權限與 RLS 不完全一致。** 例如側欄允許 `CanManageOrders`，但退款函式要求 `IsAdmin = true`；部分直接資料庫更新也可能被只允許超管的 RLS 擋下。
 
-### P1／報表可能顯示錯誤
+### P1／報表資料注意事項
 
-1. **後台首頁的今日訂單、待付款與低庫存固定容易顯示 0。** 查詢用了 `head: true`，但頁面讀 `data.length`，沒有讀回傳的 `count`。
-2. **銷售總覽的低庫存與商品點擊也沒有正確讀 `count`。** 因此低庫存、點擊與轉換率指標可能永遠是 0／空白。
-3. **優惠券成效查詢 `C_ORD_OrderList.CouponCode`，但目前 schema 與建單流程只保存 `CouponID`。** 報表可能查詢錯誤或永遠沒有使用資料。
-4. **網站建單沒有寫入訂單 `MemberID`。** 銷售總覽的買家數、商品排行的不重複會員數會低估；目前 schema 文件也未列出 OrderList 的 `MemberID`，需一併確認實際部署欄位。
+1. **網站建單沒有寫入訂單 `MemberID`。** 銷售總覽的買家數、商品排行的不重複會員數會低估；目前 schema 文件也未列出 OrderList 的 `MemberID`，需一併確認實際部署欄位。
+
+> 2026-07-25 已修正：後台首頁與銷售總覽的 `head: true` 計數、流量報表載入、優惠券 `CouponID` 對應、取消狀態統計，以及會員報表排除管理員。
+
+### 暫緩項目（原檢閱第 10 項）
+
+**前台已改為 YouTube 直播，但後台與隱私權文件仍保留 Facebook 流程。**
+
+- 前台 `/live`：YouTube iframe + 網站聊天室。
+- 後台直播場次：仍保留 Facebook Graph API 自動監控與貼留言批次匯入。
+- 隱私權政策：仍描述 Facebook 登入與 Facebook 直播留言讀取。
+- 目前決定：先不移除也不改寫，等正式直播下單來源與 Facebook 登入是否保留確認後，再一起整理後台功能、權限與隱私權文字。
 
 ### P2／文件與資料品質落差
 

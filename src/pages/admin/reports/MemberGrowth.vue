@@ -57,17 +57,25 @@ async function load() {
     months.push({ label: `${d.getFullYear()}/${pad(d.getMonth()+1)}`, ym: `${d.getFullYear()}-${pad(d.getMonth()+1)}` })
   }
 
-  const [{ data: members }, { data: orders }] = await Promise.all([
+  const [{ data: members }, { data: orders }, { data: adminRows }] = await Promise.all([
     db.from('C_MBR_MemberList')
-      .select('CreatedDate'),
+      .select('UserID, Email, CreatedDate'),
     db.from('C_ORD_OrderList')
       .select('CustomerEmail, PaymentStatus, CreatedDate'),
+    db.from('S_SYS_AdminUserList')
+      .select('UserId'),
   ])
+
+  const adminUserIds = new Set((adminRows ?? []).map(row => row.UserId))
+  const customerMembers = (members ?? []).filter(member => !adminUserIds.has(member.UserID))
+  const customerEmails = new Set(
+    customerMembers.map(member => member.Email?.trim().toLowerCase()).filter(Boolean)
+  )
 
   // Monthly new member count
   const byMonth = {}
   months.forEach(m => { byMonth[m.ym] = 0 })
-  ;(members ?? []).forEach(m => {
+  customerMembers.forEach(m => {
     const ym = m.CreatedDate?.slice(0, 7)
     if (ym && byMonth[ym] !== undefined) byMonth[ym]++
   })
@@ -76,17 +84,18 @@ async function load() {
   const activeSet = new Set()
   const emailOrderCount = {}
   ;(orders ?? []).forEach(o => {
-    if (!o.CustomerEmail) return
+    const email = o.CustomerEmail?.trim().toLowerCase()
+    if (!email || !customerEmails.has(email)) return
     if (o.PaymentStatus === 'paid') {
-      if (o.CreatedDate >= thisMonthStart) activeSet.add(o.CustomerEmail)
-      emailOrderCount[o.CustomerEmail] = (emailOrderCount[o.CustomerEmail] ?? 0) + 1
+      if (o.CreatedDate >= thisMonthStart) activeSet.add(email)
+      emailOrderCount[email] = (emailOrderCount[email] ?? 0) + 1
     }
   })
 
   const repeatBuyers = Object.values(emailOrderCount).filter(c => c >= 2).length
 
   stats.value = {
-    total: members?.length ?? 0,
+    total: customerMembers.length,
     activeThisMonth: activeSet.size,
     repeatBuyers,
   }

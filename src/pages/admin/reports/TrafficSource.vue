@@ -90,46 +90,48 @@ function buildChart() {
 async function load() {
   loading.value = true
 
-  const { start, end } = range.value
-  const { data: logs } = await db
-    .from('C_ANL_ProductClickLog')
-    .select('Source, CreatedDate')
-    .gte('CreatedDate', start + 'T00:00:00')
-    .lte('CreatedDate', end + 'T23:59:59')
-    .catch(() => ({ data: [] }))
+  try {
+    const { start, end } = range.value
+    const { data: logs, error } = await db
+      .from('C_ANL_ProductClickLog')
+      .select('Source, CreatedDate')
+      .gte('CreatedDate', start + 'T00:00:00')
+      .lte('CreatedDate', end + 'T23:59:59')
 
-  if (!logs?.length) {
-    rows.value = []
-    loading.value = false
-    return
-  }
-
-  // 按 Source 聚合
-  const sourceMap = {}
-  logs.forEach(log => {
-    const s = log.Source || '直接'
-    sourceMap[s] = (sourceMap[s] || 0) + 1
-  })
-
-  const total = logs.length
-  rows.value = SOURCE_ORDER
-    .filter(s => sourceMap[s])
-    .map(s => ({
-      source: s,
-      clicks: sourceMap[s],
-      pct:    sourceMap[s] / total,
-    }))
-  // 加入未知來源
-  Object.entries(sourceMap).forEach(([s, c]) => {
-    if (!SOURCE_ORDER.includes(s)) {
-      rows.value.push({ source: s, clicks: c, pct: c / total })
+    // 流量紀錄是選配功能；資料表尚未建立時，以無資料畫面呈現。
+    if (error || !logs?.length) {
+      rows.value = []
+      return
     }
-  })
-  rows.value.sort((a, b) => b.clicks - a.clicks)
 
-  loading.value = false
-  await nextTick()
-  buildChart()
+    // 按 Source 聚合
+    const sourceMap = {}
+    logs.forEach(log => {
+      const s = log.Source || '直接'
+      sourceMap[s] = (sourceMap[s] || 0) + 1
+    })
+
+    const total = logs.length
+    rows.value = SOURCE_ORDER
+      .filter(s => sourceMap[s])
+      .map(s => ({
+        source: s,
+        clicks: sourceMap[s],
+        pct:    sourceMap[s] / total,
+      }))
+    // 加入未知來源
+    Object.entries(sourceMap).forEach(([s, c]) => {
+      if (!SOURCE_ORDER.includes(s)) {
+        rows.value.push({ source: s, clicks: c, pct: c / total })
+      }
+    })
+    rows.value.sort((a, b) => b.clicks - a.clicks)
+
+    await nextTick()
+    buildChart()
+  } finally {
+    loading.value = false
+  }
 }
 
 watch(range, load, { deep: true })

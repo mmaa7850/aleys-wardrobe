@@ -43,7 +43,7 @@ const stats = ref({
 function estimateFee(order) {
   const amt = order.NewebpayAmt ?? 0
   if (amt === 0) return 0
-  const method = order.PaymentMethod ?? ''
+  const method = String(order.PaymentMethod ?? '').trim().toUpperCase()
   if (['CREDIT', 'APPLEPAY', 'GOOGLEPAY', 'SAMSUNGPAY', 'UNIONPAY', 'CREDITAE', 'LINEPAY'].includes(method)) {
     return Math.round(amt * 0.028)
   }
@@ -98,67 +98,74 @@ async function load() {
   loading.value = true
   const { start, end } = range.value
 
-  const [{ data: orders }, { data: lowStock }, { data: clicks }] = await Promise.all([
-    db.from('C_ORD_OrderList')
-      .select('ID, FinalAmount, PaymentStatus, CreatedDate, NewebpayAmt, PaymentMethod, "PaymentFee", MemberID')
-      .gte('CreatedDate', start + 'T00:00:00')
-      .lte('CreatedDate', end + 'T23:59:59'),
-    db.from('C_PRD_ProductVariantList')
-      .select('ID', { count: 'exact', head: true })
-      .lte('StockQty', 3)
-      .eq('IsActive', true),
-    db.from('C_ANL_ProductClickLog')
-      .select('ID', { count: 'exact', head: true })
-      .gte('CreatedDate', start + 'T00:00:00')
-      .lte('CreatedDate', end + 'T23:59:59')
-      .catch(() => ({ data: null, count: 0 })),
-  ])
+  try {
+    const [ordersResult, lowStockResult, clicksResult] = await Promise.all([
+      db.from('C_ORD_OrderList')
+        .select('ID, FinalAmount, PaymentStatus, CreatedDate, NewebpayAmt, PaymentMethod, "PaymentFee", MemberID')
+        .gte('CreatedDate', start + 'T00:00:00')
+        .lte('CreatedDate', end + 'T23:59:59'),
+      db.from('C_PRD_ProductVariantList')
+        .select('ID', { count: 'exact', head: true })
+        .lte('StockQty', 3)
+        .eq('IsActive', true),
+      db.from('C_ANL_ProductClickLog')
+        .select('ID', { count: 'exact', head: true })
+        .gte('CreatedDate', start + 'T00:00:00')
+        .lte('CreatedDate', end + 'T23:59:59'),
+    ])
 
-  const paid     = (orders ?? []).filter(o => o.PaymentStatus === 'paid')
-  const refunded = (orders ?? []).filter(o => o.PaymentStatus === 'refunded')
-  const revenue  = paid.reduce((s, o) => s + (o.FinalAmount ?? 0), 0)
+    if (ordersResult.error) throw ordersResult.error
+    if (lowStockResult.error) throw lowStockResult.error
 
-  // 優先使用 payment-notify 寫入的實際手續費；若為 null（舊訂單或錢包全額付款）則用估算值補充
-  const estFee = paid.reduce((s, o) => {
-    const actual = o.PaymentFee ?? null
-    return s + (actual !== null ? Number(actual) : estimateFee(o))
-  }, 0)
+    const orders = ordersResult.data ?? []
+    const paid     = orders.filter(o => o.PaymentStatus === 'paid')
+    const refunded = orders.filter(o => o.PaymentStatus === 'refunded')
+    const revenue  = paid.reduce((s, o) => s + (o.FinalAmount ?? 0), 0)
 
-  const clickCount = clicks?.count ?? 0
-  const paidCount  = paid.length
-  const buyerCount = new Set(paid.map(o => o.MemberID).filter(Boolean)).size
+    // 優先使用 payment-notify 寫入的實際手續費；若為 null（舊訂單或錢包全額付款）則用估算值補充
+    const estFee = paid.reduce((s, o) => {
+      const actual = o.PaymentFee ?? null
+      return s + (actual !== null ? Number(actual) : estimateFee(o))
+    }, 0)
 
-  stats.value = {
-    revenue,
-    orders: (orders ?? []).length,
-    aov: paidCount ? Math.round(revenue / paidCount) : 0,
-    refunds: refunded.reduce((s, o) => s + (o.FinalAmount ?? 0), 0),
-    lowStock: lowStock?.length ?? 0,
-    estFee,
-    clicks:   clickCount,
-    convRate: clickCount > 0 ? paidCount / clickCount : null,
-    buyers:   buyerCount,
+    // 點擊紀錄表是選配；尚未建立時只顯示 0，不阻斷整張銷售報表。
+    const clickCount = clicksResult.error ? 0 : (clicksResult.count ?? 0)
+    const paidCount  = paid.length
+    const buyerCount = new Set(paid.map(o => o.MemberID).filter(Boolean)).size
+
+    stats.value = {
+      revenue,
+      orders: orders.length,
+      aov: paidCount ? Math.round(revenue / paidCount) : 0,
+      refunds: refunded.reduce((s, o) => s + (o.FinalAmount ?? 0), 0),
+      lowStock: lowStockResult.count ?? 0,
+      estFee,
+      clicks:   clickCount,
+      convRate: clickCount > 0 ? paidCount / clickCount : null,
+      buyers:   buyerCount,
+    }
+
+    // Build daily series
+    const days = []
+    const cur = new Date(start)
+    const last = new Date(end)
+    while (cur <= last) { days.push(fmt(cur)); cur.setDate(cur.getDate() + 1) }
+
+    const byDay = {}
+    days.forEach(d => { byDay[d] = 0 })
+    paid.forEach(o => {
+      const d = o.CreatedDate?.slice(0, 10)
+      if (d && byDay[d] !== undefined) byDay[d] += (o.FinalAmount ?? 0)
+    })
+
+    chartLabels.value = days.map(d => d.slice(5))
+    chartData.value   = days.map(d => byDay[d])
+
+    await nextTick()
+    buildChart()
+  } finally {
+    loading.value = false
   }
-
-  // Build daily series
-  const days = []
-  const cur = new Date(start)
-  const last = new Date(end)
-  while (cur <= last) { days.push(fmt(cur)); cur.setDate(cur.getDate() + 1) }
-
-  const byDay = {}
-  days.forEach(d => { byDay[d] = 0 })
-  paid.forEach(o => {
-    const d = o.CreatedDate?.slice(0, 10)
-    if (d && byDay[d] !== undefined) byDay[d] += (o.FinalAmount ?? 0)
-  })
-
-  chartLabels.value = days.map(d => d.slice(5))
-  chartData.value   = days.map(d => byDay[d])
-
-  loading.value = false
-  await nextTick()
-  buildChart()
 }
 
 watch(range, load, { deep: true })

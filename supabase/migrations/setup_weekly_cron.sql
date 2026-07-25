@@ -31,6 +31,10 @@ SELECT cron.schedule(
     -- 取消訂單
     UPDATE public."C_ORD_OrderList"
     SET    "PaymentStatus" = 'cancelled',
+           "StatusID"      = COALESCE(
+             (SELECT "ID" FROM public."S_ORD_StatusList" WHERE "Name" = 'cancelled' ORDER BY "ID" LIMIT 1),
+             "StatusID"
+           ),
            "UpdatedDate"   = NOW()
     WHERE  "PaymentStatus" IN ('pending', 'failed');
 
@@ -86,6 +90,10 @@ SELECT cron.schedule(
 
     UPDATE staging."C_ORD_OrderList"
     SET    "PaymentStatus" = 'cancelled',
+           "StatusID"      = COALESCE(
+             (SELECT "ID" FROM staging."S_ORD_StatusList" WHERE "Name" = 'cancelled' ORDER BY "ID" LIMIT 1),
+             "StatusID"
+           ),
            "UpdatedDate"   = NOW()
     WHERE  "PaymentStatus" IN ('pending', 'failed');
 
