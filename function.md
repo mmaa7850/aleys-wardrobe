@@ -1,6 +1,6 @@
 # Aley's Wardrobe — 現有功能總覽
 
-> 更新時間：2026-07-02
+> 更新時間：2026-07-25
 > 技術棧：Vue 3 + Pinia + Vue Router + Supabase (PostgreSQL + Storage + Auth) + Supabase Edge Functions + NewebPay 藍新金流
 
 ---
@@ -82,8 +82,7 @@
 | **報表 — 優惠券效益** | `/admin/reports/coupons` | 全部 | 各券：使用次數/使用率進度條/折扣總額/帶動營收；7天內到期標黃；手動碼 vs 自動折抵分類顯示 |
 | **報表 — 訂單狀態分佈** | `/admin/reports/orders` | 全部 | 全部訂單甜甜圈圖（付款狀態4種：待付款/已付款/付款失敗/已退款）；佔比表格；點擊跳訂單列表 |
 | **報表 — 會員成長趨勢** | `/admin/reports/members` | 全部 | 近12個月月新增柱狀圖；3張 stat card（累積總數/本月活躍/回購會員數） |
-| **報表 — 毛利報表** | `/admin/reports/profit` | 全部 | 日期區間篩選；訂單級毛利明細（含耗材成本欄）；成本拆解彙總（進貨成本/手續費/運費/耗材/退換費用）；**淨利率**欄位（原毛利率）|
-| **報表 — 賣場淨利報表** | `/admin/reports/store-profit` | 全部 | 月份選擇；第一層訂單毛利彙總 + 第二層月度固定費用 = 本月淨利；**淨利率**（原毛利率）；訂單明細含耗材欄 |
+| **報表 — 訂單收支報表** | `/admin/reports/order-settlement` | 全部 | 日期區間篩選；依已付款訂單列出商品售價、顧客運費、折價券、實收、金流手續費、實際物流、耗材、其他額外成本與淨收；不查詢商品進貨成本、FIFO、`UnitCost` 或 `LineCost` |
 | **報表 — 流量來源分析** | `/admin/reports/traffic` | 全部 | 查詢期間內各來源點擊分布；Chart.js 長條圖；表格顯示來源/點擊數/點擊佔比（進度條）；來源分類：廣告來源/購物車/願望清單/直接；說明來源偵測邏輯 |
 | **報表 — 縣市訂單統計** | `/admin/reports/city-stats` | 全部 | 以 regex 從 `ShippingAddress` 擷取縣市（22個縣市 + 離島）；Chart.js 水平長條圖（`indexAxis:'y'`）；表格：排名/縣市/訂單數/佔比（%）/訂單金額/平均客單價；篩選已付款訂單（`PaymentStatus='paid'`）|
 | **報表 — 退款排行** | `/admin/reports/refund-ranking` | 全部 | 依 `CustomerEmail` 統計退款訂單；顯示：姓名/Email/電話/退款次數（≥3 次標紅色 badge）/退款總額/平均退款額/金額進度條；支援依「金額」或「次數」切換排序 |
